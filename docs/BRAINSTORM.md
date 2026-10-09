@@ -67,6 +67,62 @@
   - Workflow changes ("you focus best 9–12; blocks after 3pm get postponed").
 - **Memory:** `memory: user` subagent plus markdown files in `_system/memory/`. RAG or embeddings are added only if grep stops being enough.
 
+### 4b. Action cards and earned autonomy
+The overseer's suggestions become **action cards with buttons** instead of plain text.
+
+**Card = one note in `_system/actions/`:**
+```yaml
+type: action
+action: continue_agent        # create_widget | book_event | continue_agent | add_connector | new_skill | file_note ...
+params: { project: blog-engine, session: abc123, goal: "finish RSS feed" }
+reason: "Session stopped 2 days ago at 80%; you have a free 2h block tomorrow"
+risk: medium                  # low | medium | high
+status: pending               # pending → approved/rejected/snoozed → running → done/failed
+context: [[Projects/blog-engine]]
+expires: 2026-10-12
+```
+
+**Buttons:**
+- **Do it**
+- **Not now** (snooze)
+- **No** (with an optional one-word reason)
+- **Always do this**
+- **Never suggest this**
+
+Meta Bind buttons set the card's `status`. Clicking a button only changes a file, so it works the same in Obsidian, on the phone (synced) and in the web dashboard.
+
+**Executor (desktop):**
+- A file watcher (or a cron job every couple of minutes) picks up approved cards.
+- It runs each one through `claude -p` with a per-action tool allowlist. For example, `continue_agent` resumes a session or starts a new one with the goal; `create_widget` writes a Bases view or Datacore widget; `book_event` uses the calendar MCP.
+- It writes the result and an undo hint back onto the card and into the changelog.
+- High-risk cards show a dry-run preview before running.
+
+**Contextual placement:**
+- Cards show up where they're relevant: a project's cards on that project's note, today's cards on Home, session cards on the session board.
+- Events create them, for example:
+  - CI failed → "Fix CI on PR #12".
+  - A session is waiting on you → "Answer / let it continue".
+  - A stalled project plus a free calendar slot → "Book a focus block".
+
+**Earned autonomy (trust ladder per action type):**
+1. **Suggest:** every card needs a click.
+2. **Auto with notice:** the card runs on its own and shows up as done, with an Undo button.
+3. **Silent:** the action runs and is only logged.
+
+**How autonomy changes:**
+- An action type moves up after N approvals in a row with no rejects or undos (e.g. 5 for low risk, 10 for medium). **The promotion is itself a card.** It never self-promotes silently.
+- Any undo or reject moves it back down a step.
+- "Always do this" is a manual shortcut straight to level 2.
+- Rejection reasons and "never" choices are kept in `_system/memory/preferences.md`. The overseer reads them before it suggests anything.
+- The current level of each action type is kept in `_system/policy.md`, which you can read and edit by hand.
+
+**Hard ceilings** (stay on Suggest forever unless you change them):
+- Sending anything to other people (email, posts, invites).
+- Spending money.
+- Deleting.
+- Touching folders outside its own.
+- Pushing to main.
+
 ## Surfaces
 - **Obsidian Home** (Homepage plugin + Bases):
   - Today.
@@ -89,7 +145,7 @@
 1. **MVP:** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
 2. **Sessions + GitHub:** hooks feed the session board, and GitHub data lands in project notes. Adds `/resume` and `/next`.
 3. **Calendar/email + writing pipeline + PDF import.**
-4. **Overseer:** activity log, `/weekly`, suggestion queue with memory.
+4. **Overseer:** activity log, `/weekly`, action cards + executor, trust ladder.
 5. **Web dashboard / PWA.**
 
 ## Pitfalls to avoid

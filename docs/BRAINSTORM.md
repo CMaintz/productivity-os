@@ -2,7 +2,8 @@
 
 ## Decisions so far
 - **Hybrid design.** The Obsidian vault holds the truth as plain markdown. Obsidian is where you work day to day, and a small web dashboard covers what Obsidian can't do well: live Claude session status, charts and quick phone checks.
-- **Devices:** several desktops plus a phone.
+- **Devices:** several Windows PCs plus a phone.
+- **Web surface:** a private subdomain of maintz.dev (e.g. `dash.maintz.dev`).
 - **Autonomy:** the agent does low-risk work on its own, asks before anything destructive, and logs every edit.
 - **Sources:** GitHub, Claude Code sessions, calendar and email, writing and publishing, and existing markdown and PDFs.
 
@@ -37,6 +38,30 @@
 | Calendar/email | MCP servers (Google or Microsoft). Email triage only writes drafts and never sends. |
 | Existing md/PDFs | A one-time import into `Raw/`, plus a lightweight index note per source. **No mass summarising**, because summaries bloat the vault. |
 | Writing | `Writing/` pipeline: idea → draft → edit → scheduled → published, tracked per platform. |
+
+### 2b. Project docs (ADRs, audits, decisions)
+- **Repo indexer** (a script run on a schedule and after git pulls):
+  - Scans the folder your repos live in (e.g. `C:\dev\*`) using glob rules in `_system/sources.yaml`.
+  - Default rules: `docs/adr/**`, `docs/decisions/**`, `**/AUDIT*.md`, `**/*audit*.md`, `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `docs/**/*.md`.
+  - Each repo gets its own overrides.
+- **Index, don't copy.** Each repo gets a `Projects/<repo>/docs.md` note listing every doc with:
+  - type (adr | audit | decision | readme | changelog)
+  - status
+  - date
+  - a one-line gist
+  - a local path link and a GitHub link (the GitHub link works on the phone)
+
+  Copying would mean two copies that drift apart and a bloated vault.
+- **New or changed docs become action cards.** Examples: "ADR-012 added by agent session X → review", "Audit found 3 high-severity issues → create tasks?".
+- **Autonomous-decision convention.** Every repo's `CLAUDE.md` tells agents to record any non-trivial decision they make on their own in `docs/decisions/YYYY-MM-DD-<slug>.md`. The record follows a short template: context, options, choice, confidence, and how to revert. The indexer gathers these into one "Decisions to review" view.
+- **`/resume <project>` and `/next`** read the project's ADRs and recent decisions, so their suggestions follow the architecture choices you've already made.
+
+### Windows specifics
+- **Scripts** are written in Node/TypeScript, so the hooks, indexer, executor and web dashboard all share one language and data types. No bash dependency.
+- **Claude Code hooks** call `node` scripts, so there are no PowerShell quoting issues.
+- **Scheduling** uses Windows Task Scheduler or Claude Desktop scheduled tasks instead of cron.
+- **The executor** runs as a small background service (e.g. a Node process started at login), and only on the "main" PC to avoid running the same job twice. A lock file in `_system/` ensures only one executor runs.
+- **Git** uses `core.autocrlf=false` and `.gitattributes` with `* text=auto eol=lf`, so the vault doesn't flip line endings between machines.
 
 ### 3. Agent layer (Claude Code)
 - **Contract** (`CLAUDE.md` in the vault):
@@ -130,10 +155,12 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
   - Session board (kanban: running / waiting on me / done).
   - Writing pipeline.
   - Suggestion inbox.
-- **Web dashboard** (later, read-only):
-  - Live Claude sessions, GitHub/CI status, charts (focus time, throughput, streaks).
-  - Works as a PWA on the phone.
-  - Writes go through Claude or Obsidian only, to avoid sync conflicts.
+- **Web dashboard at `dash.maintz.dev`** (later):
+  - Live Claude sessions, GitHub/CI status, charts (focus time, throughput, streaks), action-card buttons. Works as a PWA on the phone.
+  - **Push model:** the main PC publishes a JSON snapshot of the vault state to the site's backend (e.g. Cloudflare Worker + KV/D1). The site never touches the vault directly.
+  - **Button clicks** go into a small queue on the backend. The desktop executor polls the queue and applies each click as a card status change. Edits still happen only on the PC, so there are no sync conflicts.
+  - **Authentication:** Cloudflare Access (or another login system) in front of the whole subdomain.
+  - **Privacy:** the snapshot leaves out note bodies by default, sending only titles and metadata. Private areas can be excluded completely.
 
 ## Recommended Obsidian stack
 - Bases, Tasks, Templater, Periodic Notes and Homepage.
@@ -143,7 +170,7 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
 
 ## Phased roadmap
 1. **MVP:** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
-2. **Sessions + GitHub:** hooks feed the session board, and GitHub data lands in project notes. Adds `/resume` and `/next`.
+2. **Sessions + GitHub + repo docs indexer:** hooks feed the session board, GitHub data lands in project notes, and ADRs/audits/decisions are indexed per project. Adds `/resume` and `/next`.
 3. **Calendar/email + writing pipeline + PDF import.**
 4. **Overseer:** activity log, `/weekly`, action cards + executor, trust ladder.
 5. **Web dashboard / PWA.**
@@ -156,7 +183,8 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- Which desktop operating systems (Windows, macOS or Linux)? This affects hooks and scheduling scripts.
+- How is maintz.dev built and hosted (framework, host, DNS on Cloudflare?)
+- Where do your repos live (one root folder?), and do any already have ADRs or audits?
 - Calendar and email provider: Google or Microsoft/Outlook?
 - Which writing platforms (blog, LinkedIn, X, Substack…)?
 - Is there an existing vault, roughly how big is it, and where do the existing markdown and PDF files live?

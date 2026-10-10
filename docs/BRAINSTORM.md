@@ -3,7 +3,9 @@
 ## Decisions so far
 - **Hybrid design.** The Obsidian vault holds the truth as plain markdown. Obsidian is where you work day to day, and a small web dashboard covers what Obsidian can't do well: live Claude session status, charts and quick phone checks.
 - **Devices:** several Windows PCs plus a phone.
-- **Web surface:** a private subdomain of maintz.dev (e.g. `dash.maintz.dev`).
+- **Web surface:** a private subdomain of maintz.dev (e.g. `dash.maintz.dev`). The site already uses Astro on Cloudflare with some Supabase, and the dashboard reuses that stack.
+- **Projects root:** almost all repos live under one `Projects` folder. It needs reorganising, and a few folders still need moving into it.
+- **Email/calendar:** mainly Outlook (personal Microsoft account). Gmail is unused, so it's ignored.
 - **Autonomy:** the agent does low-risk work on its own, asks before anything destructive, and logs every edit.
 - **Sources:** GitHub, Claude Code sessions, calendar and email, writing and publishing, and existing markdown and PDFs.
 
@@ -35,13 +37,16 @@
 | Claude Code (local) | Hooks on `SessionStart`, `Stop` and `Notification` run a script. The script writes or updates `Sessions/<id>.md` with project, status, last message, and whether it is waiting on you. |
 | Claude Code (cloud) | No public list API. Routines report their own runs; other sessions are added by hand or via an end-of-session hook. |
 | GitHub | GitHub MCP, or a script running `gh` on a schedule. It writes open PRs, CI state and review requests into each project note. |
-| Calendar/email | MCP servers (Google or Microsoft). Email triage only writes drafts and never sends. |
+| Calendar/email | Outlook via Microsoft Graph, using either Claude's Microsoft 365 connector or a Graph-based Outlook MCP server. **To verify:** support for personal outlook.com accounts, since some connectors only accept work/school accounts. Email triage only writes drafts and never sends. |
 | Existing md/PDFs | A one-time import into `Raw/`, plus a lightweight index note per source. **No mass summarising**, because summaries bloat the vault. |
 | Writing | `Writing/` pipeline: idea → draft → edit → scheduled → published, tracked per platform. |
 
 ### 2b. Project docs (ADRs, audits, decisions)
 - **Repo indexer** (a script run on a schedule and after git pulls):
-  - Scans the folder your repos live in (e.g. `C:\dev\*`) using glob rules in `_system/sources.yaml`.
+  - Scans the `Projects` folder recursively and finds projects by their `.git` folders, so reorganising subfolders doesn't break anything.
+  - A non-git folder can be marked as a project with a `.project.yaml` file.
+  - Extra folders outside `Projects` can be listed in `_system/sources.yaml`.
+  - Which files count as docs is decided by glob rules in `_system/sources.yaml`.
   - Default rules: `docs/adr/**`, `docs/decisions/**`, `**/AUDIT*.md`, `**/*audit*.md`, `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `docs/**/*.md`.
   - Each repo gets its own overrides.
 - **Index, don't copy.** Each repo gets a `Projects/<repo>/docs.md` note listing every doc with:
@@ -180,9 +185,11 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
   - Suggestion inbox.
 - **Web dashboard at `dash.maintz.dev`** (later):
   - Live Claude sessions, GitHub/CI status, charts (focus time, throughput, streaks), action-card buttons. Works as a PWA on the phone.
-  - **Push model:** the main PC publishes a JSON snapshot of the vault state to the site's backend (e.g. Cloudflare Worker + KV/D1). The site never touches the vault directly.
-  - **Button clicks** go into a small queue on the backend. The desktop executor polls the queue and applies each click as a card status change. Edits still happen only on the PC, so there are no sync conflicts.
-  - **Authentication:** Cloudflare Access (or another login system) in front of the whole subdomain.
+  - **Built as** an Astro app on Cloudflare (Pages/Workers), with Supabase as the backend.
+  - **Push model:** the main PC sends a snapshot of the vault state to Supabase tables (projects, files, sessions, cards). The site never touches the vault directly.
+  - **Supabase Realtime** keeps the session board and action cards live without refreshing.
+  - **Button clicks** go into an `action_events` table in Supabase. The desktop executor polls the queue and applies each click as a card status change. Edits still happen only on the PC, so there are no sync conflicts.
+  - **Authentication:** Cloudflare Access in front of the whole subdomain, plus Supabase row-level security on every table (single owner).
   - **Privacy:** the snapshot leaves out note bodies by default, sending only titles and metadata. Private areas can be excluded completely.
 
 ## Recommended Obsidian stack
@@ -192,6 +199,10 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
 - Dataview is legacy now. Datacore is only for one-off custom widgets.
 
 ## Phased roadmap
+0. **Projects inventory & renovation (first real use):**
+   - A script lists every folder in `Projects`, plus the folders that need moving in, with git remote, last commit, uncommitted changes, size and the docs found.
+   - The agent proposes a new folder structure and each move as an action card (moves always need approval).
+   - This also tests the card flow before anything depends on it.
 1. **MVP:** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
 2. **Sessions + GitHub + repo docs indexer:** hooks feed the session board, GitHub data lands in project notes, and ADRs/audits/decisions are indexed per project. Adds `/resume` and `/next`.
 3. **Calendar/email + writing pipeline + PDF import.**
@@ -206,9 +217,8 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- How is maintz.dev built and hosted (framework, host, DNS on Cloudflare?)
-- Where do your repos live (one root folder?), and do any already have ADRs or audits?
-- Calendar and email provider: Google or Microsoft/Outlook?
+- Is the Outlook account a personal outlook.com account or a Microsoft 365 work/school account?
+- Which folders outside `Projects` need moving in, and what's the path to `Projects`?
 - Which writing platforms (blog, LinkedIn, X, Substack…)?
 - Is there an existing vault, roughly how big is it, and where do the existing markdown and PDF files live?
 - Claude subscription only, or also an API key (for SDK and dashboard jobs)?

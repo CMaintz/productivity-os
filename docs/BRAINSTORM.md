@@ -5,7 +5,13 @@
 - **Devices:** several Windows PCs plus a phone.
 - **Web surface:** a private subdomain of maintz.dev (e.g. `dash.maintz.dev`). The site already uses Astro on Cloudflare with some Supabase, and the dashboard reuses that stack.
 - **Projects root:** almost all repos live under one `Projects` folder. It needs reorganising, and a few folders still need moving into it.
-- **Email/calendar:** mainly Outlook (personal Microsoft account). Gmail is unused, so it's ignored.
+- **Email/calendar:** a personal Outlook account. Gmail is unused, so it's ignored.
+- **No vault yet.** We create a new one.
+- **Claude subscription only, no API key.** All AI work runs through Claude Code on your login (see "Execution model").
+- **Paths:**
+  - `C:\Users\akash\Projects`
+  - Siblings to fold in: `PhpStormProjects`, `IdeaProjects`, etc.
+- **Later idea:** an always-on server running Claude Code plus the collector and executor.
 - **Autonomy:** the agent does low-risk work on its own, asks before anything destructive, and logs every edit.
 - **Sources:** GitHub, Claude Code sessions, calendar and email, writing and publishing, and existing markdown and PDFs.
 
@@ -37,7 +43,7 @@
 | Claude Code (local) | Hooks on `SessionStart`, `Stop` and `Notification` run a script. The script writes or updates `Sessions/<id>.md` with project, status, last message, and whether it is waiting on you. |
 | Claude Code (cloud) | No public list API. Routines report their own runs; other sessions are added by hand or via an end-of-session hook. |
 | GitHub | GitHub MCP, or a script running `gh` on a schedule. It writes open PRs, CI state and review requests into each project note. |
-| Calendar/email | Outlook via Microsoft Graph, using either Claude's Microsoft 365 connector or a Graph-based Outlook MCP server. **To verify:** support for personal outlook.com accounts, since some connectors only accept work/school accounts. Email triage only writes drafts and never sends. |
+| Calendar/email | **Personal** Outlook through Microsoft Graph. Graph accepts personal Microsoft accounts. Plan: a free Entra/Azure app registration (device-code login) plus a Graph-based Outlook MCP server, or our own small fetcher. Claude's Microsoft 365 connector is probably limited to work/school accounts (verify). Email triage only writes drafts and never sends. |
 | Existing md/PDFs | A one-time import into `Raw/`, plus a lightweight index note per source. **No mass summarising**, because summaries bloat the vault. |
 | Writing | `Writing/` pipeline: idea → draft → edit → scheduled → published, tracked per platform. |
 
@@ -221,13 +227,76 @@ permissions: [github:read]
 
 **Build flow:**
 - **Declarative widgets:** the agent writes the YAML and a preview shows up on the dashboard with Keep and Discard buttons.
-- **Code widgets:**
-  - The agent works on a branch and opens a PR.
-  - Cloudflare Pages builds a preview URL.
-  - The card links to that preview, and approving the card merges the PR.
-- **Trust ladder:** declarative widgets can earn "auto with notice". Code widgets always need approval.
+- **Code widgets** go through the specs → PR pipeline:
+  1. The agent works on a branch with tests: a fixture-data unit test, a schema check, and a Playwright render/screenshot test.
+  2. CI runs, and Cloudflare builds a preview.
+  3. If everything is green and the widget asks for no new permissions or connectors, it **auto-merges and deploys**, and you get a notice card with Undo.
+  4. If it asks for new permissions, it needs your approval first.
+- **Runtime guardrails:**
+  - Every widget runs behind an error boundary or sandbox.
+  - Repeated runtime errors switch the widget off automatically and open a "fix it" card.
+  - Rolling back is one click.
 
 **Widget gallery page:** lists installed widgets, suggested ones (with the reason for each), and retired ones (with one-click restore).
+
+## Platform architecture: modules + widgets (unified)
+Complex core features are **not** widgets. They are **first-party modules**. Modules and widgets are built on the same platform and follow the same contracts.
+
+**Shared platform contracts:**
+- **Data:** typed entities (project, file, session, card, spec, event) live in Supabase and are mirrored to the vault as markdown.
+- **Actions:** every button anywhere is an action card going through the same executor and trust ladder.
+- **Events:** one event log for all interactions (`usage_events`).
+- **Layout:** pages are made of slots, and slots hold widgets.
+- **Auth/permissions:** the same model for everything.
+
+**Module** = a full feature with its own pages, backend and code. Modules ship with the core repo. Examples:
+- Sessions
+- Projects & file panel
+- Specs / ticket-to-PR
+- Orchestrator chat
+- Action inbox
+- Widget gallery
+
+**Widget** = a tile placed in a layout slot. Widgets are declarative or code, as in 4c.
+
+**A module also exposes widgets.** The Sessions module, for example, offers a "waiting on me" tile. Modules and widgets share the same data, actions and logging.
+
+## Execution model (subscription only, no API key)
+- **Every AI job runs as Claude Code on your login:**
+  - `claude -p` started by the executor on the main PC.
+  - Claude Desktop scheduled tasks.
+  - Routines (cloud, for jobs that don't need local files).
+  - The Claude GitHub Action with a subscription OAuth token (`claude setup-token`) for repo work.
+- **The browser never calls the Anthropic API.** Orchestrator chat in the dashboard works like this:
+  - The message is written to Supabase.
+  - The executor runs `claude -p --resume <orchestrator-session>`.
+  - The reply streams back through Realtime.
+  - This only works while the PC is on; the "always-on server" idea would fix that later.
+- **Usage budget:**
+  - The status line reports your 5-hour and weekly usage %. A widget shows it.
+  - The orchestrator pauses background jobs once usage passes a threshold you choose, so you aren't locked out of interactive work.
+
+## Interaction logging (workflow insight)
+- **Logged events:**
+  - Dashboard: views, clicks, dismissals, card decisions.
+  - Orchestrator chat: messages, which suggestions you accepted or rejected, and the reasons.
+  - Claude Code hooks: `UserPromptSubmit`, `PostToolUse`, `Stop`, `Notification`, permission prompts, interrupts and session length.
+- **Patterns the orchestrator looks for:**
+  - The same permission prompt approved repeatedly → suggest an allowlist rule.
+  - The same prompt typed repeatedly → suggest a skill or slash command.
+  - Frequent interrupts or corrections in a repo → suggest a `CLAUDE.md` fix.
+  - Sessions sitting "waiting on you" for a long time → suggest a notification or a widget.
+  - A dashboard feature you never use → suggest removing it.
+- **Privacy:** raw prompts stay local in `_system/activity.jsonl`. Only aggregates and metadata go to Supabase, unless you choose otherwise.
+
+## Specs → PR module (integrates your ticket-to-PR tool)
+1. **Write or brainstorm a spec in the dashboard.** The orchestrator helps by asking questions and pulling in project ADRs and existing docs.
+2. **The spec is saved** as markdown in the vault and as a GitHub issue in the target repo.
+3. **Pick the repo, then click "Build":**
+   - The spec is handed to your ticket-to-PR pipeline. Alternatives are a local `claude -p` run or the Claude GitHub Action on the issue.
+   - The agent writes a decision record for any choice it makes on its own.
+4. **Progress shows on the session board:** PR, CI, review state and the Cloudflare preview link.
+5. **Finishing:** coded widgets use this same pipeline.
 
 ## Surfaces
 - **Obsidian Home** (Homepage plugin + Bases):
@@ -253,8 +322,16 @@ permissions: [github:read]
 
 ## Phased roadmap
 0. **Projects inventory & renovation (first real use):**
-   - A script lists every folder in `Projects`, plus the folders that need moving in, with git remote, last commit, uncommitted changes, size and the docs found.
+   - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).
+   - For each folder it lists git remote, last commit, uncommitted changes and unpushed branches, size, language and docs found.
+   - It also cross-checks against your GitHub repos: what's local-only and what's GitHub-only.
    - The agent proposes a new folder structure and each move as an action card (moves always need approval).
+   - Structure is organised by kind, not status (a status change shouldn't move folders); only `_archive` is status-based.
+   - **Moves are safe:**
+     - Nothing with uncommitted or unpushed work moves until that work is saved.
+     - Claude Code session history (`~/.claude/projects/<encoded-path>`) is renamed to the new path, so old sessions still show up.
+     - Python venvs and absolute-path configs are flagged for rebuilding.
+     - JetBrains recent-project lists get refreshed.
    - This also tests the card flow before anything depends on it.
 1. **Widget runtime + MVP:** widget manifest format, the built-in view primitives, and the core widgets built with them.
    **MVP (rest):** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
@@ -271,8 +348,9 @@ permissions: [github:read]
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- Is the Outlook account a personal outlook.com account or a Microsoft 365 work/school account?
-- Which folders outside `Projects` need moving in, and what's the path to `Projects`?
 - Which writing platforms (blog, LinkedIn, X, Substack…)?
-- Is there an existing vault, roughly how big is it, and where do the existing markdown and PDF files live?
-- Claude subscription only, or also an API key (for SDK and dashboard jobs)?
+- Which repo is the ticket-to-PR tool, and how is it triggered?
+- Phone: iPhone or Android? This decides vault sync (Obsidian Sync vs Syncthing) and push notifications.
+- Which PC is the main one that runs the executor?
+- Where do the existing loose markdown and PDF files live?
+- Project categories for the new structure?

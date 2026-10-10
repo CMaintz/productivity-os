@@ -7,6 +7,9 @@
 - **Projects root:** almost all repos live under one `Projects` folder. It needs reorganising, and a few folders still need moving into it.
 - **Email/calendar:** a personal Outlook account. Gmail is unused, so it's ignored.
 - **No vault yet.** We create a new one.
+- **Phone: Android.** Syncthing (free) or Obsidian Sync both work, and notifications go through ntfy or web push.
+- **Raw Claude Code prompts stay local.** Only aggregates go to Supabase.
+- **Project structure:** decided after the inventory, which proposes 2–3 options using your actual repos.
 - **Claude subscription only, no API key.** All AI work runs through Claude Code on your login (see "Execution model").
 - **Paths:**
   - `C:\Users\akash\Projects`
@@ -289,11 +292,11 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
   - A dashboard feature you never use → suggest removing it.
 - **Privacy:** raw prompts stay local in `_system/activity.jsonl`. Only aggregates and metadata go to Supabase, unless you choose otherwise.
 
-## Specs → PR module (integrates your ticket-to-PR tool)
+## Specs → PR module (integrates Foundry's ticket-to-PR)
 1. **Write or brainstorm a spec in the dashboard.** The orchestrator helps by asking questions and pulling in project ADRs and existing docs.
 2. **The spec is saved** as markdown in the vault and as a GitHub issue in the target repo.
 3. **Pick the repo, then click "Build":**
-   - The spec is handed to your ticket-to-PR pipeline. Alternatives are a local `claude -p` run or the Claude GitHub Action on the issue.
+   - The spec is handed to a **build adapter**. The first adapter is Foundry's ticket-to-PR tool (it lives inside `CMaintz/foundry`). Other adapters can be a local `claude -p` run or the Claude GitHub Action on the issue. Pulling ticket-to-PR out of Foundry into its own package is an option for later.
    - The agent writes a decision record for any choice it makes on its own.
 4. **Progress shows on the session board:** PR, CI, review state and the Cloudflare preview link.
 5. **Finishing:** coded widgets use this same pipeline.
@@ -349,8 +352,6 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 
 ## Open questions
 - Which writing platforms (blog, LinkedIn, X, Substack…)?
-- Which repo is the ticket-to-PR tool, and how is it triggered?
-- Phone: iPhone or Android? This decides vault sync (Obsidian Sync vs Syncthing) and push notifications.
+- How is Foundry's ticket-to-PR triggered (CLI, issue label, API)?
 - Which PC is the main one that runs the executor?
 - Where do the existing loose markdown and PDF files live?
-- Project categories for the new structure?

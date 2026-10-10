@@ -1,0 +1,10 @@
+{
+  "name": "productivity-os",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "inventory": "node tools/inventory/inventory.mjs --out out --github CMaintz",
+    "test": "node --test tools/inventory/test/inventory.test.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

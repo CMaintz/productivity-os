@@ -54,6 +54,29 @@
   Copying would mean two copies that drift apart and a bloated vault.
 - **New or changed docs become action cards.** Examples: "ADR-012 added by agent session X → review", "Audit found 3 high-severity issues → create tasks?".
 - **Autonomous-decision convention.** Every repo's `CLAUDE.md` tells agents to record any non-trivial decision they make on their own in `docs/decisions/YYYY-MM-DD-<slug>.md`. The record follows a short template: context, options, choice, confidence, and how to revert. The indexer gathers these into one "Decisions to review" view.
+**File panel per project.** Each project note has a panel with two tabs:
+- **Repo:** markdown files tracked in git, the same set as on GitHub.
+- **Local:** markdown files that exist only on your PC: untracked or gitignored files in the clone (scratch notes, agent output, local audits) plus vault notes linked to the project.
+
+Each row shows:
+- the filename and folder
+- a type badge (ADR, audit, decision, readme, changelog, note)
+- the date it was last changed
+- its git state (clean, modified or untracked)
+- a one-line summary
+- an "open" link: `vscode://` or `obsidian://` on desktop, GitHub on the phone
+
+Extras:
+- search
+- group by folder
+- pinned docs
+- a "new since last look" dot
+
+How it works:
+- The indexer writes the file list once per project, to `Projects/<repo>/files.json`.
+- In Obsidian, a Datacore widget shows that file as the tabbed panel. The web dashboard uses the same JSON with the same component.
+- There is no note per file, so the vault stays clean.
+- On the phone, the Local tab shows file names and summaries only, because the files themselves stay on the PC.
 - **`/resume <project>` and `/next`** read the project's ADRs and recent decisions, so their suggestions follow the architecture choices you've already made.
 
 ### Windows specifics

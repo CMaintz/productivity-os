@@ -16,6 +16,13 @@ This skill **never moves, renames or deletes anything**. It produces a proposal.
    - **A move table** for the recommended structure, with columns: `from | to | reason | blockers`. Blockers are taken from the inventory flags: uncommitted work, unpushed commits, stashes, no remote, nested git, venv.
    - **"Save first" list:** repos that must be committed or pushed before moving.
    - **Questions** for anything ambiguous, such as unclear purpose or possible duplicates.
+   - **A loose-docs table**, covering the "Loose docs outside projects" section and projects with many root-level notes. For each file, read enough to judge it, then propose one destination:
+     - into a project's `docs/`, renamed to fit (e.g. ADR, decision, spec)
+     - into the future vault: `Inbox/` for anything still to sort, `Writing/` for drafts and posts, `Raw/` for reference PDFs
+     - merge into an existing doc
+     - archive
+
+     Columns: `file | what it is | proposed destination | confidence`.
    - **Cleanup suggestions** (archive, delete-candidate, clone-from-GitHub). These are suggestions only.
 4. Keep folder names short and lowercase-kebab. Keep the existing project folder names unless they clash.
 

@@ -92,7 +92,10 @@ function isProjectDir(dir, names) {
 // where every non-alphanumeric character becomes '-'.
 export function claudeEncode(p) { return p.replace(/[^a-zA-Z0-9]/g, '-'); }
 
+const isDocFile = name => /\.(md|mdx|pdf)$/i.test(name);
+
 export function classifyDoc(rel) {
+  if (/\.pdf$/i.test(rel)) return 'pdf';
   const r = rel.replace(/\\/g, '/');
   for (const [re, type] of DOC_RULES) if (re.test(r)) return type;
   return 'note';
@@ -108,6 +111,7 @@ function normRemote(url) {
 export function findProjects(root, maxDepth) {
   const found = [];
   const containers = []; // folders that only hold other projects (grouping dirs)
+  const loose = []; // md/pdf files sitting outside any project
   function walk(dir, depth) {
     let ents;
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -116,6 +120,13 @@ export function findProjects(root, maxDepth) {
     if (depth >= maxDepth) { if (depth > 0) found.push(dir); return; }
     const subdirs = ents.filter(e => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.'));
     const looseFiles = ents.filter(e => e.isFile()).length;
+    for (const e of ents) {
+      if (e.isFile() && isDocFile(e.name) && !(depth > 0 && subdirs.length === 0)) {
+        const full = path.join(dir, e.name);
+        let st; try { st = fs.statSync(full); } catch { continue; }
+        loose.push({ path: full, type: classifyDoc(path.relative(root, full)), size: st.size, modified: new Date(st.mtimeMs).toISOString() });
+      }
+    }
     if (depth > 0) {
       if (subdirs.length === 0) { found.push(dir); return; } // leaf folder with loose files
       containers.push({ path: dir, looseFiles });
@@ -123,7 +134,7 @@ export function findProjects(root, maxDepth) {
     for (const s of subdirs) walk(path.join(dir, s.name), depth + 1);
   }
   walk(root, 0);
-  return { projects: found, containers };
+  return { projects: found, containers, loose };
 }
 
 // ---------- per-project facts ----------
@@ -147,7 +158,7 @@ function scanFiles(dir) {
         bytes += st.size; if (st.mtimeMs > newest) newest = st.mtimeMs;
         const ext = path.extname(e.name).toLowerCase();
         if (LANG_BY_EXT[ext]) langs[LANG_BY_EXT[ext]] = (langs[LANG_BY_EXT[ext]] || 0) + 1;
-        if (ext === '.md' || ext === '.mdx') {
+        if (isDocFile(e.name)) {
           const rel = path.relative(dir, full);
           docs.push({ path: rel.replace(/\\/g, '/'), type: classifyDoc(rel), modified: new Date(st.mtimeMs).toISOString() });
         }
@@ -244,6 +255,15 @@ export function renderMarkdown(inv) {
   if (inv.containers.length) {
     L.push('## Existing grouping folders', ...inv.containers.map(c => `- \`${c.path}\`${c.looseFiles ? ` (${c.looseFiles} loose files)` : ''}`), '');
   }
+  if (inv.loose.length) {
+    L.push(`## Loose docs outside projects (${inv.loose.length})`, '', '| File | Type | Modified | Size |', '|---|---|---|---|');
+    for (const d of [...inv.loose].sort((a, b) => b.modified.localeCompare(a.modified))) L.push(`| \`${d.path}\` | ${d.type} | ${day(d.modified)} | ${fmtBytes(d.size)} |`);
+    L.push('');
+  }
+  const scattered = inv.projects.filter(p => p.docs.filter(d => d.type === 'note' && !d.path.includes('/')).length >= 3);
+  if (scattered.length) {
+    L.push('## Projects with many loose root-level notes', ...scattered.map(p => `- \`${p.relative}\`: ${p.docs.filter(d => d.type === 'note' && !d.path.includes('/')).map(d => d.path).join(', ')}`), '');
+  }
   L.push('## All projects', '', '| Project | Root | Lang | Last commit | Last file change | Size | GitHub | Docs | Flags |', '|---|---|---|---|---|---|---|---|---|');
   for (const p of [...inv.projects].sort((a, b) => (b.lastCommitDate || b.newest || '').localeCompare(a.lastCommitDate || a.newest || ''))) {
     const docCounts = Object.entries(p.docs.reduce((m, d) => (m[d.type] = (m[d.type] || 0) + 1, m), {})).map(([t, n]) => `${t}:${n}`).join(' ');
@@ -259,10 +279,11 @@ export function renderMarkdown(inv) {
 }
 
 export function buildInventory({ roots, home, github }) {
-  const projects = []; const containers = [];
+  const projects = []; const containers = []; const loose = [];
   for (const root of roots) {
     const r = findProjects(root, 4);
     containers.push(...r.containers);
+    loose.push(...r.loose);
     for (const dir of r.projects) projects.push(inspectProject(dir, root, home));
   }
   const byRemote = {};
@@ -273,7 +294,7 @@ export function buildInventory({ roots, home, github }) {
     const repos = githubRepos(github);
     if (repos) githubOnly = repos.filter(r => !byRemote[r.nameWithOwner.toLowerCase()]);
   }
-  return { generatedAt: new Date().toISOString(), roots, projects, containers, duplicates, githubOnly };
+  return { generatedAt: new Date().toISOString(), roots, projects, containers, loose, duplicates, githubOnly };
 }
 
 // ---------- main ----------

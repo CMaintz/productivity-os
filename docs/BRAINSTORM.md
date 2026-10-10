@@ -48,7 +48,7 @@
 | GitHub | GitHub MCP, or a script running `gh` on a schedule. It writes open PRs, CI state and review requests into each project note. |
 | Calendar/email | **Personal** Outlook through Microsoft Graph. Graph accepts personal Microsoft accounts. Plan: a free Entra/Azure app registration (device-code login) plus a Graph-based Outlook MCP server, or our own small fetcher. Claude's Microsoft 365 connector is probably limited to work/school accounts (verify). Email triage only writes drafts and never sends. |
 | Existing md/PDFs | A one-time import into `Raw/`, plus a lightweight index note per source. **No mass summarising**, because summaries bloat the vault. |
-| Writing | `Writing/` pipeline: idea → draft → edit → scheduled → published, tracked per platform. |
+| Writing | `Writing/` pipeline: idea → draft → edit → scheduled → published, tracked per platform. Platforms: **your own blog** (maintz.dev), **LinkedIn**, and maybe **dev.to**. The blog is canonical: publishing means a PR to the site repo, assuming posts are markdown in Astro (verify). dev.to cross-posts through its API with `canonical_url` pointing back to the blog. LinkedIn gets a drafted post, and publishing it stays manual (copy plus a link), since sending things to people is a hard ceiling anyway. |
 
 ### 2b. Project docs (ADRs, audits, decisions)
 - **Repo indexer** (a script run on a schedule and after git pulls):
@@ -296,9 +296,15 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 1. **Write or brainstorm a spec in the dashboard.** The orchestrator helps by asking questions and pulling in project ADRs and existing docs.
 2. **The spec is saved** as markdown in the vault and as a GitHub issue in the target repo.
 3. **Pick the repo, then click "Build":**
-   - The spec is handed to a **build adapter**. The first adapter is Foundry's ticket-to-PR tool (it lives inside `CMaintz/foundry`). Other adapters can be a local `claude -p` run or the Claude GitHub Action on the issue. Pulling ticket-to-PR out of Foundry into its own package is an option for later.
+   - The spec editor follows Foundry's ticket schema (`presets/tickets/ticket-schema.md`). It has four fields: **intent**, **acceptance-criteria checklist**, **scope boundaries** and **pointers**. The orchestrator helps fill them in, and "Build" stays disabled until all four are complete.
+   - The spec becomes a GitHub issue on the `agent-feature` template. If the repo is missing Foundry's labels, a card offers to onboard it (`setup-labels.sh` / `foundry-init`).
+   - **Build adapters** (one per trigger, chosen per project or per spec):
+     - **Label:** set `agent:ready`, and a `/loop /feature` puller picks the issue up.
+     - **Command:** the executor runs `/feature <issue-ref>` supervised in local Claude Code.
+     - **API:** a Routine `/fire` call or the Claude GitHub Action on the issue, for when the PC is off.
+   - The `/feature` driver works the issue until Foundry's gate passes, then hands it to `/ship`, which opens the PR.
    - The agent writes a decision record for any choice it makes on its own.
-4. **Progress shows on the session board:** PR, CI, review state and the Cloudflare preview link.
+4. **Progress shows on the session board:** the ticket's label state (`agent:ready` → `agent:working` → `agent:blocked`), the issue thread log, PR, CI, review state and the Cloudflare preview link. When an issue goes to `agent:blocked`, an action card appears with the reason the agent posted on the thread.
 5. **Finishing:** coded widgets use this same pipeline.
 
 ## Surfaces
@@ -328,6 +334,7 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).
    - For each folder it lists git remote, last commit, uncommitted changes and unpushed branches, size, language and docs found.
    - It also cross-checks against your GitHub repos: what's local-only and what's GitHub-only.
+   - **Loose docs:** markdown and PDF files that sit outside any project, plus projects cluttered with root-level notes. The proposal gives each one a destination: a project's `docs/`, the vault (`Inbox/`, `Writing/`, `Raw/`), merge into an existing doc, or archive.
    - The agent proposes a new folder structure and each move as an action card (moves always need approval).
    - Structure is organised by kind, not status (a status change shouldn't move folders); only `_archive` is status-based.
    - **Moves are safe:**
@@ -351,7 +358,5 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- Which writing platforms (blog, LinkedIn, X, Substack…)?
-- How is Foundry's ticket-to-PR triggered (CLI, issue label, API)?
 - Which PC is the main one that runs the executor?
-- Where do the existing loose markdown and PDF files live?
+- Are blog posts markdown files in the `cmaintz-site` repo?

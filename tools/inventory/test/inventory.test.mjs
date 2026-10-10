@@ -30,6 +30,8 @@ function fixture() {
   write(path.join(home, 'IdeaProjects', 'javaThing', 'pom.xml'));
   write(path.join(home, 'IdeaProjects', 'javaThing', 'src/Main.java'));
   write(path.join(home, 'IdeaProjects', 'javaThing', 'SECURITY-AUDIT.md'));
+  // loose docs outside projects
+  write(path.join(P, 'ideas.md')); write(path.join(P, 'web', 'site-notes.md')); write(path.join(P, 'spec.pdf'));
   // claude history for site
   fs.mkdirSync(path.join(home, '.claude', 'projects', claudeEncode(a)), { recursive: true });
   return { home, a, b };
@@ -62,7 +64,12 @@ test('inventory finds projects, git state, docs and flags', () => {
   assert.ok(byName.javaThing.docs.some(d => d.type === 'audit'));
   assert.ok(inv.containers.some(c => c.path.endsWith('web')));
 
+  const loose = inv.loose.map(d => path.basename(d.path)).sort();
+  assert.deepEqual(loose, ['ideas.md', 'site-notes.md', 'spec.pdf']);
+  assert.equal(inv.loose.find(d => d.path.endsWith('spec.pdf')).type, 'pdf');
+
   const md = renderMarkdown(inv);
+  assert.match(md, /Loose docs outside projects \(3\)/);
   assert.match(md, /Save before moving/);
   assert.match(md, /scratch/);
   // read-only: scanned repo untouched

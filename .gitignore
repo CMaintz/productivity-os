@@ -1,2 +1,5 @@
 out/
 node_modules/
+
+# Foundry loop telemetry (local observability)
+.foundry/

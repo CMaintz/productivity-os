@@ -176,6 +176,59 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
 - Touching folders outside its own.
 - Pushing to main.
 
+### 4c. Universal widgets (buildable by the orchestrator)
+Everything on a dashboard is a widget. That includes the core pieces (session board, file panel, action cards, today), so the system is built from the same parts it can create.
+
+**Two kinds of widget:**
+1. **Declarative.** This is the default and covers about 80% of cases.
+   - A `widget.yaml` combines a **data source** with a **built-in view primitive**.
+   - Data sources: vault query, Supabase view, GitHub, Graph/Outlook, Claude sessions, any MCP/HTTP endpoint.
+   - Built-in views: stat, list, table, chart, kanban, timeline, calendar, file panel, card list, feed.
+   - No code is involved, so the orchestrator can generate these safely.
+2. **Code.** Only for when the built-in views can't do the job.
+   - `widgets/<id>/` holds:
+     - `widget.yaml`: the manifest, including permissions and data schema.
+     - `fetch.ts`: the backend that produces the widget's JSON.
+     - `view.tsx`: a React view, compatible with Preact so the same component runs in Obsidian (Datacore) and the web dashboard (Astro island).
+
+**Example manifest:**
+```yaml
+id: pr-review-queue
+title: PRs waiting on me
+source: { kind: github, query: "is:open review-requested:@me" }
+view: { kind: list, fields: [repo, title, age, ci] , actions: [open, "continue_agent"] }
+refresh: 10m
+surfaces: [home, project]
+permissions: [github:read]
+```
+
+**Where things run:**
+- **Fetchers** run either on the PC collector (for anything that needs local access) or in a Cloudflare Worker (for cloud APIs).
+- **Secrets** stay server-side, and each fetcher only gets the permissions its manifest declares.
+- **Custom views** render in a sandboxed iframe on the web.
+- **Layouts** (`layouts/home.yaml`, `layouts/project.yaml`) say which widgets go where. The orchestrator can suggest changing them.
+
+**Usage-driven evolution:**
+- **What gets logged:**
+  - The dashboard logs widget views, clicks, expands and dismissals to Supabase `usage_events`.
+  - Claude Code hooks log what you ask Claude for.
+- **What the orchestrator looks for:**
+  - Repeated manual lookups, for example asking Claude "what's CI on X?" 6 times this week. → Card: "Create a CI status widget".
+  - Widgets you never look at. → Card: "Remove or shrink the widget".
+  - Widgets you always open together. → Card: "Merge them, or put them next to each other".
+  - Missing data. → Card: "Add a connector".
+- **Widget lifecycle:** suggested → preview → active → retired when unused.
+
+**Build flow:**
+- **Declarative widgets:** the agent writes the YAML and a preview shows up on the dashboard with Keep and Discard buttons.
+- **Code widgets:**
+  - The agent works on a branch and opens a PR.
+  - Cloudflare Pages builds a preview URL.
+  - The card links to that preview, and approving the card merges the PR.
+- **Trust ladder:** declarative widgets can earn "auto with notice". Code widgets always need approval.
+
+**Widget gallery page:** lists installed widgets, suggested ones (with the reason for each), and retired ones (with one-click restore).
+
 ## Surfaces
 - **Obsidian Home** (Homepage plugin + Bases):
   - Today.
@@ -203,7 +256,8 @@ Meta Bind buttons set the card's `status`. Clicking a button only changes a file
    - A script lists every folder in `Projects`, plus the folders that need moving in, with git remote, last commit, uncommitted changes, size and the docs found.
    - The agent proposes a new folder structure and each move as an action card (moves always need approval).
    - This also tests the card flow before anything depends on it.
-1. **MVP:** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
+1. **Widget runtime + MVP:** widget manifest format, the built-in view primitives, and the core widgets built with them.
+   **MVP (rest):** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
 2. **Sessions + GitHub + repo docs indexer:** hooks feed the session board, GitHub data lands in project notes, and ADRs/audits/decisions are indexed per project. Adds `/resume` and `/next`.
 3. **Calendar/email + writing pipeline + PDF import.**
 4. **Overseer:** activity log, `/weekly`, action cards + executor, trust ladder.

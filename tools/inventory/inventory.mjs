@@ -199,10 +199,18 @@ function gitFacts(dir) {
   };
 }
 
+// Marks each doc as tracked by git (in the repo, on GitHub) or local-only (untracked/ignored).
+function markTracked(dir, docs, isGit) {
+  const out = isGit ? git(dir, ['ls-files', '-z', '--', '*.md', '*.mdx', '*.pdf']) : null;
+  const tracked = new Set((out || '').split('\0').filter(Boolean));
+  for (const d of docs) d.tracked = tracked.has(d.path);
+}
+
 export function inspectProject(dir, root, home) {
   const names = (() => { try { return fs.readdirSync(dir); } catch { return []; } })();
   const g = gitFacts(dir);
   const f = scanFiles(dir);
+  markTracked(dir, f.docs, g.isGit);
   const claudeHistory = path.join(home, '.claude', 'projects', claudeEncode(dir));
   const flags = [];
   if (g.isGit && g.dirty) flags.push(`uncommitted:${g.dirty}`);

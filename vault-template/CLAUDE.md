@@ -10,7 +10,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 | `Projects/` | One note per project (`<name>.md`) | update the `## Log`, `## Tasks` and `next` sections; create from template |
 | `Writing/` | Post ideas and drafts | create ideas; edit drafts **only when asked** |
 | `Specs/` | Product/feature specs | create/update when asked |
-| `Sessions/` | Claude Code session notes (written by hooks) | read; update status fields |
+| `Sessions/` | One note per Claude Code session, written by the session hook (`tools/hooks/` in productivity-os) | read; you may set `status: ended` on stale ones |
 | `Raw/` | Imported sources (PDFs, old md) | **read-only, never edit or delete** |
 | `Archive/` | Finished or dead material | move in **only via an approved action card** |
 | `Templates/`, `Bases/` | Note templates and dashboard views | change only when asked |
@@ -22,6 +22,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 - **spec:** `type: spec`, `status: outline|drafting|ready|building|done`, `project`, `mode: interview|autonomous`
 - **action:** `type: action`, `action`, `params`, `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed`, `context`, `expires`
 - **daily:** `type: daily`, `date: YYYY-MM-DD`
+- **session** (written by the hook, don't hand-edit): `type: session`, `status: idle|running|waiting|ended`, `project`, `cwd`, `session_id`, `started`, `updated`, `prompts`, `last_prompt`, `waiting_for`
 - **source:** `type: source`, `origin` (original path or URL), `imported: YYYY-MM-DD`
 
 Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-MM-DD ⏫`. They live in project notes under `## Tasks` and in daily notes.

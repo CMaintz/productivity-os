@@ -52,7 +52,10 @@ test('inventory finds projects, git state, docs and flags', () => {
   const site = byName.site;
   assert.equal(site.github, 'cmaintz/site');
   assert.equal(site.dirty, 0);
-  assert.ok(site.docs.some(d => d.type === 'adr'));
+  assert.ok(site.docs.some(d => d.type === 'adr' && d.tracked));
+  write(path.join(a, 'scratch-notes.md'));
+  const again = buildInventory({ roots: [path.join(home, 'Projects')], home, github: null }).projects.find(p => p.name === 'site');
+  assert.equal(again.docs.find(d => d.path === 'scratch-notes.md').tracked, false);
   assert.ok(site.heavyDirs.includes('node_modules'));
   assert.ok(!site.docs.some(d => d.path.includes('node_modules')));
   assert.equal(site.claudeHistory !== null, true);

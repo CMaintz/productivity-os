@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+"""foundry-flaky - the deterministic Triager (DESIGN §4.2), built.
+
+Two jobs, no model:
+
+  gate <report> [baseline]
+      Read a test report (JUnit XML or vitest JSON) and a flaky-baseline.json, then
+      decide the gate outcome: exit 1 ONLY if a test that is NOT quarantined failed.
+      A quarantined test that fails is printed (never hidden) but does not gate.
+      This is post-processing over the runner's own report - we do not fight the
+      runner with plugins or @Disabled; the runner runs everything, we judge the log.
+
+  classify --runs N --rerun "<cmd with {test}>" <report> [baseline]
+      Rerun each FAILED test N times to tell a flake from a real failure. A test that
+      both passes and fails across the reruns is a flake CANDIDATE - printed for a
+      human to add to the baseline (adding is a ratchet loosening; ruleset-guard makes
+      it a labelled decision). A test that fails every rerun is real; a quarantined
+      test that now passes every rerun is a within-run prune CANDIDATE (printed).
+
+  prune <baseline> [--min-green M] [--log <path>]
+      Auto-prune (re-arm) quarantined tests that have been green for M consecutive
+      gate runs. Reads the streak log that `gate` appends to, computes each quarantined
+      id's trailing consecutive-pass count (a single fail resets it to 0), and rewrites
+      the baseline WITHOUT the stable ones. Removal only, so the baseline still only
+      shrinks - ruleset-guard's `snooze` kind passes a prune label-free. Default M=10.
+      Fed by the PRE-PUSH placement (`/ship`), where `.foundry/` persists between runs;
+      CI contributes to the streak only if `.foundry/` is cached across runs. Run it
+      locally, or from a scheduled refresh workflow that opens the prune PR (mirrors
+      bootstrap.yml's snooze --prune pattern).
+
+Baseline (flaky-baseline.json), committed, may only shrink:
+  { "quarantined": [ { "id": "<test id>", "reason": "...", "since": "<ref/date>" } ] }
+
+Test id format (match the baseline to these):
+  JUnit XML  -> "<classname>.<name>"      (Gradle/PHPUnit/JUnit)
+  vitest     -> the assertion "fullName"  (ancestor titles + test title, space-joined)
+"""
+import glob
+import json
+import os
+import subprocess
+import sys
+import time
+import xml.etree.ElementTree as ET
+
+# Streak log that `gate` appends to and `prune` reads. One JSON line per gate run:
+#   {"ts": <epoch>, "results": {"<quarantined id>": "pass"|"fail", ...}}
+# Only quarantined ids that actually RAN this gate are recorded (an absent id neither
+# advances nor breaks a streak). Gitignore `.foundry/`.
+STREAK_LOG = os.environ.get("FOUNDRY_FLAKY_STREAKS", ".foundry/flaky-streaks.jsonl")
+DEFAULT_MIN_GREEN = 10
+
+
+def parse_report(path):
+    """Return (failed_ids, total, all_ids) from a report path.
+
+    `path` may be a single JUnit-XML or vitest-JSON file, or a DIRECTORY of JUnit XML
+    (Gradle/PHPUnit write one TEST-*.xml per class to build/test-results/test/) - in
+    which case every *.xml under it is parsed and merged.
+    """
+    if os.path.isdir(path):
+        files = sorted(glob.glob(os.path.join(path, "**", "*.xml"), recursive=True))
+        if not files:
+            raise SystemExit(f"flaky: no *.xml under directory {path}")
+        failed, all_ids = [], []
+        for f in files:
+            with open(f, encoding="utf-8") as fh:
+                fl, _, ids = _parse_junit(fh.read())
+            failed += fl
+            all_ids += ids
+        return failed, len(all_ids), all_ids
+    with open(path, encoding="utf-8") as fh:
+        head = fh.read(4096)
+        fh.seek(0)
+        body = fh.read()
+    if head.lstrip().startswith("<"):
+        return _parse_junit(body)
+    return _parse_vitest(body)
+
+
+def _parse_junit(text):
+    failed, all_ids = [], []
+    root = ET.fromstring(text)
+    # <testsuite> may be the root or nested under <testsuites>.
+    for case in root.iter("testcase"):
+        cls, name = case.get("classname", ""), case.get("name", "")
+        tid = f"{cls}.{name}" if cls else name
+        all_ids.append(tid)
+        # JUnit marks a failed case with a direct <failure> or <error> child.
+        if case.find("failure") is not None or case.find("error") is not None:
+            failed.append(tid)
+    return failed, len(all_ids), all_ids
+
+
+def _parse_vitest(text):
+    data = json.loads(text)
+    failed, all_ids = [], []
+    for suite in data.get("testResults", []):
+        for a in suite.get("assertionResults", []):
+            tid = a.get("fullName") or " ".join(
+                a.get("ancestorTitles", []) + [a.get("title", "")]
+            ).strip()
+            all_ids.append(tid)
+            if a.get("status") == "failed":
+                failed.append(tid)
+    return failed, len(all_ids), all_ids
+
+
+def load_quarantine(path):
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return {}
+    q = {}
+    for e in data.get("quarantined", []):
+        q[e["id"] if isinstance(e, dict) else e] = (
+            e.get("reason", "") if isinstance(e, dict) else ""
+        )
+    return q
+
+
+def append_streak(quar, all_ids, failed, log_path=STREAK_LOG):
+    """Record this run's pass/fail for each quarantined id that RAN. Best-effort: a
+    write failure never affects the gate outcome (telemetry must not change the result)."""
+    if not quar:
+        return
+    ran = set(all_ids)
+    failed_set = set(failed)
+    results = {tid: ("fail" if tid in failed_set else "pass")
+               for tid in quar if tid in ran}
+    if not results:
+        return
+    try:
+        d = os.path.dirname(log_path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"ts": int(time.time()), "results": results}) + "\n")
+    except OSError as e:
+        print(f"flaky: could not append streak log {log_path}: {e}", file=sys.stderr)
+
+
+def cmd_gate(report, baseline):
+    failed, total, all_ids = parse_report(report)
+    quar = load_quarantine(baseline)
+    real = [t for t in failed if t not in quar]
+    flaky_hits = [t for t in failed if t in quar]
+
+    # Feed the green-streak log (pre-push/CI), so `prune` can auto-re-arm stable flakes.
+    append_streak(quar, all_ids, failed)
+
+    print(f"flaky: {total} tests, {len(failed)} failed "
+          f"({len(real)} real, {len(flaky_hits)} quarantined)")
+    for t in flaky_hits:
+        print(f"  quarantined (not gating): {t}  [{quar[t] or 'no reason recorded'}]")
+    for t in real:
+        print(f"  FAIL (gating): {t}")
+    if real:
+        print("flaky: gate FAILS - a non-quarantined test failed.")
+        return 1
+    if flaky_hits:
+        print("flaky: gate passes - only quarantined flakes failed. Fix or prune them; "
+              "quarantine is debt, not a resting place.")
+    else:
+        print("flaky: gate passes - clean.")
+    return 0
+
+
+def trailing_green(log_path, tid):
+    """Consecutive 'pass' results for `tid` from the newest recorded run backward,
+    stopping at the first 'fail' (which resets the streak to 0). Runs where the test
+    did not appear are skipped - they neither advance nor break the streak."""
+    try:
+        with open(log_path, encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except FileNotFoundError:
+        return 0
+    streak = 0
+    for ln in reversed(lines):
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            res = json.loads(ln).get("results", {})
+        except json.JSONDecodeError:
+            continue
+        if tid not in res:
+            continue
+        if res[tid] == "pass":
+            streak += 1
+        else:
+            break
+    return streak
+
+
+def times_seen(log_path, tid):
+    """How many recorded runs include `tid` at all (0 => never ran since logging began)."""
+    try:
+        with open(log_path, encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except FileNotFoundError:
+        return 0
+    n = 0
+    for ln in lines:
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            if tid in json.loads(ln).get("results", {}):
+                n += 1
+        except json.JSONDecodeError:
+            continue
+    return n
+
+
+def cmd_prune(baseline, min_green, log_path):
+    if not baseline:
+        print("usage: foundry-flaky prune <baseline> [--min-green M] [--log <path>]",
+              file=sys.stderr)
+        return 2
+    try:
+        with open(baseline, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        print(f"flaky prune: no baseline at {baseline} - nothing to prune.")
+        return 0
+    entries = data.get("quarantined", [])
+    kept, pruned, stale = [], [], []
+    for e in entries:
+        tid = e["id"] if isinstance(e, dict) else e
+        g = trailing_green(log_path, tid)
+        if g >= min_green:
+            pruned.append((tid, g))
+            continue
+        kept.append(e)
+        # Never seen in the log = renamed/deleted test, or a quarantine that never runs.
+        # It can never reach the green threshold, so it would otherwise sit as dead debt.
+        # Surface it for a human - do NOT auto-remove (a rename deserves eyes).
+        if times_seen(log_path, tid) == 0:
+            stale.append(tid)
+    if stale:
+        print("flaky prune: STALE quarantine (never seen in the streak log - renamed, "
+              "deleted, or never run?); review by hand:")
+        for tid in stale:
+            print(f"  stale: {tid}")
+    if not pruned:
+        print(f"flaky prune: no quarantined test has {min_green}+ consecutive green "
+              f"runs in {log_path}; baseline unchanged.")
+        return 0
+    data["quarantined"] = kept
+    # newline="\n": a committed ratchet baseline must stay LF, or a Windows-run prune
+    # emits a whole-file CRLF diff (the phantom-diff the global gitattributes convention
+    # and _guards.yml's CRLF check exist to prevent).
+    with open(baseline, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+    print(f"flaky prune: re-armed {len(pruned)} stable test(s) (>= {min_green} green runs); "
+          "removal is tightening - commit without a label:")
+    for tid, g in pruned:
+        print(f"  pruned: {tid}  ({g} consecutive green)")
+    return 0
+
+
+def cmd_classify(report, baseline, runs, rerun_tmpl):
+    failed, _, _ = parse_report(report)
+    quar = load_quarantine(baseline)
+    if not failed:
+        print("flaky classify: nothing failed - nothing to classify.")
+        return 0
+    print(f"flaky classify: rerunning {len(failed)} failed test(s) x{runs}...")
+    new_flakes, real_fails, prune = [], [], []
+    for tid in failed:
+        passes = fails = 0
+        for _ in range(runs):
+            cmd = rerun_tmpl.replace("{test}", tid)
+            rc = subprocess.run(cmd, shell=True).returncode
+            if rc == 0:
+                passes += 1
+            else:
+                fails += 1
+        flips = passes > 0 and fails > 0
+        tag = "FLAKE" if flips else ("real" if fails == runs else "passed-all")
+        print(f"  {tid}: {passes} pass / {fails} fail -> {tag}")
+        if flips and tid not in quar:
+            new_flakes.append(tid)
+        elif fails == runs and tid not in quar:
+            real_fails.append(tid)
+        if tid in quar and passes == runs:
+            prune.append(tid)
+    if new_flakes:
+        print("\nQuarantine CANDIDATES (add to flaky-baseline.json - needs the "
+              "ruleset-change label, since growing the baseline is a loosening):")
+        for t in new_flakes:
+            print(f'  {{ "id": "{t}", "reason": "TODO", "since": "TODO" }}')
+    if prune:
+        print("\nPRUNE candidates (quarantined but now stable - remove to re-arm; "
+              "removal is tightening, no label needed):")
+        for t in prune:
+            print(f"  {t}")
+    if real_fails:
+        print("\nReal failures (fix these - not flaky):")
+        for t in real_fails:
+            print(f"  {t}")
+    return 0
+
+
+def main(argv):
+    if not argv or argv[0] not in ("gate", "classify", "prune"):
+        print(__doc__)
+        return 2
+    mode, rest = argv[0], argv[1:]
+    if mode == "gate":
+        if not rest:
+            print("usage: foundry-flaky gate <report> [baseline]", file=sys.stderr)
+            return 2
+        return cmd_gate(rest[0], rest[1] if len(rest) > 1 else None)
+    if mode == "prune":
+        min_green, log_path, pos = DEFAULT_MIN_GREEN, STREAK_LOG, []
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--min-green":
+                min_green = int(rest[i + 1]); i += 2
+            elif rest[i] == "--log":
+                log_path = rest[i + 1]; i += 2
+            else:
+                pos.append(rest[i]); i += 1
+        return cmd_prune(pos[0] if pos else None, min_green, log_path)
+    # classify
+    runs, rerun = 5, None
+    pos = []
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--runs":
+            runs = int(rest[i + 1]); i += 2
+        elif rest[i] == "--rerun":
+            rerun = rest[i + 1]; i += 2
+        else:
+            pos.append(rest[i]); i += 1
+    if not pos or not rerun:
+        print('usage: foundry-flaky classify --runs N --rerun "<cmd {test}>" <report> [baseline]',
+              file=sys.stderr)
+        return 2
+    return cmd_classify(pos[0], pos[1] if len(pos) > 1 else None, runs, rerun)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

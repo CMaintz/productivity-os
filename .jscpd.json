@@ -1,0 +1,9 @@
+{
+  "ignore": [
+    "**/src/test/**",
+    "**/src/main/resources/**",
+    "**/build/**",
+    "**/target/**",
+    "**/*.golden.txt"
+  ]
+}

@@ -14,6 +14,7 @@
 - **Paths:**
   - `C:\Users\akash\Projects`
   - Siblings to fold in: `PhpStormProjects`, `IdeaProjects`, etc.
+- **Main PC:** the PC the user is on now. The executor registers machines by hostname on first run, and setup marks this one as main.
 - **Later idea:** an always-on server running Claude Code plus the collector and executor.
 - **Autonomy:** the agent does low-risk work on its own, asks before anything destructive, and logs every edit.
 - **Sources:** GitHub, Claude Code sessions, calendar and email, writing and publishing, and existing markdown and PDFs.
@@ -307,6 +308,70 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 4. **Progress shows on the session board:** the ticket's label state (`agent:ready` → `agent:working` → `agent:blocked`), the issue thread log, PR, CI, review state and the Cloudflare preview link. When an issue goes to `agent:blocked`, an action card appears with the reason the agent posted on the thread.
 5. **Finishing:** coded widgets use this same pipeline.
 
+## Writing studio + blog editor (Writing module)
+- **Editor in the dashboard.** You write and publish without touching the repo yourself.
+  - The editor is markdown with a live preview using the site's own styles, plus frontmatter fields (title, tags, cover, canonical, publish date), image upload and an AI assist: outline, tighten, title ideas, SEO description.
+  - **Recommended: git-backed.** Hitting Publish commits the `.md` (and its images) to `cmaintz-site` through the GitHub API, which triggers the Cloudflare build. Posts stay plain markdown in the repo with full history, and you never touch git yourself. Keystatic or Decap work as off-the-shelf alternatives, both designed for Astro.
+  - **Alternative:** posts live in Supabase, and Astro's content layer loads them, either at build time or through SSR for instant publishing. This is faster to publish, but the content moves out of git.
+  - Drafts live in the vault under `Writing/` and sync with the editor, so you can write in Obsidian or the dashboard.
+- **Cross-posting on publish**, one card listing every platform, each with its own toggle:
+  - **dev.to:** the API creates the article with `canonical_url` pointing to the maintz.dev post, so SEO credit goes to your blog.
+  - **LinkedIn:** a post written for LinkedIn (hook, a short version and a link). It's published through LinkedIn's member-posting API if that works for a personal account (verify), otherwise copy plus open.
+  - Optional later: Hashnode or Medium (both support canonical URLs).
+  - Each platform's status (posted, URL, and reactions where an API allows) shows up on the post's page.
+  - Cross-posting counts as "sending to people", so it starts at **Suggest**. It can earn "auto with notice" per platform.
+
+## Product Forge (outline → spec → name → build → verify → sell)
+A pipeline for building a new product, or a big feature for an existing project. Each stage writes its output to the vault and the repo, so you can step in at any point.
+
+**Stages:**
+1. **Outline.** A few lines from you, or a voice/text dump.
+2. **Spec.** Choose a mode:
+   - **Interview:** the agent asks focused questions, a few at a time.
+   - **Autonomous:** the agent researches, decides for itself, and logs every assumption in `docs/decisions/` so you can review them.
+
+   Output: PRD, user stories, acceptance criteria, non-goals, data model, and the architecture as ADRs.
+3. **Naming.**
+   - 10–20 name candidates, each with its rationale.
+   - Automatic checks for each: domain availability (RDAP), GitHub/npm/package names, social handles, and links to a trademark search (EUIPO/USPTO).
+   - You pick one, or let the agent pick its top-ranked name.
+4. **Plan.** The spec is split into Foundry tickets (an epic plus `agent-feature` issues) with dependencies, then ordered into milestones.
+5. **Build.**
+   - Foundry `/feature` loops run on the tickets, several at once in separate worktrees, each one held to the gate.
+   - `/ship` opens a PR per ticket.
+   - A **lead agent** watches the whole run. It re-plans when a ticket is blocked and keeps the architecture consistent with the ADRs.
+6. **Verify end-to-end.** This happens in addition to the per-ticket gates:
+   - **Playwright E2E:** walk every user story and click every button and link, checking for console errors and failed network calls.
+   - **Backend:** API contract and integration tests against a real database (a Supabase branch or local).
+   - **Quality:** accessibility (axe), Lighthouse/performance, a security review, and a dependency license audit.
+   - **Fresh-context review agents:** one checks whether the build is rationally built (architecture, duplication, dead code) and one checks the result against the spec.
+   - **Fix loop:** any failure becomes a ticket and goes back to step 5. The loop is bounded, and it escalates to you when it stops making progress.
+7. **Demo.**
+   - A deploy to a preview URL.
+   - A screenshot tour and a short summary of what was built, with known gaps.
+   - The run's cost in usage.
+8. **Sell or hand over** (optional):
+   - Landing page, one-pager, pitch deck, demo video script and screenshots/GIFs.
+   - A marketplace listing draft (e.g. Acquire.com, Flippa).
+   - A **handover pack** for a new owner: architecture, runbook, environment/secrets inventory, a license/IP audit, a transfer checklist (repo, domain, accounts) and a known-issues list.
+
+**Controls:**
+- **One click** runs everything. Before starting you can set **stop-points**, e.g. "stop after spec" or "stop after naming".
+- At any stage you can type a few lines of feedback. The agent re-plans from that stage onward.
+- **Usage-aware:** the run is paced across your subscription windows. It pauses near the 5-hour limit and resumes on its own.
+- Where possible, runs go to cloud Claude Code sessions or Routines so they don't depend on the PC being on (verify which options are available on your plan).
+- **Hard ceilings stay manual:**
+  - Buying domains or anything else.
+  - Publishing marketing.
+  - Contacting buyers.
+  - Production deploys with real users.
+  - Transferring ownership.
+- **Sandboxing:** each product gets a new repo with its own preview environments and no production secrets from your other projects.
+
+**Defaults:** new products use your own stack (Astro + Cloudflare + Supabase, TypeScript) and Foundry's gate. Each spec can override this.
+
+**Being realistic:** small-to-medium web apps are a good fit for full end-to-end autonomous builds. Large or unusual products will need more stop-points. The spec and the E2E suite set the quality ceiling, so the verify stage matters as much as the build stage.
+
 ## Surfaces
 - **Obsidian Home** (Homepage plugin + Bases):
   - Today.
@@ -358,5 +423,5 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- Which PC is the main one that runs the executor?
-- Are blog posts markdown files in the `cmaintz-site` repo?
+- Blog editor: git-backed (recommended) or Supabase-backed?
+- Product Forge: is Astro + Cloudflare + Supabase the right default stack for new products?

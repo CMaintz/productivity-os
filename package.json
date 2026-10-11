@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "inventory": "node tools/inventory/inventory.mjs --out out --github CMaintz",
-    "test": "node --test tools/inventory/test/inventory.test.mjs"
+    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs"
   },
   "engines": {
     "node": ">=20"

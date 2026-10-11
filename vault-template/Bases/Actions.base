@@ -1,0 +1,25 @@
+filters:
+  and:
+    - 'type == "action"'
+views:
+  - type: table
+    name: Pending
+    filters:
+      and:
+        - 'status == "pending"'
+    order:
+      - file.name
+      - risk
+      - reason
+      - context
+      - expires
+  - type: table
+    name: Recent
+    filters:
+      and:
+        - 'status != "pending"'
+    order:
+      - file.name
+      - status
+      - action
+      - context

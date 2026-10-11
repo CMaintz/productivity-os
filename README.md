@@ -30,4 +30,6 @@ The mover's safety rules:
 - It refuses overlapping moves, existing destinations and moves across drives.
 - It moves your Claude Code session history (`~/.claude/projects/...`) along with each project.
 
+Next: set up the vault with [docs/VAULT.md](docs/VAULT.md).
+
 Tests: `npm test`.

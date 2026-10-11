@@ -1,0 +1,3 @@
+// git lives only on the main PC; never sync it between devices
+.git
+.obsidian/workspace*.json

@@ -1,0 +1,11 @@
+filters:
+  and:
+    - 'type == "spec"'
+views:
+  - type: table
+    name: Specs
+    order:
+      - file.name
+      - status
+      - project
+      - mode

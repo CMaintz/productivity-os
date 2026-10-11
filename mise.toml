@@ -139,7 +139,7 @@ run = "echo 'typecheck: n/a - no TypeScript in this repo (plain .mjs); nothing t
 
 [tasks.test]
 description = "Tests (node --test)"
-run = "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs"
+run = "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs"
 
 [tasks.audit]
 description = "Dependency vulnerabilities. Local subset; CI security.yml adds gitleaks + SAST"

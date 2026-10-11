@@ -311,15 +311,29 @@ Complex core features are **not** widgets. They are **first-party modules**. Mod
 ## Writing studio + blog editor (Writing module)
 - **Editor in the dashboard.** You write and publish without touching the repo yourself.
   - The editor is markdown with a live preview using the site's own styles, plus frontmatter fields (title, tags, cover, canonical, publish date), image upload and an AI assist: outline, tighten, title ideas, SEO description.
-  - **Recommended: git-backed.** Hitting Publish commits the `.md` (and its images) to `cmaintz-site` through the GitHub API, which triggers the Cloudflare build. Posts stay plain markdown in the repo with full history, and you never touch git yourself. Keystatic or Decap work as off-the-shelf alternatives, both designed for Astro.
-  - **Alternative:** posts live in Supabase, and Astro's content layer loads them, either at build time or through SSR for instant publishing. This is faster to publish, but the content moves out of git.
+  - **Decision: git-backed, with Keystatic.** Keystatic is chosen over Decap for these reasons:
+    - It has a first-party Astro integration and typed schemas in TypeScript, matching how the site is built.
+    - Its GitHub mode commits through the GitHub App/API, so you never touch git. **Draft posts live on branches**, and publishing merges them.
+    - Its reader API lets the dashboard list posts and their state.
+    - It is under active development. Decap needs a separate OAuth proxy, uses YAML config, and has slowed down.
+  - **Setup:**
+    - Keystatic is mounted in `cmaintz-site` at `/keystatic`.
+    - Cloudflare Access protects that path.
+    - It needs the `@astrojs/cloudflare` adapter for the admin routes (verify that combination in a spike; the fallback is serving the admin from `dash.maintz.dev`).
+    - The dashboard's Writing module links straight into it.
+  - **AI assist** (outline, tighten, titles, SEO description) runs from the dashboard or the orchestrator. Its suggestions are written as commits on the draft's branch, so you can review them in Keystatic.
   - Drafts live in the vault under `Writing/` and sync with the editor, so you can write in Obsidian or the dashboard.
-- **Cross-posting on publish**, one card listing every platform, each with its own toggle:
+- **Cross-posting on publish.** A post opts in through a frontmatter field you tick in Keystatic (`crosspost: [devto, linkedin]`). Ticking it counts as your approval.
+  - A **GitHub Action in `cmaintz-site`** runs on each push to main. It finds new or changed posts that have `crosspost` set and syncs them.
+  - Mapping each post to its remote article IDs is stored in Supabase, so re-runs are idempotent and edits get synced (dev.to `PUT`).
+  - The dashboard shows each post's status per platform.
+
+  Per platform:
   - **dev.to:** the API creates the article with `canonical_url` pointing to the maintz.dev post, so SEO credit goes to your blog.
   - **LinkedIn:** a post written for LinkedIn (hook, a short version and a link). It's published through LinkedIn's member-posting API if that works for a personal account (verify), otherwise copy plus open.
   - Optional later: Hashnode or Medium (both support canonical URLs).
   - Each platform's status (posted, URL, and reactions where an API allows) shows up on the post's page.
-  - Cross-posting counts as "sending to people", so it starts at **Suggest**. It can earn "auto with notice" per platform.
+  - Cross-posting is "sending to people", so it only happens for platforms you ticked. Nothing is posted that you didn't tick.
 
 ## Product Forge (outline → spec → name → build → verify → sell)
 A pipeline for building a new product, or a big feature for an existing project. Each stage writes its output to the vault and the repo, so you can step in at any point.
@@ -331,6 +345,11 @@ A pipeline for building a new product, or a big feature for an existing project.
    - **Autonomous:** the agent researches, decides for itself, and logs every assumption in `docs/decisions/` so you can review them.
 
    Output: PRD, user stories, acceptance criteria, non-goals, data model, and the architecture as ADRs.
+2b. **Stack decision.**
+   - The default is your stack: Astro + Cloudflare + Supabase + TypeScript, with Foundry's gate.
+   - The agent checks the requirements against that default: realtime needs, heavy compute, mobile/native, offline, ML, compliance, scale, pricing.
+   - It suggests a different stack only where the requirements clearly call for it, and writes an ADR comparing 2–3 options. The bias is toward the default, because a familiar stack is easier for you to maintain and to sell.
+   - In interview mode it asks before switching. In autonomous mode it decides and flags the choice.
 3. **Naming.**
    - 10–20 name candidates, each with its rationale.
    - Automatic checks for each: domain availability (RDAP), GitHub/npm/package names, social handles, and links to a trademark search (EUIPO/USPTO).
@@ -368,7 +387,7 @@ A pipeline for building a new product, or a big feature for an existing project.
   - Transferring ownership.
 - **Sandboxing:** each product gets a new repo with its own preview environments and no production secrets from your other projects.
 
-**Defaults:** new products use your own stack (Astro + Cloudflare + Supabase, TypeScript) and Foundry's gate. Each spec can override this.
+**Defaults:** see stage 2b.
 
 **Being realistic:** small-to-medium web apps are a good fit for full end-to-end autonomous builds. Large or unusual products will need more stop-points. The spec and the E2E suite set the quality ceiling, so the verify stage matters as much as the build stage.
 
@@ -423,5 +442,3 @@ A pipeline for building a new product, or a big feature for an existing project.
 - Rule: automate only what you have already done by hand a few times.
 
 ## Open questions
-- Blog editor: git-backed (recommended) or Supabase-backed?
-- Product Forge: is Astro + Cloudflare + Supabase the right default stack for new products?

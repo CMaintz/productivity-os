@@ -1,0 +1,34 @@
+filters:
+  and:
+    - 'type == "project"'
+views:
+  - type: table
+    name: Active
+    filters:
+      and:
+        - 'status == "active"'
+    order:
+      - file.name
+      - priority
+      - next
+      - repo
+      - updated
+  - type: table
+    name: Paused & ideas
+    filters:
+      or:
+        - 'status == "paused"'
+        - 'status == "idea"'
+    order:
+      - file.name
+      - status
+      - next
+      - updated
+  - type: table
+    name: All
+    order:
+      - file.name
+      - status
+      - area
+      - repo
+      - updated

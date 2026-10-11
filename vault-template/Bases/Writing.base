@@ -1,0 +1,23 @@
+filters:
+  and:
+    - 'type == "post"'
+views:
+  - type: table
+    name: Pipeline
+    filters:
+      and:
+        - 'status != "published"'
+    order:
+      - file.name
+      - status
+      - platforms
+      - publish_date
+  - type: table
+    name: Published
+    filters:
+      and:
+        - 'status == "published"'
+    order:
+      - file.name
+      - platforms
+      - publish_date

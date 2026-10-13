@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { copyTemplate, updateSystem } from '../init.mjs';
+import { copyTemplate, updateSystem, writeToolsConfig } from '../init.mjs';
 import { syncProjects, projectNote, setFrontmatter, DOCS_START } from '../projects.mjs';
 
 const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'vault-template');
@@ -86,4 +86,11 @@ test('--update-system refreshes system files only, with a backup', () => {
   assert.equal(fs.readFileSync(path.join(v, '_system', 'backup', '42', 'CLAUDE.md'), 'utf8'), 'old contract');
   assert.equal(fs.readFileSync(path.join(v, 'Home.md'), 'utf8'), 'my home');
   assert.deepEqual(updateSystem(TEMPLATE, v, 43), []);
+});
+
+test('tools.json points the vault skills at this repo', () => {
+  const v = tmpVault();
+  writeToolsConfig(v, 'C:\\Users\\akash\\Projects\\productivity-os');
+  const cfg = JSON.parse(fs.readFileSync(path.join(v, '_system', 'tools.json'), 'utf8'));
+  assert.equal(cfg.productivityOs, 'C:/Users/akash/Projects/productivity-os');
 });

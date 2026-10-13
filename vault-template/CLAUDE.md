@@ -18,6 +18,8 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 
 ## Frontmatter schema (keep it exact; Bases views depend on it)
 - **project:** `type: project`, `status: idea|active|paused|done|archived`, `area`, `repo: owner/name`, `path` (local folder), `priority: 1|2|3`, `next` (one line), `updated: YYYY-MM-DD`
+  - **Written by the GitHub sync (don't edit by hand):** `ci: passing|failing|pending|none`, `open_prs`, `failing_prs`, `agent_blocked`, `github_synced`.
+  - The `## GitHub` and `## Docs` sections between `<!-- ...:start -->`/`<!-- ...:end -->` markers are generated. Leave them alone.
 - **post:** `type: post`, `status: idea|draft|edit|scheduled|published`, `platforms: [blog, devto, linkedin]`, `publish_date`, `slug`
 - **spec:** `type: spec`, `status: outline|drafting|ready|building|done`, `project`, `mode: interview|autonomous`
 - **action:** `type: action`, `action`, `params`, `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed`, `context`, `expires`
@@ -44,6 +46,10 @@ Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-
   - Edit `Raw/`.
   - Send, post or publish anything.
   - Touch folders outside the vault, except to read project repos.
+
+## Tools
+`_system/tools.json` says where the productivity-os repo lives (`productivityOs`). Run its scripts from there:
+- **GitHub sync** (read-only on GitHub): `node <productivityOs>/tools/github/sync.mjs`. Refreshes the `## GitHub` section and frontmatter of every project note that has a `repo`. Needs `gh` logged in. If it fails, say so and carry on without the GitHub data.
 
 ## Every change gets logged
 Append one line per change to `_system/changelog.md`: `- YYYY-MM-DD HH:MM <skill/agent> <what> [[note]]`.

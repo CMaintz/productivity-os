@@ -48,7 +48,17 @@ The vault location defaults to `~/Vault`. Set `PRODUCTIVITY_VAULT` to use anothe
   ![[Sessions.base#Active]]
   ```
 
-## 6. Sync to other PCs and Android
+## 6. GitHub data in project notes
+```powershell
+npm run github     # needs `gh auth login`; read-only on GitHub
+```
+Every project note with a `repo` gets:
+- A generated `## GitHub` section: default-branch CI, open PRs with CI and review state, Foundry agent tickets (ready, working, blocked) and open issues.
+- Frontmatter fields: `ci`, `open_prs`, `failing_prs`, `agent_blocked`. These feed the **Needs attention** view on Home.
+
+`/today` runs the sync itself, and `/resume <project>` and `/next` use this data.
+
+## 7. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

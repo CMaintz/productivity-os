@@ -77,19 +77,25 @@ export function setFrontmatter(note, key, value) {
   return note.replace(m[1], () => fm);
 }
 
-function replaceDocsBlock(note, block) {
-  const start = note.indexOf(DOCS_START);
-  const end = note.indexOf(DOCS_END);
-  if (start >= 0 && end > start) return note.slice(0, start) + block + note.slice(end + DOCS_END.length);
-  const log = note.search(/^## Log/m);
-  const section = `## Docs\n${block}\n\n`;
-  return log >= 0 ? note.slice(0, log) + section + note.slice(log) : `${note.trimEnd()}\n\n${section}`;
+/**
+ * Swaps a generated block (between its start and end markers) for a new one. When the note
+ * has no such block yet, adds it as `## <heading>` before the first `## <before>` section.
+ */
+export function replaceBlock(note, { start: startMark, end: endMark, heading, before = 'Log' }, block) {
+  const start = note.indexOf(startMark);
+  const end = note.indexOf(endMark);
+  if (start >= 0 && end > start) return note.slice(0, start) + block + note.slice(end + endMark.length);
+  const at = note.search(new RegExp(`^## ${before}\\b`, 'm'));
+  const section = `## ${heading}\n${block}\n\n`;
+  return at >= 0 ? note.slice(0, at) + section + note.slice(at) : `${note.trimEnd()}\n\n${section}`;
 }
+
+const DOCS = { start: DOCS_START, end: DOCS_END, heading: 'Docs' };
 
 export function refreshNote(note, p) {
   let out = setFrontmatter(note, 'path', yamlStr(p.path));
   if (p.github) out = setFrontmatter(out, 'repo', p.github);
-  return replaceDocsBlock(out, docsBlock(p));
+  return replaceBlock(out, DOCS, docsBlock(p));
 }
 
 /** Existing project notes, indexed by their `repo` frontmatter and by file slug. */

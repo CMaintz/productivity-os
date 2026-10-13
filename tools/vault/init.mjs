@@ -65,6 +65,14 @@ export function updateSystem(src, vault, stamp = Date.now()) {
   return updated;
 }
 
+/** Tells the vault's skills where productivity-os lives, so they can run its tools. */
+export function writeToolsConfig(vault, repoRoot = path.resolve(TEMPLATE, '..')) {
+  const file = path.join(vault, '_system', 'tools.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const config = { productivityOs: repoRoot.replace(/\\/g, '/'), githubSync: 'node <productivityOs>/tools/github/sync.mjs' };
+  fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+}
+
 function gitInit(vault) {
   const run = args => execFileSync('git', args, { cwd: vault, stdio: 'ignore' });
   if (!fs.existsSync(path.join(vault, '.git'))) run(['init', '-q']);
@@ -75,6 +83,7 @@ function gitInit(vault) {
 function main() {
   const a = parseArgs(process.argv.slice(2));
   const t = copyTemplate(TEMPLATE, a.path);
+  writeToolsConfig(a.path);
   if (a.updateSystem) console.log(`  system files updated: ${updateSystem(TEMPLATE, a.path).join(', ') || 'none (already current)'}`);
   console.log(`Vault: ${a.path}\n  template files created: ${t.created.length}, already present (kept): ${t.skipped.length}`);
   if (a.inventory) {

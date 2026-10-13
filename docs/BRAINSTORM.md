@@ -415,8 +415,8 @@ A pipeline for building a new product, or a big feature for an existing project.
 
 ## Phased roadmap
 Status (Oct 2026):
-- **Done:** Phase 0 tools (inventory, mover), the vault MVP, the Phase 2 session hooks, and the per-project Repo/Local-only docs list.
-- **Next:** the GitHub data in project notes, `/resume` and `/next`.
+- **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/resume` and `/next`.
+- **Next:** action cards with buttons (Meta Bind) plus the executor and trust ladder (Phase 4). Then the web dashboard.
 
 0. **Projects inventory & renovation (first real use):**
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).

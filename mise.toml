@@ -132,14 +132,14 @@ run = [
 ]
 
 [tasks.typecheck]
-description = "Static types (n/a: plain JavaScript, no TypeScript in this repo)"
-# There is no TypeScript here and no tsconfig, so there is nothing to type-check. This is an
-# explicit no-op, not a pass: add a tsconfig and `tsc -b` here when .ts or checkJs is adopted.
-run = "echo 'typecheck: n/a - no TypeScript in this repo (plain .mjs); nothing to check'"
+description = "Static types: astro check over the dashboard (the tools are plain .mjs)"
+# The tools/ scripts are plain JavaScript with no tsconfig; the TypeScript lives in the
+# dashboard workspace, which astro check covers (.astro + .ts via dashboard/tsconfig.json).
+run = "npm --workspace dashboard run check"
 
 [tasks.test]
 description = "Tests (node --test)"
-run = "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs"
+run = "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs tools/dashboard/test/dashboard.test.mjs tools/dashboard/test/sql.test.mjs"
 
 [tasks.audit]
 description = "Dependency vulnerabilities. Local subset; CI security.yml adds gitleaks + SAST"

@@ -162,11 +162,11 @@ test('executor: a policy-approved card is held when its type is still at suggest
   assert.match(card(v).text, /\*\*Held/);
 });
 
-test('guards: lock blocks a second run; main host check', () => {
+test('guards: lock blocks a second run; main host check', async () => {
   const v = vault();
   fs.writeFileSync(path.join(v, '_system', 'executor.lock'), JSON.stringify({ pid: 1, host: 'h', at: NOW.toISOString() }));
-  assert.match(withLock(v, () => 'ran', later(0.1)).skipped, /locked by pid 1/);
-  assert.equal(withLock(v, () => 'ran', later(2)).result, 'ran', 'stale lock is taken over');
+  assert.match((await withLock(v, () => 'ran', later(0.1))).skipped, /locked by pid 1/);
+  assert.equal((await withLock(v, async () => 'ran', later(2))).result, 'ran', 'stale lock is taken over');
   fs.writeFileSync(path.join(v, '_system', 'tools.json'), JSON.stringify({ mainHost: 'desk' }));
   assert.equal(onMainHost(v, 'desk'), true);
   assert.equal(onMainHost(v, 'laptop'), false);

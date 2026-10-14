@@ -1,0 +1,26 @@
+---
+import '../styles/dashboard.css';
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Dashboard · maintz.dev</title>
+  </head>
+  <body>
+    <header class="top">
+      <a class="logo" href="/">CM<span>dash</span></a>
+      <div id="user" class="user"></div>
+    </header>
+    <main id="main" aria-live="polite"><p class="empty">Loading…</p></main>
+    <script>
+      import { start } from '../lib/app';
+      void start();
+    </script>
+  </body>
+</html>

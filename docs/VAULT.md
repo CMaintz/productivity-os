@@ -90,7 +90,14 @@ powershell -ExecutionPolicy Bypass -File tools\actions\install-executor.ps1   # 
 - **Usage:** Claude runs use your subscription (`claude -p`), so each approved `fix_ci`, `triage_inbox` or `claude_task` card counts toward your usage limits.
 - **Main PC only:** the executor runs only on the PC named in `_system/tools.json` (`mainHost`, set on first setup) and never twice at once.
 
-## 8. Sync to other PCs and Android
+## 8. Web dashboard
+`dash.maintz.dev` shows the vault from anywhere: today's top 3, cards with working buttons, Claude sessions, projects needing attention, and active projects. The executor keeps it in sync:
+- **Before each pass:** it applies button presses from the dashboard to the card notes. These are the same fields Meta Bind sets, and a press only counts if the card is still waiting on it.
+- **After each pass:** it publishes a fresh snapshot.
+
+The snapshot holds metadata only (titles, statuses, counts, one-line reasons), never note text, tasks or prompts. Setup is in `docs/SETUP-GUIDE.md` step 8. The code is in `dashboard/`, `tools/dashboard/` and `supabase/migrations/`.
+
+## 9. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

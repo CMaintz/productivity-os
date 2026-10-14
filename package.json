@@ -4,19 +4,27 @@
   "type": "module",
   "scripts": {
     "inventory": "node tools/inventory/inventory.mjs --out out --github CMaintz",
-    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs",
+    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs tools/dashboard/test/dashboard.test.mjs tools/dashboard/test/sql.test.mjs",
     "vault": "node tools/vault/init.mjs --from-inventory out/inventory.json --git",
     "hooks": "node tools/hooks/install.mjs",
     "github": "node tools/github/sync.mjs",
     "suggest": "node tools/actions/suggest.mjs",
-    "executor": "node tools/actions/executor.mjs --once"
+    "executor": "node tools/actions/executor.mjs --once",
+    "dashboard": "node tools/dashboard/sync.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
     "jscpd": "^5.4.0",
     "knip": "^6.39.0",
-    "ts-morph": "^28.0.0"
-  }
+    "ts-morph": "^28.0.0",
+    "typescript-eslint": "^8.71.2"
+  },
+  "workspaces": [
+    "dashboard"
+  ]
 }

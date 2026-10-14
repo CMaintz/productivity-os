@@ -4,6 +4,7 @@
     "**/src/main/resources/**",
     "**/build/**",
     "**/target/**",
-    "**/*.golden.txt"
+    "**/*.golden.txt",
+    "**/package-lock.json"
   ]
 }

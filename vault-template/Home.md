@@ -15,6 +15,12 @@ sort by priority
 ## Waiting on me
 ![[Actions.base#Pending]]
 
+## Claude sessions
+![[Sessions.base#Active]]
+
+## Needs attention
+![[Projects.base#Needs attention]]
+
 ## Active projects
 ![[Projects.base#Active]]
 

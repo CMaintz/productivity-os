@@ -4,24 +4,28 @@
 // Usage:
 //   node tools/vault/init.mjs [--path <vault dir>] [--from-inventory out/inventory.json] [--git]
 // Defaults: --path %USERPROFILE%\Vault
-//   --from-inventory  also create Projects/<name>.md for every scanned project (skips existing notes)
+//   --from-inventory  create Projects/<name>.md for new projects; for existing notes refresh only
+//                     `path`/`repo` and the generated docs block (safe to re-run after moving folders)
 //   --git             git init the vault (if not already a repo) and make an initial commit
+//   --update-system   overwrite the system-owned files (CLAUDE.md, .claude/skills, Bases) with the
+//                     template's newer versions; old copies go to _system/backup/<timestamp>/
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { syncProjects } from './projects.mjs';
 
 const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'vault-template');
-const ACTIVE_DAYS = 60;
 
 function parseArgs(argv) {
-  const a = { path: path.join(os.homedir(), 'Vault'), inventory: null, git: false };
+  const a = { path: path.join(os.homedir(), 'Vault'), inventory: null, git: false, updateSystem: false };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--path') a.path = argv[++i];
     else if (argv[i] === '--from-inventory') a.inventory = argv[++i];
     else if (argv[i] === '--git') a.git = true;
+    else if (argv[i] === '--update-system') a.updateSystem = true;
   }
   return a;
 }
@@ -37,47 +41,36 @@ export function copyTemplate(src, dest, created = [], skipped = []) {
   return { created, skipped };
 }
 
-const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const yamlStr = s => JSON.stringify(s ?? '');
+// Files the system owns. Your notes, Home.md, policy and memory are never touched.
+const SYSTEM = ['CLAUDE.md', path.join('.claude', 'skills'), 'Bases'];
 
-export function projectNote(p, today = new Date()) {
-  const last = p.lastCommitDate || p.newest;
-  const ageDays = last ? (today - new Date(last)) / 864e5 : Infinity;
-  const docs = (p.docs || []).filter(d => d.type !== 'note').slice(0, 15)
-    .map(d => `- ${d.type}: \`${d.path}\``).join('\n');
-  return `---
-type: project
-status: ${ageDays <= ACTIVE_DAYS ? 'active' : 'paused'}
-area: 
-repo: ${p.github || ''}
-path: ${yamlStr(p.path)}
-priority: 2
-next: 
-updated: ${(last || today.toISOString()).slice(0, 10)}
----
-# ${p.name}
-
-## What & why
-${p.languages?.length ? `Languages: ${p.languages.join(', ')}.` : ''}${p.lastCommitSubject ? ` Last commit: "${p.lastCommitSubject}".` : ''}
-
-## Tasks
-
-## Decisions
-${docs || '<!-- none found by the inventory -->'}
-
-## Log
-`;
+function listFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+  if (fs.statSync(dir).isFile()) return [dir];
+  return fs.readdirSync(dir).flatMap(n => listFiles(path.join(dir, n)));
 }
 
-export function seedProjects(vault, inventory, today = new Date()) {
-  const dir = path.join(vault, 'Projects'); fs.mkdirSync(dir, { recursive: true });
-  const created = []; const skipped = [];
-  for (const p of inventory.projects || []) {
-    const file = path.join(dir, `${slug(p.name)}.md`);
-    if (fs.existsSync(file)) { skipped.push(file); continue; }
-    fs.writeFileSync(file, projectNote(p, today)); created.push(file);
+/** Overwrites changed system-owned files from the template, backing up the old copies. */
+export function updateSystem(src, vault, stamp = Date.now()) {
+  const updated = [];
+  for (const from of SYSTEM.flatMap(rel => listFiles(path.join(src, rel)))) {
+    const rel = path.relative(src, from); const to = path.join(vault, rel);
+    if (fs.existsSync(to) && fs.readFileSync(to).equals(fs.readFileSync(from))) continue;
+    if (fs.existsSync(to)) {
+      const backup = path.join(vault, '_system', 'backup', String(stamp), rel);
+      fs.mkdirSync(path.dirname(backup), { recursive: true }); fs.copyFileSync(to, backup);
+    }
+    fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to); updated.push(rel);
   }
-  return { created, skipped };
+  return updated;
+}
+
+/** Tells the vault's skills where productivity-os lives, so they can run its tools. */
+export function writeToolsConfig(vault, repoRoot = path.resolve(TEMPLATE, '..')) {
+  const file = path.join(vault, '_system', 'tools.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const config = { productivityOs: repoRoot.replace(/\\/g, '/'), githubSync: 'node <productivityOs>/tools/github/sync.mjs' };
+  fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
 }
 
 function gitInit(vault) {
@@ -90,10 +83,12 @@ function gitInit(vault) {
 function main() {
   const a = parseArgs(process.argv.slice(2));
   const t = copyTemplate(TEMPLATE, a.path);
+  writeToolsConfig(a.path);
+  if (a.updateSystem) console.log(`  system files updated: ${updateSystem(TEMPLATE, a.path).join(', ') || 'none (already current)'}`);
   console.log(`Vault: ${a.path}\n  template files created: ${t.created.length}, already present (kept): ${t.skipped.length}`);
   if (a.inventory) {
-    const s = seedProjects(a.path, JSON.parse(fs.readFileSync(a.inventory, 'utf8')));
-    console.log(`  project notes created: ${s.created.length}, existing (kept): ${s.skipped.length}`);
+    const s = syncProjects(a.path, JSON.parse(fs.readFileSync(a.inventory, 'utf8')));
+    console.log(`  project notes created: ${s.created.length}, refreshed: ${s.refreshed.length}, unchanged: ${s.unchanged.length}`);
   }
   if (a.git) { gitInit(a.path); console.log('  git: initialised and committed'); }
   console.log('\nNext: open the folder as a vault in Obsidian, install the plugins listed in docs/VAULT.md, then run `claude` in the vault and try /today.');

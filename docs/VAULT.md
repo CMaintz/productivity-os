@@ -26,7 +26,39 @@ claude
 ```
 Then try `/today`, `/capture buy a domain for the blog redesign`, and `/shutdown`. The rules Claude follows are in `CLAUDE.md` and `_system/policy.md`, and every change it makes is logged in `_system/changelog.md`.
 
-## 4. Sync to other PCs and Android
+## 4. Track your Claude Code sessions
+```powershell
+npm run hooks      # adds the session hook to ~/.claude/settings.json (backs it up first)
+```
+From then on, every Claude Code session on this PC gets a note in `Sessions/`. The note's status is:
+- `running`: working on a prompt.
+- `waiting`: needs your permission or input, and says why.
+- `idle`: finished its turn.
+- `ended`: closed.
+
+Home shows active sessions, and `/today` lists the ones waiting on you. Note previews are shortened. The full prompt text only goes to `_system/activity.jsonl`, which is git-ignored and excluded from Syncthing, so it stays on this PC.
+
+The vault location defaults to `~/Vault`. Set `PRODUCTIVITY_VAULT` to use another path. To remove the hook: `node tools/hooks/install.mjs --uninstall`.
+
+## 5. Keeping the vault up to date
+- **After moving project folders** (or now and then): `npm run inventory` then `npm run vault`. New projects get notes. Existing notes get their `path`/`repo` updated and their **Docs** section rebuilt (Repo vs Local only). Your tasks, log and status are left alone.
+- **When the template improves** (new skills, Bases, contract): `node tools/vault/init.mjs --update-system`. This replaces `CLAUDE.md`, `.claude/skills/` and `Bases/`, and copies the old versions to `_system/backup/<timestamp>/`. `Home.md` is yours, so it's never replaced. If you set the vault up before sessions existed, add this to it:
+  ```markdown
+  ## Claude sessions
+  ![[Sessions.base#Active]]
+  ```
+
+## 6. GitHub data in project notes
+```powershell
+npm run github     # needs `gh auth login`; read-only on GitHub
+```
+Every project note with a `repo` gets:
+- A generated `## GitHub` section: default-branch CI, open PRs with CI and review state, Foundry agent tickets (ready, working, blocked) and open issues.
+- Frontmatter fields: `ci`, `open_prs`, `failing_prs`, `agent_blocked`. These feed the **Needs attention** view on Home.
+
+`/today` runs the sync itself, and `/resume <project>` and `/next` use this data.
+
+## 7. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.
@@ -38,7 +70,7 @@ Then try `/today`, `/capture buy a domain for the blog redesign`, and `/shutdown
 |---|---|
 | `CLAUDE.md` | Agent contract: folders, frontmatter schema, what it may do without asking |
 | `Home.md` | Dashboard: today's tasks, pending action cards, active projects, writing pipeline, inbox |
-| `Bases/*.base` | Views over the frontmatter (projects, writing, actions, specs, inbox) |
+| `Bases/*.base` | Views over the frontmatter (projects, writing, actions, specs, sessions, inbox) |
 | `Templates/` | Templates for daily, project, post, spec and action-card notes |
 | `.claude/skills/` | `/today`, `/capture`, `/shutdown` |
 | `_system/` | Policy (trust ladder), changelog, memory/preferences, action cards |

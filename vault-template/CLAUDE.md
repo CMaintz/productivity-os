@@ -10,7 +10,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 | `Projects/` | One note per project (`<name>.md`) | update the `## Log`, `## Tasks` and `next` sections; create from template |
 | `Writing/` | Post ideas and drafts | create ideas; edit drafts **only when asked** |
 | `Specs/` | Product/feature specs | create/update when asked |
-| `Sessions/` | Claude Code session notes (written by hooks) | read; update status fields |
+| `Sessions/` | One note per Claude Code session, written by the session hook (`tools/hooks/` in productivity-os) | read; you may set `status: ended` on stale ones |
 | `Raw/` | Imported sources (PDFs, old md) | **read-only, never edit or delete** |
 | `Archive/` | Finished or dead material | move in **only via an approved action card** |
 | `Templates/`, `Bases/` | Note templates and dashboard views | change only when asked |
@@ -18,10 +18,13 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 
 ## Frontmatter schema (keep it exact; Bases views depend on it)
 - **project:** `type: project`, `status: idea|active|paused|done|archived`, `area`, `repo: owner/name`, `path` (local folder), `priority: 1|2|3`, `next` (one line), `updated: YYYY-MM-DD`
+  - **Written by the GitHub sync (don't edit by hand):** `ci: passing|failing|pending|none`, `open_prs`, `failing_prs`, `agent_blocked`, `github_synced`.
+  - The `## GitHub` and `## Docs` sections between `<!-- ...:start -->`/`<!-- ...:end -->` markers are generated. Leave them alone.
 - **post:** `type: post`, `status: idea|draft|edit|scheduled|published`, `platforms: [blog, devto, linkedin]`, `publish_date`, `slug`
 - **spec:** `type: spec`, `status: outline|drafting|ready|building|done`, `project`, `mode: interview|autonomous`
 - **action:** `type: action`, `action`, `params`, `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed`, `context`, `expires`
 - **daily:** `type: daily`, `date: YYYY-MM-DD`
+- **session** (written by the hook, don't hand-edit): `type: session`, `status: idle|running|waiting|ended`, `project`, `cwd`, `session_id`, `started`, `updated`, `prompts`, `last_prompt`, `waiting_for`
 - **source:** `type: source`, `origin` (original path or URL), `imported: YYYY-MM-DD`
 
 Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-MM-DD ⏫`. They live in project notes under `## Tasks` and in daily notes.
@@ -43,6 +46,10 @@ Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-
   - Edit `Raw/`.
   - Send, post or publish anything.
   - Touch folders outside the vault, except to read project repos.
+
+## Tools
+`_system/tools.json` says where the productivity-os repo lives (`productivityOs`). Run its scripts from there:
+- **GitHub sync** (read-only on GitHub): `node <productivityOs>/tools/github/sync.mjs`. Refreshes the `## GitHub` section and frontmatter of every project note that has a `repo`. Needs `gh` logged in. If it fails, say so and carry on without the GitHub data.
 
 ## Every change gets logged
 Append one line per change to `_system/changelog.md`: `- YYYY-MM-DD HH:MM <skill/agent> <what> [[note]]`.

@@ -1,3 +1,5 @@
 // git lives only on the main PC; never sync it between devices
 .git
 .obsidian/workspace*.json
+// full prompt log stays on the main PC
+_system/activity.jsonl

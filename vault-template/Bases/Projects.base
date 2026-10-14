@@ -11,8 +11,23 @@ views:
       - file.name
       - priority
       - next
-      - repo
+      - ci
+      - open_prs
+      - agent_blocked
       - updated
+  - type: table
+    name: Needs attention
+    filters:
+      or:
+        - 'ci == "failing"'
+        - 'failing_prs > 0'
+        - 'agent_blocked > 0'
+    order:
+      - file.name
+      - ci
+      - failing_prs
+      - agent_blocked
+      - next
   - type: table
     name: Paused & ideas
     filters:

@@ -2,9 +2,21 @@
 
 A personal productivity OS: an Obsidian vault, Claude Code and a dashboard at `dash.maintz.dev`. The full design is in [docs/BRAINSTORM.md](docs/BRAINSTORM.md).
 
-## Phase 0: projects inventory (read-only)
+**Everything you need to do yourself is listed in [docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md).** Run `claude` in this repo and type `/pos-setup`, and a local Claude works through it with you.
 
-Requirements: Node 20+ and git. The `gh` CLI is optional; it's used for the GitHub cross-check.
+## Getting started (Windows, main PC)
+
+You need [Node 22+](https://nodejs.org) and [Git for Windows](https://git-scm.com). The `gh` CLI is optional; it's used for the GitHub cross-check.
+
+```powershell
+cd C:\Users\akash\Projects
+git clone https://github.com/CMaintz/productivity-os
+cd productivity-os        # run every command below from here
+```
+
+The scripts always scan `C:\Users\akash\Projects` and its sibling folders, wherever the repo itself lives. Their output goes to `productivity-os\out\`, which git ignores.
+
+## Phase 0: projects inventory (read-only)
 
 ```powershell
 npm run inventory          # scans %USERPROFILE%\Projects + *Projects siblings + source\repos

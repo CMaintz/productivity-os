@@ -414,6 +414,10 @@ A pipeline for building a new product, or a big feature for an existing project.
 - Dataview is legacy now. Datacore is only for one-off custom widgets.
 
 ## Phased roadmap
+Status (Oct 2026):
+- **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/resume` and `/next`.
+- **Next:** action cards with buttons (Meta Bind) plus the executor and trust ladder (Phase 4). Then the web dashboard.
+
 0. **Projects inventory & renovation (first real use):**
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).
    - For each folder it lists git remote, last commit, uncommitted changes and unpushed branches, size, language and docs found.

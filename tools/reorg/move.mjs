@@ -86,13 +86,21 @@ export function checkMove(m, { allowDirty }) {
 // ---------- Claude Code history ----------
 // History lives in ~/.claude/projects/<encoded cwd>. Encoding is lossy ("foo-bar" vs "foo/bar"),
 // so prefix matches are confirmed by reading the real cwd recorded in a transcript.
-function transcriptCwd(dir) {
+//
+// A worktree session's first cwd is often the parent repo, and some folders hold
+// only nested subagent transcripts, so search every transcript for a cwd that
+// encodes to the folder name. Case is ignored because NTFS shares one folder
+// between C:\ and c:\ cwds.
+function transcriptCwd(dir, name) {
   let files = [];
-  try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')); } catch { return null; }
+  try { files = fs.readdirSync(dir, { recursive: true }).filter(f => f.endsWith('.jsonl')); } catch { return null; }
+  const want = name.toLowerCase();
   for (const f of files) {
-    const lines = fs.readFileSync(path.join(dir, f), 'utf8').split('\n', 50);
-    for (const line of lines) {
-      try { const cwd = JSON.parse(line).cwd; if (cwd) return cwd; } catch { /* skip partial line */ }
+    let text;
+    try { text = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; } // live session rotated it, or too large to read
+    for (const line of text.split('\n')) {
+      if (!line.includes('"cwd"')) continue;
+      try { const cwd = JSON.parse(line).cwd; if (cwd && claudeEncode(cwd).toLowerCase() === want) return cwd; } catch { /* skip partial line */ }
     }
   }
   return null;
@@ -105,7 +113,7 @@ export function historyRenames(from, to, home) {
   const out = [];
   for (const name of fs.readdirSync(base)) {
     if (name !== prefix && !name.startsWith(prefix + '-')) continue;
-    const cwd = name === prefix ? from : transcriptCwd(path.join(base, name));
+    const cwd = name === prefix ? from : transcriptCwd(path.join(base, name), name);
     if (!cwd || !(samePath(cwd, from) || isInside(cwd, from))) continue;
     const newCwd = path.join(to, path.relative(from, cwd));
     out.push({ from: path.join(base, name), to: path.join(base, claudeEncode(newCwd)) });

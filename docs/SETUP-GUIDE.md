@@ -10,10 +10,10 @@ Each step is tagged by who does it:
 Open a terminal in your clone of this repo and run `claude`, then type:
 
 ```
-/setup
+/pos-setup
 ```
 
-The command loads the `setup` skill, which works through this file in order. It does every 🤖 step, stops at each 🧑 step with exact instructions, and checks the result before moving on. You can stop anytime; it picks up where you left off, because it ticks steps off in `out/setup-progress.md`.
+The command loads the `pos-setup` skill, which works through this file in order. It does every 🤖 step, stops at each 🧑 step with exact instructions, and checks the result before moving on. You can stop anytime; it picks up where you left off, because it ticks steps off in `out/pos-setup-progress.md`.
 
 Rules the local Claude follows:
 - It never asks you to paste a secret into the chat. Secrets go straight into `wrangler`/`gh` prompts in your own terminal, or are generated and piped without being shown.

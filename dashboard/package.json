@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "dev": "node ../tools/widgets/build-frame.mjs && astro dev",
+    "build": "node ../tools/widgets/build-frame.mjs && astro build",
     "check": "astro check",
     "smoke": "node --test test/smoke.test.mjs",
     "deploy": "astro build && wrangler deploy"

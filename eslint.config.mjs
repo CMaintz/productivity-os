@@ -4,11 +4,13 @@ import tseslint from 'typescript-eslint';
 // Preact escapes everything it renders; these APIs bypass that, so they're banned outright.
 const RAW_HTML = 'Render with Preact instead; raw HTML bypasses escaping.';
 
-// Code widgets (often written by an agent) only render the rows they're handed: no network,
-// storage, DOM globals or dynamic code. tools/widgets/guard.mjs relies on this rule.
+// Code widgets (often written by an agent) only render the rows they're handed. The security
+// boundary is the sandboxed iframe and its CSP (no network); this rule keeps widgets honest and
+// catches mistakes early: no network, storage, DOM globals, timers or dynamic code.
 const SANDBOX = 'Code widgets only render the rows they are given; see docs/VAULT.md section 10.';
 const SANDBOX_GLOBALS = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'localStorage', 'sessionStorage', 'indexedDB',
-  'document', 'window', 'globalThis', 'self', 'navigator', 'location', 'eval', 'Function', 'importScripts', 'postMessage']
+  'document', 'window', 'globalThis', 'self', 'top', 'parent', 'opener', 'frames', 'navigator', 'location', 'eval', 'Function',
+  'importScripts', 'postMessage', 'setTimeout', 'setInterval', 'Image', 'Worker', 'SharedWorker']
   .map(name => ({ name, message: SANDBOX }));
 
 export default tseslint.config(
@@ -26,7 +28,7 @@ export default tseslint.config(
   },
   {
     files: ['dashboard/src/widgets/code/**/*.ts'],
-    ignores: ['dashboard/src/widgets/code/registry.ts'],
+    ignores: ['dashboard/src/widgets/code/catalog.ts', 'dashboard/src/widgets/code/renderers.ts'],
     rules: {
       'no-restricted-globals': ['error', ...SANDBOX_GLOBALS],
       'no-restricted-imports': ['error', { patterns: [{ regex: '^(?!\\.\\./\\.\\./(types|format)$|\\./(?!.*\\.\\.))', message: SANDBOX }] }],

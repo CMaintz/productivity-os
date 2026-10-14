@@ -34,6 +34,7 @@ Propose a **code widget** only when the views above can't do it: a custom layout
 ```
 node <productivityOs>/tools/widgets/code-widgets.mjs propose '{"id":"…","title":"…","purpose":"what it shows and why the user wants it","source":{…},"fields":[…]}'
 ```
-- Same `source` and `fields` rules as above. Code widgets can't read `today`, and they get exactly the fields listed (plus title, path and slug).
+- `source` must be a `snapshot` over `projects`, `cards` or `sessions` (no notes folders, no `today`). It gets exactly the fields listed, plus title, path and slug.
+- Code widgets show on the web dashboard only; in Obsidian, use a manifest widget.
 - `purpose` becomes the ticket's intent, so be specific about what the view looks like.
 - Approving the card opens the ticket. When the PR merges, the widget shows up on its own with an Undo card.

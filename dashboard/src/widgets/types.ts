@@ -30,7 +30,7 @@ type UseState = <T>(initial: T) => [T, (v: T) => void];
 export interface Host {
   h: H;
   useState: UseState;
-  Boundary?: unknown;
+  CodeFrame?: unknown;
 }
 
 export interface LayoutEntry { id: string; size?: string; disabled?: boolean }

@@ -180,10 +180,10 @@ async function main() {
   setInterval(pass, WATCH_SECONDS * 1000);
   setInterval(suggest, SUGGEST_MINUTES * 60 * 1000);
   // Code widgets CI merged since the last look (needs gh logged in; offline is fine).
-  const install = () => {
-    try { const done = installMerged(vault); if (done.length) console.log(`code widgets: ${done.join('; ')}`); } catch (e) { console.error(`code widgets: ${e.message.split('\n')[0]}`); }
-  };
-  install();
+  const install = () => withLock(vault, () => installMerged(vault))
+    .then(r => r.result?.length && console.log(`code widgets: ${r.result.join('; ')}`))
+    .catch(e => console.error(`code widgets: ${e.message.split('\n')[0]}`));
+  await install();
   setInterval(install, INSTALL_MINUTES * 60 * 1000);
 }
 

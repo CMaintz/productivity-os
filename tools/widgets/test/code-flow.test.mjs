@@ -31,7 +31,7 @@ function fakeGh({ prs = [], onMain = {} } = {}) {
     if (args[0] === 'pr') return JSON.stringify(prs);
     if (args[0] === 'api') {
       const id = args[1].match(/code\/([^/]+)\/widget\.json/)[1];
-      if (!onMain[id]) throw new Error('404');
+      if (!onMain[id]) throw Object.assign(new Error('gh: Not Found (HTTP 404)'), { stderr: 'HTTP 404' });
       return Buffer.from(JSON.stringify(onMain[id])).toString('base64');
     }
     if (args[0] === 'issue') return 'Creating issue\nhttps://github.com/me/pos/issues/42\n';
@@ -83,6 +83,16 @@ test('a merged widget PR installs itself with a notice card; Undo removes it and
   assert.equal(removal.params.cwd, '/repos/productivity-os');
 });
 
+test('a GitHub hiccup is retried later, never read as "removed"', () => {
+  const v = codeVault();
+  fs.writeFileSync(path.join(v, '_system', 'widgets', 'ci-status.json'), JSON.stringify(MANIFEST));
+  const prs = [{ number: 9, title: 'x', files: [{ path: 'dashboard/src/widgets/code/ci-status/widget.json' }] }];
+  const flaky = (args) => { if (args[0] === 'pr') return JSON.stringify(prs); throw Object.assign(new Error('HTTP 502: Bad Gateway'), { stderr: 'gh: HTTP 502' }); };
+  assert.match(installMerged(v, { run: flaky }).join(), /retry #9 later/);
+  assert.ok(fs.existsSync(path.join(v, '_system', 'widgets', 'ci-status.json')), 'still installed');
+  assert.deepEqual(installMerged(v, { run: fakeGh({ prs, onMain: { 'ci-status': MANIFEST } }).run }), ['install ci-status'], 'and picked up on the next pass');
+});
+
 test('a widget removed from main (a revert PR) leaves the vault too', () => {
   const v = codeVault();
   fs.writeFileSync(path.join(v, '_system', 'widgets', 'ci-status.json'), JSON.stringify(MANIFEST));
@@ -95,18 +105,20 @@ test('off-switch: 3 crashes in 24h since (re)enabling disable a widget and propo
   const v = codeVault();
   fs.writeFileSync(path.join(v, '_system', 'widgets', 'ci-status.json'), JSON.stringify(MANIFEST));
   fs.writeFileSync(path.join(v, '_system', 'layouts', 'dashboard.json'), JSON.stringify({ widgets: [{ id: 'cards' }, { id: 'ci-status', since: '2026-10-14T09:00:00Z' }] }));
-  const err = (h, id = 'ci-status') => ({ widget_id: id, message: `boom ${h}`, created_at: `2026-10-14T${String(h).padStart(2, '0')}:00:00Z` });
+  const err = (h, id = 'ci-status') => ({ widget_id: id, message: `TypeError: boom ${h}`, created_at: `2026-10-14T${String(h).padStart(2, '0')}:00:00Z` });
   assert.deepEqual(applyWidgetErrors(v, [err(8), err(8), err(10), err(11)], NOW), [], 'errors before it was (re)enabled do not count');
   assert.deepEqual(applyWidgetErrors(v, [err(9, 'cards'), err(9, 'cards'), err(10), err(11), err(11)], NOW), ['ci-status']);
   assert.equal(readLayout(v).widgets.find(w => w.id === 'ci-status').disabled, true);
   assert.equal(loadWidgets(v, {}).widgets['ci-status'], undefined, 'a disabled widget is not computed');
   assert.ok(loadWidgets(v, {}).layout.find(w => w.id === 'ci-status').disabled, 'and the Board is told to skip it');
   const fix = cardBy(v, 'fix_widget');
-  assert.deepEqual(fix.params.errors, ['boom 11', 'boom 11', 'boom 10']);
+  assert.deepEqual(fix.params.errors, ['TypeError: boom 11', 'TypeError: boom 11', 'TypeError: boom 10']);
   press(fix, 'approved');
   const gh = fakeGh();
   runOnce(v, { now: NOW, ghRunner: gh.run });
-  assert.match(gh.calls.find(c => c.args[0] === 'issue').input, /`boom 11`/);
+  const ticket = gh.calls.find(c => c.args[0] === 'issue').input;
+  assert.doesNotMatch(ticket, /boom/, 'crash messages can quote rows, so they stay out of GitHub');
+  assert.match(ticket, /Error types: `TypeError`/);
   const reinstall = { prs: [{ number: 12, title: 'fix', files: [{ path: 'dashboard/src/widgets/code/ci-status/widget.json' }] }], onMain: { 'ci-status': MANIFEST } };
   installMerged(v, { run: fakeGh(reinstall).run, now: NOW.toISOString() });
   runOnce(v, { now: NOW });

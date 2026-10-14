@@ -51,8 +51,8 @@ export function proposeCodeWidget(vault, spec, now = new Date().toISOString()) {
 }
 
 const CONTRACT = `- Lives in \`dashboard/src/widgets/code/<id>/\`: \`widget.ts\` (\`createWidget(host)\` returning \`({ m, rows, ctx }) => VNode\`, built with \`host.h\`), \`widget.json\` (the manifest below, unchanged unless the data truly needs it) and \`fixture.json\` (\`{ rows, expect }\`: sample rows and strings the render must contain).
-- Run \`node tools/widgets/code-registry.mjs\` and \`node tools/widgets/build-views.mjs\` after adding the folder.
-- Only the rows it's given: no network, storage, DOM globals or imports beyond \`../../types\`, \`../../format\` and its own folder (ESLint enforces this). Style with existing classes or inline \`style\`.`;
+- Run \`node tools/widgets/code-registry.mjs\` after adding the folder.
+- It renders in a sandboxed iframe from the rows it's given: no network, storage or DOM globals, and no imports beyond \`../../types\`, \`../../format\` and its own folder (ESLint enforces this). Style with the dashboard's classes or inline \`style\`.`;
 
 /** The agent-feature ticket body for a requested code widget. */
 export function ticketBody({ spec, manifest }) {
@@ -97,8 +97,9 @@ export function openBuildTicket(card, ctx) {
 /** fix_widget handler: a ticket to repair a widget the off-switch disabled. */
 export function openFixTicket(card, ctx) {
   const { id, errors = [] } = card.params;
+  const names = [...new Set(errors.map(e => String(e).split(':')[0].replace(/[^\w]/g, '').slice(0, 40)))];
   if (!ID_PATTERN.test(String(id))) return { ok: false, summary: `Refused: "${id}" isn't a widget id.` };
-  const body = `### Intent\nThe \`${id}\` code widget kept crashing on the dashboard and was switched off. Fix it so it renders again.\n\n### Acceptance criteria\n- [ ] The errors below can't happen again; \`fixture.json\` gains rows that reproduce them.\n- [ ] \`node tools/widgets/guard.mjs\` passes and \`mise run gate\` is green.\n\n### Scope boundaries\n- Only \`dashboard/src/widgets/code/${id}/\` and the generated files.\n\n### Pointers\n- Errors (most recent first):\n${errors.map(e => `  - \`${String(e).replace(/`/g, "'")}\``).join('\n') || '  - (none recorded)'}\n`;
+  const body = `### Intent\nThe \`${id}\` code widget kept crashing on the dashboard and was switched off. Fix it so it renders again.\n\n### Acceptance criteria\n- [ ] The crash can't happen again; \`fixture.json\` gains rows that reproduce it.\n- [ ] \`node tools/widgets/guard.mjs\` passes and \`mise run gate\` is green.\n\n### Scope boundaries\n- Only \`dashboard/src/widgets/code/${id}/\` and the generated files.\n\n### Pointers\n- Error types: ${names.map(n => `\`${n}\``).join(', ') || '(none recorded)'}. The messages can quote row data, so they stay in the vault: \`_system/actions/\` fix card for \`${id}\`.\n`;
   const url = openIssue(ctx, { title: `fix(widget): ${id} keeps crashing`, body });
   return { ok: true, summary: `Opened ${url}. The widget stays off until the fix ships.` };
 }
@@ -110,11 +111,15 @@ const readInstalled = vault => {
 };
 const WIDGET_JSON = /^dashboard\/src\/widgets\/code\/([a-z0-9][a-z0-9-]{0,40})\/widget\.json$/;
 
+/** The widget's manifest on main; null only when GitHub says it's gone (404). Other failures throw. */
 function manifestOnMain(run, repo, id) {
   try {
     const out = run(['api', `repos/${repo}/contents/dashboard/src/widgets/code/${id}/widget.json?ref=main`, '--jq', '.content']);
     return JSON.parse(Buffer.from(out.trim(), 'base64').toString('utf8'));
-  } catch { return null; }
+  } catch (e) {
+    if (/\b404\b|Not Found/.test(`${e.message} ${e.stderr ?? ''}`)) return null;
+    throw e;
+  }
 }
 
 /**
@@ -130,9 +135,10 @@ export function installMerged(vault, { run = gh, now = new Date().toISOString() 
   // Oldest first, and each widget once per pass: main's current manifest is what gets installed.
   for (const pr of prs.filter(p => !seen.prs.includes(p.number)).reverse()) {
     const ids = [...new Set((pr.files ?? []).map(f => WIDGET_JSON.exec(f.path)?.[1]).filter(Boolean))].filter(id => !handled.has(id));
-    for (const id of ids) {
+    let manifests;
+    try { manifests = ids.map(id => [id, manifestOnMain(run, repo, id)]); } catch (e) { out.push(`retry #${pr.number} later: ${e.message.split('\n')[0]}`); continue; }
+    for (const [id, manifest] of manifests) {
       handled.add(id);
-      const manifest = manifestOnMain(run, repo, id);
       if (!manifest) { out.push(removeFromVault(vault, id)); continue; }
       const file = createCard(vault, {
         action: 'install_code_widget', key: `install:${id}:${pr.number}`, risk: 'low',
@@ -180,8 +186,8 @@ export function proposeCodeRemoval(vault, id, now = new Date().toISOString()) {
   return createCard(vault, {
     action: 'claude_task', key: `remove-code-widget:${id}`, risk: 'low',
     title: `Remove the ${id} widget's code`, reason: `You undid the ${id} widget; its code is still in the repo.`,
-    explain: 'Claude deletes the folder, regenerates the registry and views, and opens a widget:code PR that merges itself once CI passes.',
-    params: { cwd: repoDir, prompt: `Remove the code widget "${id}": git switch -c remove-widget-${id} origin/main, delete dashboard/src/widgets/code/${id}/, run node tools/widgets/code-registry.mjs and node tools/widgets/build-views.mjs, run mise run gate, commit, push, and gh pr create --label widget:code --title "revert(widget): remove ${id}" --body "Undo from the dashboard."` },
+    explain: 'Claude deletes the folder, regenerates the registry, and opens a widget:code PR that merges itself once CI passes.',
+    params: { cwd: repoDir, prompt: `Remove the code widget "${id}": git switch -c remove-widget-${id} origin/main, delete dashboard/src/widgets/code/${id}/, run node tools/widgets/code-registry.mjs, run mise run gate, commit, push, and gh pr create --label widget:code --title "revert(widget): remove ${id}" --body "Undo from the dashboard."` },
   }, now);
 }
 

@@ -10,12 +10,15 @@ const manifest = (fields = ['ci', 'status'], extra = {}) => JSON.stringify({
 });
 
 /** A PR: `base` and `head` map paths to file text; `changed` defaults to every path that differs. */
-function pr({ base = {}, head = {}, changed, codeIds = ['ci'] }) {
+const CATALOG = 'dashboard/src/widgets/code/catalog.ts';
+const RENDERERS = 'dashboard/src/widgets/code/renderers.ts';
+
+function pr({ base = {}, head = {}, changed, codeIds = ['ci'], expected = [[CATALOG, head[CATALOG] ?? null], [RENDERERS, head[RENDERERS] ?? null]] }) {
   const paths = changed ?? [...new Set([...Object.keys(base), ...Object.keys(head)])].filter(p => base[p] !== head[p]);
-  return checkChange({ changed: paths, readBase: p => base[p] ?? null, readHead: p => head[p] ?? null, codeIds });
+  return checkChange({ changed: paths, readBase: p => base[p] ?? null, readHead: p => head[p] ?? null, codeIds, expected });
 }
 
-const newWidget = { [`${DIR}/widget.json`]: manifest(), [`${DIR}/widget.ts`]: 'x', [`${DIR}/fixture.json`]: '{}', 'dashboard/src/widgets/code/registry.ts': 'r', 'vault-template/_system/widgets/views.md': 'v' };
+const newWidget = { [`${DIR}/widget.json`]: manifest(), [`${DIR}/widget.ts`]: 'x', [`${DIR}/fixture.json`]: '{}', [CATALOG]: 'c', [RENDERERS]: 'r' };
 
 test('a new widget inside its folder, with generated files, may merge itself', () => {
   const r = pr({ head: newWidget });
@@ -24,11 +27,12 @@ test('a new widget inside its folder, with generated files, may merge itself', (
 });
 
 test('touching anything outside the code widget folders needs review', () => {
-  const r = pr({ head: { ...newWidget, 'dashboard/src/lib/data.ts': 'fetch(evil)', '.github/workflows/x.yml': 'x', [`${DIR}/helper.js`]: 'fetch(evil)' } });
+  const r = pr({ head: { ...newWidget, 'dashboard/src/lib/data.ts': 'fetch(evil)', '.github/workflows/x.yml': 'x', [`${DIR}/helper.js`]: 'fetch(evil)', 'vault-template/_system/widgets/views.md': 'v' } });
   assert.equal(r.ok, false);
   assert.match(r.problems.join('\n'), /dashboard\/src\/lib\/data.ts, outside/);
   assert.match(r.problems.join('\n'), /workflows\/x.yml, outside/);
   assert.match(r.problems.join('\n'), /ci\/helper.js, outside/, 'only .ts and .json inside a widget folder');
+  assert.match(r.problems.join('\n'), /views.md, outside/, 'the Obsidian bundle never changes with a widget');
 });
 
 test('a widget that reads more than its base version needs review', () => {
@@ -38,6 +42,15 @@ test('a widget that reads more than its base version needs review', () => {
   assert.equal(r.ok, false);
   assert.match(r.problems.join(), /widens its permissions \(fields:next\)/);
   assert.equal(pr({ base, head: { [`${DIR}/widget.json`]: manifest(), [`${DIR}/widget.ts`]: 'y' }, changed: [`${DIR}/widget.ts`] }).ok, true, 'a code-only change is fine');
+  const unfiltered = manifest(['ci'], { source: { kind: 'snapshot', collection: 'projects' } });
+  assert.match(pr({ base, head: { [`${DIR}/widget.json`]: unfiltered } }).problems.join(), /changes which rows it gets/, 'dropping a filter is widening too');
+});
+
+test('a widget may not borrow another renderer, and generated files must be exactly generated', () => {
+  assert.match(pr({ head: { [`${DIR}/widget.json`]: manifest(undefined, { view: 'code:ci-status' }) } }).problems.join(), /view must be "code:ci"/);
+  const tampered = pr({ head: newWidget, expected: [[CATALOG, 'c'], [RENDERERS, 'what the generator writes']] });
+  assert.match(tampered.problems.join(), /renderers.ts isn't what tools\/widgets\/code-registry.mjs generates/);
+  assert.match(pr({ head: newWidget, expected: [] }).problems.join(), /catalog.ts isn't what/, 'unchecked generated files never pass');
 });
 
 test('manifests must be valid: exact permissions, no private fields, no connectors', () => {
@@ -53,10 +66,10 @@ test('manifests must be valid: exact permissions, no private fields, no connecto
 
 test('half a widget, or a PR with no widget at all, needs review', () => {
   assert.match(pr({ head: { [`${DIR}/widget.ts`]: 'x' }, codeIds: [] }).problems.join(), /needs widget.ts, widget.json and fixture.json/);
-  assert.match(pr({ head: { 'dashboard/src/widgets/code/registry.ts': 'r' } }).problems.join(), /changes no code widget/);
+  assert.match(pr({ head: { [CATALOG]: 'c' } }).problems.join(), /changes no code widget/);
 });
 
 test('removing a widget (an Undo revert) may merge itself', () => {
-  const r = pr({ base: newWidget, head: { 'dashboard/src/widgets/code/registry.ts': 'r2', 'vault-template/_system/widgets/views.md': 'v2' }, codeIds: [] });
+  const r = pr({ base: newWidget, head: { [CATALOG]: 'c2', [RENDERERS]: 'r2' }, codeIds: [] });
   assert.deepEqual(r.problems, []);
 });

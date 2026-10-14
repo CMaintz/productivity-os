@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import demo from './demo-snapshot.json';
-import { codeWidgets } from '../widgets';
+import { codeCatalog } from '../widgets/code/catalog';
 import type { CardPress, Snapshot } from './types';
 
 export interface Source {
@@ -17,8 +17,8 @@ export interface Source {
 const demoSnapshot = () => ({ ...(demo as unknown as Snapshot), generatedAt: new Date(Date.now() - 60_000).toISOString() });
 
 function codeWidgetFixtureSnapshot(which: string): Snapshot {
-  const ids = Object.keys(codeWidgets).filter(id => which === 'all' || id === which);
-  const widgets = Object.fromEntries(ids.map(id => [id, { manifest: codeWidgets[id].manifest, rows: codeWidgets[id].fixture }]));
+  const ids = Object.keys(codeCatalog).filter(id => which === 'all' || id === which);
+  const widgets = Object.fromEntries(ids.map(id => [id, { manifest: codeCatalog[id].manifest, rows: codeCatalog[id].fixture }]));
   return { ...demoSnapshot(), layout: ids.map(id => ({ id })), widgets };
 }
 

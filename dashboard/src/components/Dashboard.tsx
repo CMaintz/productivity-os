@@ -1,15 +1,11 @@
-import { Component, h, type ComponentChildren, type VNode } from 'preact';
+import { h, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { connect, type Source } from '../lib/data';
+import { CodeFrame } from './CodeFrame';
 import type { Snapshot } from '../lib/types';
 import { createViews, type Ctx, type Host, type Press, type Row } from '../widgets';
 
-class Boundary extends Component<{ onError: (e: unknown) => VNode; children?: ComponentChildren }, { error?: unknown }> {
-  static getDerivedStateFromError(error: unknown) { return { error }; }
-  render() { return this.state.error ? this.props.onError(this.state.error) : this.props.children; }
-}
-
-const { Board } = createViews({ h: h as unknown as Host['h'], useState: useState as Host['useState'], Boundary });
+const { Board } = createViews({ h: h as unknown as Host['h'], useState: useState as Host['useState'], CodeFrame });
 const STALE_MS = 10 * 60_000;
 
 function pressFor(source: Source): Ctx['press'] {

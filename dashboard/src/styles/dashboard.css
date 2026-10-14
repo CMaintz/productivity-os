@@ -76,3 +76,5 @@ tr[data-status='waiting'] td { color: var(--warn); }
 [data-ci='pending'] .ci-dot { background: var(--warn); }
 [data-ci='passing'] .ci-dot { background: var(--accent-2); }
 .ci-name { font-weight: 600; overflow-wrap: anywhere; }
+.code-frame { display: block; width: 100%; border: 0; background: transparent; }
+body.widget-frame #root { overflow: hidden; }

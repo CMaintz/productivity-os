@@ -67,16 +67,11 @@ test('widgetView loads a manifest by id from the vault and renders it', async ()
   assert.deepEqual(read, ['_system/widgets/writing.json', '_system/widgets/etcpasswd.json'], 'ids are sanitised');
 });
 
-test('code widgets render in Obsidian too, and a crash stays inside its panel', async () => {
+test('code widgets are web-only: Obsidian shows a pointer instead of running their code', async () => {
   const { widgetView } = await loadViews();
   const manifest = JSON.parse(fs.readFileSync('dashboard/src/widgets/code/ci-status/widget.json', 'utf8'));
-  const { dc } = fakeDc([page('Projects/site.md', { status: 'active', ci: 'failing', failing_prs: 1, updated: '2026-10-13' })]);
+  const { dc } = fakeDc([page('Projects/site.md', { status: 'active', ci: 'failing' })]);
   dc.app = { vault: { adapter: { read: async () => JSON.stringify(manifest) } } };
-  assert.match(text(h(await widgetView(dc, 'ci-status'), {})), /1 failing.*site/);
-  dc.app.vault.adapter.read = async () => JSON.stringify({ ...manifest, id: 'nope', view: 'code:nope' });
-  assert.match(text(h(await widgetView(dc, 'nope'), {})), /no code widget "nope" is deployed/);
-  const { createDatacoreWidgets } = await loadViews();
-  const boom = { toString() { throw new Error('boom'); } };
-  const broken = fakeDc([page('Projects/x.md', { status: 'active', ci: boom })]).dc;
-  assert.match(text(h(createDatacoreWidgets(broken).Widget, { manifest })), /This widget crashed: boom/);
+  assert.match(text(h(await widgetView(dc, 'ci-status'), {})), /render on the web dashboard/);
+  assert.doesNotMatch(fs.readFileSync(VIEWS_FILE, 'utf8'), /CiStatus|ci-status/, 'no widget code in the Obsidian bundle');
 });

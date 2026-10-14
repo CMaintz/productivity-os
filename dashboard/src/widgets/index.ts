@@ -1,32 +1,16 @@
-import type { CodeView, Ctx, Host, LayoutEntry, Manifest, Row, Widget } from './types';
+import type { Ctx, Host, LayoutEntry, Manifest, Row, Widget } from './types';
 import { primitives } from './primitives';
 import { modules } from './modules';
-import { codeWidgets } from './code/registry';
 
 export type { Ctx, Host, Widget, Row, Press, LayoutEntry } from './types';
-export { codeWidgets } from './code/registry';
-
-const message = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 200);
 
 export function createViews(host: Host) {
   const { h } = host;
   const views: Record<string, (p: never) => unknown> = { ...primitives(host), ...modules(host) };
-  const code: Record<string, CodeView> = {};
-  for (const [id, entry] of Object.entries(codeWidgets)) code[`code:${id}`] = entry.create(host);
-
-  const failed = (ctx: Ctx, id: string, e: unknown) => {
-    ctx.reportError?.(id, message(e));
-    return h('p', { class: 'error' }, `This widget crashed: ${message(e)}`);
-  };
-
-  function IsolatedCodeView({ m, rows, ctx }: { m: Manifest; rows: Row[]; ctx: Ctx }) {
-    try { return code[m.view]({ m, rows, ctx }); } catch (e) { return failed(ctx, m.id, e); }
-  }
 
   function body(m: Manifest, rows: Row[], ctx: Ctx) {
-    if (code[m.view]) {
-      const view = h(IsolatedCodeView, { m, rows, ctx });
-      return host.Boundary ? h(host.Boundary, { onError: (e: unknown) => failed(ctx, m.id, e) }, view) : view;
+    if (m.view.startsWith('code:')) {
+      return host.CodeFrame ? h(host.CodeFrame, { m, rows, ctx }) : h('p', { class: 'muted' }, 'Code widgets render on the web dashboard.');
     }
     const View = views[m.view] as unknown as (p: unknown) => unknown;
     return View ? h(View, { m, rows, ctx }) : h('p', { class: 'error' }, `Unknown view "${m.view}"`);

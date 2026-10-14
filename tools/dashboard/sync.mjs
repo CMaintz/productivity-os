@@ -85,8 +85,8 @@ const ERROR_KEEP_DAYS = 7;
 /** Recent code-widget crash reports: switches off repeat offenders, prunes old reports. */
 export async function pullWidgetErrors(vault, config, call, now = new Date()) {
   const since = new Date(now.valueOf() - 864e5).toISOString();
-  const errors = await call('GET', `/widget_errors?owner_id=eq.${config.ownerId}&created_at=gt.${since}&select=widget_id,message,created_at&order=created_at.asc&limit=500`);
-  const off = applyWidgetErrors(vault, errors ?? [], now);
+  const errors = await call('GET', `/widget_errors?owner_id=eq.${config.ownerId}&created_at=gt.${since}&select=widget_id,message,created_at&order=created_at.desc&limit=500`);
+  const off = applyWidgetErrors(vault, (errors ?? []).reverse(), now);
   const old = new Date(now.valueOf() - ERROR_KEEP_DAYS * 864e5).toISOString();
   await call('DELETE', `/widget_errors?owner_id=eq.${config.ownerId}&created_at=lt.${old}`, undefined, { prefer: 'return=minimal' });
   return off;

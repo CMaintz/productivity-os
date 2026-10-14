@@ -80,7 +80,7 @@ function checkPermissions(m, errors) {
   const p = m.permissions;
   if (!p || typeof p !== 'object') return errors.push('code widgets need a permissions block');
   const s = m.source ?? {};
-  if (s.kind === 'snapshot' && !CODE_COLLECTIONS.includes(s.collection)) errors.push(`code widgets may only read ${CODE_COLLECTIONS.join(', ')}`);
+  if (s.kind !== 'snapshot' || !CODE_COLLECTIONS.includes(s.collection)) errors.push(`code widgets may only read the snapshot collections ${CODE_COLLECTIONS.join(', ')}`);
   if (!sameSet(p.collections ?? [], s.kind === 'snapshot' ? [s.collection] : [])) errors.push('permissions.collections must match source.collection');
   if (!sameSet(p.folders ?? [], s.kind === 'notes' ? [s.folder] : [])) errors.push('permissions.folders must match source.folder');
   if (!sameSet(p.fields, fieldsUsed(m))) errors.push(`permissions.fields must list exactly the fields it reads: ${fieldsUsed(m).join(', ')}`);

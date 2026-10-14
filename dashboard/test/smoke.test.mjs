@@ -14,11 +14,25 @@ const DIST = new URL('../dist/', import.meta.url).pathname;
 const SHOTS = process.env.SHOTS ?? new URL('../test-results/', import.meta.url).pathname;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
+/** The production _headers rules (Cloudflare syntax, incl. `! Name` removals), so the CSPs are enforced here too. */
+async function headersFor(urlPath) {
+  const blocks = (await readFile(join(DIST, '_headers'), 'utf8')).split(/\n(?=\S)/).filter(b => b.startsWith('/'));
+  const out = {};
+  for (const [pattern, ...lines] of blocks.map(b => b.trim().split('\n'))) {
+    if (!new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(urlPath)) continue;
+    for (const line of lines.map(l => l.trim()).filter(l => l && !l.startsWith('#'))) {
+      if (line.startsWith('! ')) delete out[line.slice(2).toLowerCase()];
+      else { const i = line.indexOf(':'); out[line.slice(0, i).toLowerCase()] = line.slice(i + 1).trim(); }
+    }
+  }
+  return out;
+}
+
 function serve() {
   const server = createServer(async (req, res) => {
     const path = normalize(new URL(req.url, 'http://x').pathname).replace(/^(\.\.[/\\])+/, '');
     const file = join(DIST, path.endsWith('/') ? `${path}index.html` : path);
-    try { res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(await readFile(file)); }
+    try { res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', ...(await headersFor(path)) }).end(await readFile(file)); }
     catch { res.writeHead(404).end('not found'); }
   });
   return new Promise(r => server.listen(0, '127.0.0.1', () => r(server)));
@@ -68,12 +82,25 @@ for (const [label, viewport] of VIEWPORTS) {
   }));
 
   for (const id of codeWidgetIds()) {
-    test(`code widget ${id} renders from its fixture on ${label}`, () => withPage(viewport, `/?demo&widget=${id}`, async (page, errors) => {
-      await page.waitForSelector(`#${id}`);
+    test(`code widget ${id} renders from its fixture, sandboxed, on ${label}`, () => withPage(viewport, `/?demo&widget=${id}`, async (page, errors) => {
+      await page.waitForSelector(`#${id} iframe.code-frame`);
+      const frame = page.frameLocator(`#${id} iframe`);
+      await frame.locator('#root > *').first().waitFor();
+      check(`${label}: ${id} renders content`, ((await frame.locator('#root').textContent()) ?? '').length > 10);
       check(`${label}: ${id} shows no error state`, (await page.locator(`#${id} .error`).count()) === 0);
-      check(`${label}: ${id} renders content`, ((await page.locator(`#${id}`).textContent()) ?? '').length > 10);
+      check(`${label}: the frame grew to fit`, (await page.locator(`#${id} iframe`).evaluate(f => f.getBoundingClientRect().height)) > 40);
       check(`${label}: ${id} causes no horizontal scroll`, await noScroll(page));
-      assert.deepEqual(errors, [], `${label}: no console errors`);
+      const inside = page.frames().find(f => f.url().includes('widget-frame'));
+      const escapes = await inside.evaluate(async () => {
+        const tryIt = async fn => { try { await fn(); return 'allowed'; } catch { return 'blocked'; } };
+        return {
+          parentDom: await tryIt(() => window.parent.document.title),
+          storage: await tryIt(() => window.localStorage.length),
+          network: await tryIt(() => fetch('https://example.com/?leak')),
+        };
+      });
+      assert.deepEqual(escapes, { parentDom: 'blocked', storage: 'blocked', network: 'blocked' }, `${label}: the frame can't reach the page, storage or network`);
+      assert.deepEqual(errors.filter(e => !/example\.com|Content Security Policy|Failed to fetch/.test(e)), [], `${label}: no console errors`);
       mkdirSync(SHOTS, { recursive: true });
       await page.locator(`#${id}`).screenshot({ path: `${SHOTS}/widget-${id}-${label}.png` });
     }));

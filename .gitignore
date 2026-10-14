@@ -9,3 +9,4 @@ dashboard/dist/
 dashboard/.astro/
 dashboard/.env
 dashboard/test-results/
+dashboard/public/widget-frame.js

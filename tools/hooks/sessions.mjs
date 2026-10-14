@@ -3,6 +3,7 @@
 // Pure functions here; session-hook.mjs does the I/O.
 
 import path from 'node:path';
+import { readFrontmatter } from '../lib/frontmatter.mjs';
 
 const PROMPT_PREVIEW = 160;
 const MAX_PROMPT_LINES = 50;
@@ -50,14 +51,6 @@ export function sessionFields(input, project, now, prev = {}) {
 
 export function renderFrontmatter(fields) {
   return `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n`;
-}
-
-/** Reads `key: value` pairs back from a note we wrote (values kept as raw YAML). */
-export function readFrontmatter(note) {
-  const m = note?.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  if (!m) return { fields: {}, body: note ?? '' };
-  const fields = Object.fromEntries(m[1].split(/\r?\n/).map(l => l.match(/^(\w+):\s?(.*)$/)).filter(Boolean).map(x => [x[1], x[2]]));
-  return { fields, body: note.slice(m[0].length) };
 }
 
 /** Body: a title and a capped list of prompt previews, newest last. */

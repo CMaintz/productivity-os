@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "inventory": "node tools/inventory/inventory.mjs --out out --github CMaintz",
-    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs",
+    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs",
     "vault": "node tools/vault/init.mjs --from-inventory out/inventory.json --git",
     "hooks": "node tools/hooks/install.mjs",
-    "github": "node tools/github/sync.mjs"
+    "github": "node tools/github/sync.mjs",
+    "suggest": "node tools/actions/suggest.mjs",
+    "executor": "node tools/actions/executor.mjs --once"
   },
   "engines": {
     "node": ">=20"

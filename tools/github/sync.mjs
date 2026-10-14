@@ -11,7 +11,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { REPO_QUERY, GH_BLOCK, summarise, githubBlock, githubFields } from './github.mjs';
-import { replaceBlock, setFrontmatter } from '../vault/projects.mjs';
+import { replaceBlock } from '../vault/projects.mjs';
+import { setFrontmatter } from '../lib/frontmatter.mjs';
 
 function parseArgs(argv) {
   const a = { vault: process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault'), only: null };

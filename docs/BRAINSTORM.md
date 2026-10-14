@@ -416,7 +416,8 @@ A pipeline for building a new product, or a big feature for an existing project.
 ## Phased roadmap
 Status (Oct 2026):
 - **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/resume` and `/next`.
-- **Next:** action cards with buttons (Meta Bind) plus the executor and trust ladder (Phase 4). Then the web dashboard.
+- **Done:** action cards with Meta Bind buttons, the executor, the trust ladder, rule-based suggestions and `/suggest` (Phase 4 core).
+- **Next:** the web dashboard at `dash.maintz.dev` (Supabase snapshot + card buttons), then widgets and the Product Forge.
 
 0. **Projects inventory & renovation (first real use):**
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).

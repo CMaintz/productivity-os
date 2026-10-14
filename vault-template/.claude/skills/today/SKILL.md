@@ -7,7 +7,10 @@ description: Morning brief. Builds or refreshes today's daily note with top 3 pr
 
 Work in the vault root. Follow `CLAUDE.md`. Updating the daily note is low-risk, so do it without asking.
 
-1. **Refresh GitHub data first:** run the GitHub sync from `_system/tools.json` (see `CLAUDE.md`, "Tools"). If it fails, keep going without it.
+1. **Refresh first:**
+   - Run the GitHub sync from `_system/tools.json` (see `CLAUDE.md`, "Tools").
+   - Then run `node <productivityOs>/tools/actions/suggest.mjs`, which creates cards for failing CI, stale projects, blocked agent tickets and a full inbox.
+   - If either fails, keep going without it.
 2. **Gather:**
    - Open tasks that are due today or overdue: grep `- \[ \]` lines with `📅 <date>` up to today in `Projects/` and `Daily/`.
    - Unchecked items under `## Carry over` and `## Tasks` in the most recent previous daily note.

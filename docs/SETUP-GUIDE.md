@@ -66,6 +66,17 @@ Rules the local Claude follows:
 2. 🧑 Restart any open Claude Code sessions. 🤖 Check that a new session creates a note in `Vault\Sessions\`.
 3. 🧑 In a Claude Code session inside the vault (`cd $env:USERPROFILE\Vault; claude`): `/plugin marketplace add kepano/obsidian-skills`, then install the skills it lists. This command is interactive, so it has to be you.
 
+## 4b. Action cards and the executor
+1. 🧑 Obsidian → Community plugins: install **Meta Bind**. Card buttons depend on it.
+2. 🤖 `npm run vault` then `node tools/vault/init.mjs --update-system`. This picks up the card views, the `/suggest` skill and the updated contract, and records this PC as `mainHost` in `_system\tools.json`.
+3. 🤖 With your OK, add this to `Vault\Home.md` under "Waiting on me":
+   ```markdown
+   ## Ran on their own
+   ![[Actions.base#Ran on their own]]
+   ```
+4. 🤖 `npm run suggest`, then show the cards it made. 🧑 Press a button on one. 🤖 `npm run executor` and confirm the card updated.
+5. 🤖 With your OK: `powershell -ExecutionPolicy Bypass -File tools\actions\install-executor.ps1`, which starts the executor hidden at logon. Check it with `Get-ScheduledTask -TaskName 'productivity-os executor' | Get-ScheduledTaskInfo`.
+
 ## 5. Phone (Android) sync
 1. 🧑 Install **Syncthing** on the PC and **Syncthing-Fork** on Android.
 2. 🧑 Share `C:\Users\akash\Vault` to the phone. The vault's `.stignore` already keeps out `.git` and the private prompt log.
@@ -116,6 +127,7 @@ Rules the local Claude follows:
 | Morning | In the vault: `/today` |
 | Something pops up | `/capture <text>` |
 | Starting work | `/next`, or `/resume <project>` |
+| Anytime | Answer cards under **Waiting on me** (works on the phone). `/suggest` asks for fresh ideas. |
 | End of day | `/shutdown` |
 | After moving folders | `npm run inventory` then `npm run vault` |
 | Writing | https://maintz.dev/keystatic, then merge the post's PR to publish |

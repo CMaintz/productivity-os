@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { setFrontmatter } from '../lib/frontmatter.mjs';
 
 const ACTIVE_DAYS = 60;
 const MAX_DOCS = 30;
@@ -66,15 +67,6 @@ ${docsBlock(p)}
 
 ## Log
 `;
-}
-
-/** Sets `key: value` inside the frontmatter, adding the key if it's missing. */
-export function setFrontmatter(note, key, value) {
-  const m = note.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!m) return note;
-  const re = new RegExp(`^${key}:.*$`, 'm');
-  const fm = re.test(m[1]) ? m[1].replace(re, `${key}: ${value}`) : `${m[1]}\n${key}: ${value}`;
-  return note.replace(m[1], () => fm);
 }
 
 /**

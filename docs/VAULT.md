@@ -58,7 +58,39 @@ Every project note with a `repo` gets:
 
 `/today` runs the sync itself, and `/resume <project>` and `/next` use this data.
 
-## 7. Sync to other PCs and Android
+## 7. Action cards and the executor
+Suggestions arrive as **cards** in `_system/actions/`, shown on Home under **Waiting on me**. Each card has buttons:
+- **Do it**
+- **Not now** (comes back tomorrow)
+- **No** (with an optional "why not")
+- **Always do this**
+- **Never suggest this**
+- **Undo**
+
+The buttons only change the card's `status`, so they work on your phone too. They need the **Meta Bind** community plugin.
+
+The **executor** on the main PC does the work:
+- Picks up approved cards, runs them, and writes the result onto the card.
+- Records every decision in `_system/policy.md`, the trust ladder. Enough approvals in a row produce a card proposing the next level ("let pause_stale_project run on its own"). A reject or undo drops the type back a level.
+- Never raises an action type above its `max`. Anything that sends, spends, deletes or merges stays at "suggest".
+
+| Card type | Where it comes from | What "Do it" does |
+|---|---|---|
+| `fix_ci` | default branch failing | A Claude Code session in the repo fixes it on a branch and opens a PR. Never pushes to main or merges. |
+| `pause_stale_project` | active, but untouched for 21 days | Sets `status: paused`. Undo restores it. |
+| `triage_inbox` | 5+ notes in Inbox | Claude files them per `CLAUDE.md`. Starts at auto-notice. |
+| `reminder` | blocked agent tickets | Nothing; marks it seen. |
+| `claude_task` | `/suggest` (judgement calls) | A Claude Code session runs the card's instructions. Always needs a click. |
+
+```powershell
+npm run suggest     # create cards from the current vault state (also part of /today)
+npm run executor    # one pass by hand
+powershell -ExecutionPolicy Bypass -File tools\actions\install-executor.ps1   # run it hidden at logon: a pass every minute, suggestions hourly
+```
+- **Usage:** Claude runs use your subscription (`claude -p`), so each approved `fix_ci`, `triage_inbox` or `claude_task` card counts toward your usage limits.
+- **Main PC only:** the executor runs only on the PC named in `_system/tools.json` (`mainHost`, set on first setup) and never twice at once.
+
+## 8. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

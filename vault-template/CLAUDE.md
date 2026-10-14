@@ -22,7 +22,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
   - The `## GitHub` and `## Docs` sections between `<!-- ...:start -->`/`<!-- ...:end -->` markers are generated. Leave them alone.
 - **post:** `type: post`, `status: idea|draft|edit|scheduled|published`, `platforms: [blog, devto, linkedin]`, `publish_date`, `slug`
 - **spec:** `type: spec`, `status: outline|drafting|ready|building|done`, `project`, `mode: interview|autonomous`
-- **action:** `type: action`, `action`, `params`, `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed`, `context`, `expires`
+- **action** (cards in `_system/actions/`, created by `tools/actions/cards.mjs`, never by hand): `type: action`, `action`, `key`, `params` (JSON), `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed|undone|expired`, `level`, `decided_by: you|policy`, `context`, `expires`
 - **daily:** `type: daily`, `date: YYYY-MM-DD`
 - **session** (written by the hook, don't hand-edit): `type: session`, `status: idle|running|waiting|ended`, `project`, `cwd`, `session_id`, `started`, `updated`, `prompts`, `last_prompt`, `waiting_for`
 - **source:** `type: source`, `origin` (original path or URL), `imported: YYYY-MM-DD`
@@ -50,6 +50,15 @@ Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-
 ## Tools
 `_system/tools.json` says where the productivity-os repo lives (`productivityOs`). Run its scripts from there:
 - **GitHub sync** (read-only on GitHub): `node <productivityOs>/tools/github/sync.mjs`. Refreshes the `## GitHub` section and frontmatter of every project note that has a `repo`. Needs `gh` logged in. If it fails, say so and carry on without the GitHub data.
+
+## Action cards
+- **Proposing.** To propose something that needs the user's OK, create a card. Don't just do it, and don't write card files by hand:
+  ```
+  node <productivityOs>/tools/actions/cards.mjs create '{"action":"claude_task","key":"<stable-unique-key>","title":"…","reason":"…","explain":"what happens if approved","undo":"how to reverse it","risk":"low|medium|high","context":"[[Projects/x]]","params":{"cwd":"<repo path>","prompt":"<full instructions for an unattended Claude Code session>"}}'
+  ```
+  - `claude_task` cards always need a click. Their prompt must be self-contained, and must say: work on a branch, never push to main, never merge, never delete.
+- **Who runs them.** The executor (`tools/actions/executor.mjs`) on the main PC carries out approved cards and records every decision in `_system/policy.md`. That's the trust ladder: approvals earn autonomy, rejects and undos take it away. Don't edit card `status` yourself; that's the user's button.
+- **Before proposing.** Read `_system/memory/preferences.md` and the **Never suggest** list in `_system/policy.md` first. When a user rejects a card with a `decline_reason`, add the lesson to `preferences.md`.
 
 ## Every change gets logged
 Append one line per change to `_system/changelog.md`: `- YYYY-MM-DD HH:MM <skill/agent> <what> [[note]]`.

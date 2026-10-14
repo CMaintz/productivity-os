@@ -110,7 +110,32 @@ Everything on the dashboard is a widget: a small JSON file in `_system/widgets/`
   - `tools/widgets/` holds the query engine, validation and manifests.
   - `npm run widgets:build` regenerates `views.md` and the demo data. Tests fail if you forget.
 
-## 10. Sync to other PCs and Android
+## 10. Code widgets
+When a manifest isn't enough (custom layout, interaction, or a view `where`/`sort` can't express), the orchestrator asks for a **code widget**: a small Preact component an agent builds, tests and ships through a PR.
+
+1. **Request:** `/widget` proposes a `build_code_widget` card. Approving it opens an `agent:ready` + `widget:code` ticket for the Foundry `/feature` loop. These cards always need your click.
+2. **Build:** the agent adds `dashboard/src/widgets/code/<id>/`:
+   - `widget.ts`: `createWidget(host)` returns `({ m, rows, ctx }) => VNode`, using `host.h`.
+   - `widget.json`: the manifest, with `view: "code:<id>"` and a `permissions` block listing exactly the collection or folder and fields it reads, and `connectors: []`.
+   - `fixture.json`: sample `rows`, plus `expect`, strings the render must contain.
+
+   It then runs `node tools/widgets/code-registry.mjs` and `node tools/widgets/build-views.mjs`.
+3. **Guardrails:**
+   - **ESLint sandbox:** no network, storage, DOM globals, `eval` or dynamic `import()`. Imports are limited to `../../types`, `../../format` and the widget's own folder.
+   - **CSP:** the dashboard's CSP blocks other hosts anyway.
+   - **Error boundary:** each code widget renders inside one, so a crash only blanks its own panel.
+4. **Ship:**
+   - `node tools/widgets/guard.mjs` passes only when the PR stays inside widget folders (plus the generated registry and `views.md`) and doesn't widen what any widget can read.
+   - Then CI auto-merges and deploys. Anything else is labelled `widget:needs-review` for you.
+5. **Install:** the executor checks merged `widget:code` PRs every 10 minutes (via `gh`). Each new widget arrives as an **auto-notice** card, already live, with **Undo**. Undo takes it off the dashboard at once, and a follow-up card offers to remove its code.
+6. **Off-switch:**
+   - The dashboard reports crashes to Supabase: widget id and message only.
+   - After 3 crashes in 24 hours, the executor switches the widget off (`"disabled": true` in the layout) and proposes a `fix_widget` ticket.
+   - The fix ships the same way and switches it back on.
+
+Preview any code widget from its fixture: `npm --workspace dashboard run dev`, then `/?demo&widget=<id>` (or `widget=all`).
+
+## 11. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

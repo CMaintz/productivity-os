@@ -1,6 +1,6 @@
 import { runQuery, type Query } from '../../../tools/widgets/query.mjs';
 import { validateManifest } from '../../../tools/widgets/manifest.mjs';
-import { createViews } from './index';
+import { codeWidgets, createViews } from './index';
 import type { Host, Manifest, Row } from './types';
 
 type Source = Query & { kind: 'snapshot' | 'notes'; collection?: string; folder?: string };
@@ -60,7 +60,7 @@ export function createDatacoreWidgets(dc: Dc) {
 
 export async function widgetView(dc: Dc, id: string) {
   const manifest = JSON.parse(await dc.app.vault.adapter.read(`_system/widgets/${id.replace(/[^a-z0-9-]/g, '')}.json`)) as FullManifest;
-  const errors = validateManifest(manifest) as string[];
+  const errors = validateManifest(manifest, { codeIds: Object.keys(codeWidgets) }) as string[];
   const { Widget } = createDatacoreWidgets(dc);
   if (errors.length) return function Invalid() { return dc.preact.h('p', { class: 'error' }, `Widget "${id}" is invalid: ${errors.join('; ')}`); };
   return function View() { return dc.preact.h(Widget, { manifest }); };

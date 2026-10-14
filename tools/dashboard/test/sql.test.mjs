@@ -1,4 +1,4 @@
-// Runs supabase/migrations/0001_dashboard.sql in an in-process Postgres (PGlite) with a
+// Runs every supabase/migrations/*.sql, in order, in an in-process Postgres (PGlite) with a
 // small stand-in for Supabase's roles and auth schema, then checks the access rules.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ const STUB = `
 async function db() {
   const d = new PGlite();
   await d.exec(STUB);
-  await d.exec(fs.readFileSync('supabase/migrations/0001_dashboard.sql', 'utf8'));
+  for (const f of fs.readdirSync('supabase/migrations').filter(x => x.endsWith('.sql')).sort()) await d.exec(fs.readFileSync(`supabase/migrations/${f}`, 'utf8'));
   await d.exec(`insert into public.snapshot (owner_id, data) values ('${ME}', '{"mine":true}'), ('${OTHER}', '{"theirs":true}')`);
   return d;
 }
@@ -63,4 +63,21 @@ test('card_events: 30 presses a minute per owner', async () => {
   for (let i = 0; i < 30; i++) await event(d, ME);
   assert.ok(await fails(event(d, ME)));
   assert.equal(await fails(event(d, OTHER)), false, 'limit is per owner');
+});
+
+const report = (d, user, id = 'ci-status', message = 'boom') =>
+  as(d, 'authenticated', user, 'insert into public.widget_errors (widget_id, message) values ($1, $2)', [id, message]);
+
+test('widget_errors: owner can report, nobody else, nothing readable or editable from the browser', async () => {
+  const d = await db();
+  assert.equal(await fails(report(d, ME)), false, 'a normal report works');
+  assert.ok(await fails(as(d, 'anon', null, `insert into public.widget_errors (widget_id) values ('x')`)));
+  assert.ok(await fails(as(d, 'authenticated', ME, `insert into public.widget_errors (owner_id, widget_id) values ('${OTHER}', 'x')`)), 'cannot report for someone else');
+  assert.ok(await fails(report(d, ME, '../etc')), 'widget id must be an id');
+  assert.ok(await fails(report(d, ME, 'x', 'm'.repeat(201))), 'message capped at 200');
+  assert.ok(await fails(as(d, 'authenticated', ME, 'select * from public.widget_errors')), 'the browser cannot read reports');
+  assert.ok(await fails(as(d, 'authenticated', ME, 'delete from public.widget_errors')));
+  for (let i = 0; i < 9; i++) await report(d, ME);
+  assert.ok(await fails(report(d, ME)), '10 a minute per owner');
+  assert.equal(await fails(report(d, OTHER)), false);
 });

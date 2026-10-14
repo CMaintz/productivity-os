@@ -2,7 +2,8 @@
 // Two-way link between the vault (on the main PC) and the dashboard's Supabase project:
 //   push: upserts the metadata snapshot (snapshot.mjs) for the owner
 //   pull: applies dashboard button presses (card_events) to the card notes, the same
-//         fields the Meta Bind buttons set, then marks each event applied
+//         fields the Meta Bind buttons set, then marks each event applied; reads code
+//         widget crash reports (widget_errors) and switches repeat offenders off
 // The executor calls both on every pass when the dashboard is configured.
 //
 // Config: ~/.productivity-os/dashboard.json, which lives outside the vault so it never syncs:
@@ -14,6 +15,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { buildSnapshot } from './snapshot.mjs';
 import { listCards, updateCard } from '../actions/cards.mjs';
+import { applyWidgetErrors } from '../widgets/code-widgets.mjs';
 
 export const CONFIG_FILE = path.join(os.homedir(), '.productivity-os', 'dashboard.json');
 
@@ -78,6 +80,18 @@ export async function pull(vault, config, call, now = new Date()) {
   return out;
 }
 
+const ERROR_KEEP_DAYS = 7;
+
+/** Recent code-widget crash reports: switches off repeat offenders, prunes old reports. */
+export async function pullWidgetErrors(vault, config, call, now = new Date()) {
+  const since = new Date(now.valueOf() - 864e5).toISOString();
+  const errors = await call('GET', `/widget_errors?owner_id=eq.${config.ownerId}&created_at=gt.${since}&select=widget_id,message,created_at&order=created_at.asc&limit=500`);
+  const off = applyWidgetErrors(vault, errors ?? [], now);
+  const old = new Date(now.valueOf() - ERROR_KEEP_DAYS * 864e5).toISOString();
+  await call('DELETE', `/widget_errors?owner_id=eq.${config.ownerId}&created_at=lt.${old}`, undefined, { prefer: 'return=minimal' });
+  return off;
+}
+
 /** pull then push; never throws (the executor must keep running offline). */
 export async function syncDashboard(vault, { config, fetchImpl = fetch, now = new Date() } = {}) {
   try {
@@ -85,8 +99,9 @@ export async function syncDashboard(vault, { config, fetchImpl = fetch, now = ne
     if (!config) return { skipped: 'not configured' };
     const call = rest(config, fetchImpl);
     const applied = await pull(vault, config, call, now);
+    const disabled = await pullWidgetErrors(vault, config, call, now);
     await push(vault, config, call, now);
-    return { applied };
+    return { applied, disabled };
   } catch (e) {
     return { error: e.message };
   }

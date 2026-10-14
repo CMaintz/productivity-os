@@ -130,7 +130,7 @@ Rules the local Claude follows:
 The PC publishes a metadata-only snapshot to a Supabase project of its own, and the page shows it behind GitHub sign-in. Button presses go back to the PC, which applies them to the cards. No note text, tasks or prompts leave the PC.
 
 1. 🧑 **Create a new Supabase project** (free tier), e.g. `productivity-os`. Keep it separate from the site's comments project. Note the project URL and the **anon/publishable** key (Settings → API).
-2. 🧑 **Create the tables:** Supabase → SQL editor → paste `supabase/migrations/0001_dashboard.sql` → Run. 🤖 Claude can put it on your clipboard: `Get-Content supabase/migrations/0001_dashboard.sql -Raw | Set-Clipboard`.
+2. 🧑 **Create the tables:** Supabase → SQL editor → paste each file in `supabase/migrations/`, in order (`0001_dashboard.sql`, then `0002_widget_errors.sql`) → Run. 🤖 Claude can put one on your clipboard: `Get-Content supabase/migrations/0001_dashboard.sql -Raw | Set-Clipboard`. When a new migration file appears later, run just that one.
 3. 🧑 **GitHub sign-in:**
    - On GitHub → Settings → Developer settings → **OAuth Apps** → New:
      - Homepage `https://dash.maintz.dev`
@@ -155,6 +155,11 @@ The PC publishes a metadata-only snapshot to a Supabase project of its own, and 
 9. 🧑 **Optional:** Cloudflare Zero Trust → Access → a self-hosted app for `dash.maintz.dev`, allowing only your email. That's a second lock in front of the GitHub sign-in.
 
 Try the page without any of this: `npm --workspace dashboard run dev`, then open http://localhost:4321/?demo.
+
+### 8b. Code widgets (agent-built)
+1. 🤖 `gh auth status` on the main PC must show you logged in. The executor uses `gh` to open widget tickets and to see merged widget PRs. It creates the `widget:code` and `widget:needs-review` labels itself.
+2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`.
+3. 🧑 The CI side (PR previews, auto-merge for green guarded widget PRs, deploy on merge) lands in a separate workflow PR. Until then, merge widget PRs yourself and run `npm --workspace dashboard run deploy`. The vault side installs them either way.
 
 ## Daily use, once set up
 | When | What |

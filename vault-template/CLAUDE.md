@@ -62,7 +62,7 @@ Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-
 
 ## Widgets
 Dashboard widgets are JSON manifests in `_system/widgets/`, laid out in `_system/layouts/dashboard.json`. Rules:
-- **Proposing:** propose new widgets with `/widget`; never hand-write them.
+- **Proposing:** propose new widgets with `/widget`; never hand-write them. Code widgets (agent-built, via a ticket) are only for what a manifest can't express.
 - **Generated file:** `_system/widgets/views.md` is generated. Don't edit it.
 - **Privacy:** widgets over a folder of notes publish only the frontmatter fields they list, plus titles and paths. Never propose one that whitelists something private.
 

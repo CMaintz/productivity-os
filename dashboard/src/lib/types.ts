@@ -1,11 +1,11 @@
-import type { Widget } from '../widgets';
+import type { LayoutEntry, Widget } from '../widgets';
 
 export interface Snapshot {
   version: number;
   generatedAt: string;
   host: string;
   counts: { pendingCards: number; waitingSessions: number; attention: number; activeProjects: number; inbox: number };
-  layout: { id: string; size?: string }[];
+  layout: LayoutEntry[];
   widgets: Record<string, Widget>;
 }
 

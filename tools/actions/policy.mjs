@@ -12,6 +12,11 @@ export const DEFAULTS = {
   pause_stale_project: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
   fix_ci: { level: 'suggest', max: 'auto-notice', promoteAfter: 10 },
   create_widget: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
+  // Builds spend usage and open tickets, so they're always asked. Installs follow a guarded,
+  // green auto-merge, so they just show up with Undo.
+  build_code_widget: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  install_code_widget: { level: 'auto-notice', max: 'auto-notice', promoteAfter: 0 },
+  fix_widget: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

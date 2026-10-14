@@ -1,16 +1,30 @@
-import { h, type VNode } from 'preact';
+import { Component, h, type ComponentChildren, type VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { connect, type Source } from '../lib/data';
 import type { Snapshot } from '../lib/types';
 import { createViews, type Ctx, type Host, type Press, type Row } from '../widgets';
 
-const { Board } = createViews({ h: h as unknown as Host['h'], useState: useState as Host['useState'] });
+class Boundary extends Component<{ onError: (e: unknown) => VNode; children?: ComponentChildren }, { error?: unknown }> {
+  static getDerivedStateFromError(error: unknown) { return { error }; }
+  render() { return this.state.error ? this.props.onError(this.state.error) : this.props.children; }
+}
+
+const { Board } = createViews({ h: h as unknown as Host['h'], useState: useState as Host['useState'], Boundary });
 const STALE_MS = 10 * 60_000;
 
 function pressFor(source: Source): Ctx['press'] {
   return async (card: Row, p: Press, reason: string) => {
     await source.press({ card_file: String(card.file), card_key: String(card.key), ...p, reason: reason.trim() || undefined });
     return source.demo ? 'Demo mode: nothing was sent.' : 'Sent. Your PC applies it within a minute.';
+  };
+}
+
+function reportOncePerWidget(source: Source): Ctx['reportError'] {
+  const sent = new Set<string>();
+  return (id, message) => {
+    if (sent.has(id)) return;
+    sent.add(id);
+    void source.reportError(id, message).catch(() => {});
   };
 }
 
@@ -40,7 +54,8 @@ function SignIn({ source }: { source: Source }) {
 function Body({ source, snap }: { source: Source; snap: Snapshot }) {
   const now = Date.now();
   const stale = now - new Date(snap.generatedAt).valueOf() > STALE_MS;
-  const ctx: Ctx = { now, demo: source.demo, press: pressFor(source) };
+  const [reportError] = useState(() => reportOncePerWidget(source));
+  const ctx: Ctx = { now, demo: source.demo, press: pressFor(source), reportError };
   return (
     <>
       {stale && <p class="banner" role="status">No update from {snap.host} for a while. Is the PC on and the executor running?</p>}

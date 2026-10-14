@@ -79,6 +79,8 @@ var productivityViews = (() => {
   };
   var FIELD = /^[A-Za-z_][\w-]{0,40}$/;
   var ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+  var CODE_VIEW = /^code:([a-z0-9][a-z0-9-]{0,40})$/;
+  var CODE_COLLECTIONS = ["projects", "cards", "sessions"];
   var PRIVATE_FIELDS = ["last_prompt", "decline_reason", "params", "undo", "cwd", "session_id"];
   var PRIVATE_FOLDERS = ["_system", "Sessions", ".obsidian", ".claude", ".git"];
   function checkOps(ops, errors, at) {
@@ -122,12 +124,38 @@ var productivityViews = (() => {
     if (m.view === "bar" && !FIELD.test(m.groupBy ?? "") && !FIELD.test(m.valueField ?? "")) errors.push("bar needs groupBy or valueField");
     if (m.source?.kind === "notes" && !m.fields?.length) errors.push("notes widgets must list the fields they show");
   }
-  function validateManifest(m) {
+  var whereFields = (w = {}) => Object.entries(w).flatMap(([k, v]) => k === "$or" && Array.isArray(v) ? v.flatMap(whereFields) : [k]);
+  function fieldsUsed(m) {
+    const s = m.source ?? {};
+    return [...new Set([...m.fields ?? [], m.groupBy, m.valueField, ...whereFields(s.where), ...(s.sort ?? []).map((x) => x?.field)].filter(Boolean))].sort();
+  }
+  var sorted = (list) => JSON.stringify([...list].sort());
+  var sameSet = (a, b) => Array.isArray(a) && sorted(a) === sorted(b);
+  function checkPermissions(m, errors) {
+    const p = m.permissions;
+    if (!p || typeof p !== "object") return errors.push("code widgets need a permissions block");
+    const s = m.source ?? {};
+    if (s.kind === "snapshot" && !CODE_COLLECTIONS.includes(s.collection)) errors.push(`code widgets may only read ${CODE_COLLECTIONS.join(", ")}`);
+    if (!sameSet(p.collections ?? [], s.kind === "snapshot" ? [s.collection] : [])) errors.push("permissions.collections must match source.collection");
+    if (!sameSet(p.folders ?? [], s.kind === "notes" ? [s.folder] : [])) errors.push("permissions.folders must match source.folder");
+    if (!sameSet(p.fields, fieldsUsed(m))) errors.push(`permissions.fields must list exactly the fields it reads: ${fieldsUsed(m).join(", ")}`);
+    if (!Array.isArray(p.connectors) || p.connectors.length) errors.push("permissions.connectors must be [] (connectors need your review)");
+  }
+  function checkView(m, codeIds, errors) {
+    const code = CODE_VIEW.exec(m.view ?? "");
+    if (!code) {
+      if (!VIEWS.includes(m.view)) errors.push(`view must be one of ${VIEWS.join(", ")} or code:<id>`);
+      return;
+    }
+    if (codeIds && !codeIds.includes(code[1])) errors.push(`no code widget "${code[1]}" is deployed`);
+    checkPermissions(m, errors);
+  }
+  function validateManifest(m, { codeIds } = {}) {
     const errors = [];
     if (!m || typeof m !== "object") return ["manifest must be an object"];
     if (!ID.test(m.id ?? "")) errors.push("id must be lowercase-kebab, max 41 chars");
     if (typeof m.title !== "string" || !m.title.trim() || m.title.length > 80) errors.push("title must be 1-80 chars");
-    if (!VIEWS.includes(m.view)) errors.push(`view must be one of ${VIEWS.join(", ")}`);
+    checkView(m, codeIds, errors);
     if (m.size !== void 0 && !SIZES.includes(m.size)) errors.push(`size must be one of ${SIZES.join(", ")}`);
     checkSource(m.source, errors);
     checkFields(m, errors);
@@ -278,24 +306,101 @@ var productivityViews = (() => {
     return { today: TodayView, cards: CardsView };
   }
 
+  // dashboard/src/widgets/code/ci-status/widget.ts
+  var STATES = ["failing", "pending", "passing", "none"];
+  var rank = (r) => {
+    const i = STATES.indexOf(String(r.ci ?? "none"));
+    return i < 0 ? STATES.length : i;
+  };
+  var createWidget = ({ h }) => function CiStatus({ rows, ctx }) {
+    if (!rows.length) return h("p", { class: "empty" }, "No projects with CI yet.");
+    const sorted2 = [...rows].sort((a, b) => rank(a) - rank(b) || String(b.updated ?? "").localeCompare(String(a.updated ?? "")));
+    const failing = rows.filter((r) => r.ci === "failing").length;
+    return h(
+      "div",
+      { class: "ci-status" },
+      h("p", { class: failing ? "ci-summary bad" : "ci-summary good" }, failing ? `${failing} failing` : "All green"),
+      h("ul", { class: "ci-list" }, sorted2.map((r) => h(
+        "li",
+        { key: String(r.slug), "data-ci": String(r.ci ?? "none") },
+        h("span", { class: "ci-dot", "aria-hidden": "true" }),
+        h("span", { class: "ci-name" }, String(r.slug ?? r.title ?? "")),
+        h("span", { class: "muted" }, `${String(r.ci ?? "none")}${Number(r.failing_prs) ? ` · ${String(r.failing_prs)} PR failing` : ""} · ${ago(r.updated, ctx.now)}`)
+      )))
+    );
+  };
+
+  // dashboard/src/widgets/code/ci-status/widget.json
+  var widget_default = {
+    id: "ci-status",
+    title: "CI status",
+    view: "code:ci-status",
+    size: "m",
+    fields: ["slug", "ci", "failing_prs", "updated"],
+    source: {
+      kind: "snapshot",
+      collection: "projects",
+      where: { status: "active", ci: { exists: true } },
+      limit: 30
+    },
+    permissions: { collections: ["projects"], fields: ["slug", "ci", "failing_prs", "updated", "status"], connectors: [] }
+  };
+
+  // dashboard/src/widgets/code/ci-status/fixture.json
+  var fixture_default = {
+    rows: [
+      { slug: "productivity-os", ci: "passing", failing_prs: 0, updated: "2026-10-14" },
+      { slug: "cmaintz-site", ci: "failing", failing_prs: 1, updated: "2026-10-13" },
+      { slug: "foundry", ci: "pending", failing_prs: 0, updated: "2026-10-14" }
+    ],
+    expect: ["1 failing", "cmaintz-site", "failing · 1 PR failing", "foundry"]
+  };
+
+  // dashboard/src/widgets/code/registry.ts
+  var codeWidgets = {
+    "ci-status": { create: createWidget, manifest: widget_default, fixture: fixture_default.rows }
+  };
+
   // dashboard/src/widgets/index.ts
+  var message = (e) => String(e?.message ?? e).slice(0, 200);
   function createViews(host) {
     const { h } = host;
     const views = { ...primitives(host), ...modules(host) };
+    const code = {};
+    for (const [id, entry] of Object.entries(codeWidgets)) code[`code:${id}`] = entry.create(host);
+    const failed = (ctx, id, e) => {
+      ctx.reportError?.(id, message(e));
+      return h("p", { class: "error" }, `This widget crashed: ${message(e)}`);
+    };
+    function IsolatedCodeView({ m, rows, ctx }) {
+      try {
+        return code[m.view]({ m, rows, ctx });
+      } catch (e) {
+        return failed(ctx, m.id, e);
+      }
+    }
+    function body(m, rows, ctx) {
+      if (code[m.view]) {
+        const view = h(IsolatedCodeView, { m, rows, ctx });
+        return host.Boundary ? h(host.Boundary, { onError: (e) => failed(ctx, m.id, e) }, view) : view;
+      }
+      const View = views[m.view];
+      return View ? h(View, { m, rows, ctx }) : h("p", { class: "error" }, `Unknown view "${m.view}"`);
+    }
     function WidgetView({ widget, ctx, size }) {
       const { manifest: m, rows, error } = widget;
-      const View = views[m.view];
-      const body = error ? h("p", { class: "error" }, `This widget can't render: ${error}`) : View ? h(View, { m, rows, ctx }) : h("p", { class: "error" }, `Unknown view "${m.view}"`);
+      const content = error ? h("p", { class: "error" }, `This widget can't render: ${error}`) : body(m, rows, ctx);
       const count = m.view === "cards" ? rows.filter((r) => r.status === "pending").length : m.view === "today" ? null : rows.length;
       return h(
         "section",
         { id: m.id, class: `panel size-${size ?? m.size ?? "m"}`, "data-view": m.view },
         h("h2", null, m.title, count === null ? null : h("span", { class: "count" }, String(count))),
-        body
+        content
       );
     }
     function Board({ layout, widgets, ctx }) {
-      return h("div", { class: "board" }, layout.filter((l) => widgets[l.id]).map((l) => h(WidgetView, { key: l.id, widget: widgets[l.id], ctx, size: l.size })));
+      const shown = layout.filter((l) => widgets[l.id] && !l.disabled);
+      return h("div", { class: "board" }, shown.map((l) => h(WidgetView, { key: l.id, widget: widgets[l.id], ctx, size: l.size })));
     }
     return { WidgetView, Board, views };
   }
@@ -343,7 +448,7 @@ var productivityViews = (() => {
   }
   async function widgetView(dc, id) {
     const manifest = JSON.parse(await dc.app.vault.adapter.read(`_system/widgets/${id.replace(/[^a-z0-9-]/g, "")}.json`));
-    const errors = validateManifest(manifest);
+    const errors = validateManifest(manifest, { codeIds: Object.keys(codeWidgets) });
     const { Widget } = createDatacoreWidgets(dc);
     if (errors.length) return function Invalid() {
       return dc.preact.h("p", { class: "error" }, `Widget "${id}" is invalid: ${errors.join("; ")}`);

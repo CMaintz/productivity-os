@@ -1,6 +1,6 @@
 ---
 name: widget
-description: Propose a new dashboard widget (a declarative JSON manifest) as an action card. Use for "/widget <what you want to see>", "add a widget for...", "show me X on the dashboard", or when /suggest finds the user repeatedly looking something up by hand.
+description: Propose a new dashboard widget as an action card - a declarative JSON manifest, or a coded widget an agent builds when a manifest can't express it. Use for "/widget <what you want to see>", "add a widget for...", "show me X on the dashboard", or when /suggest finds the user repeatedly looking something up by hand.
 ---
 
 # /widget <what to show>
@@ -27,3 +27,13 @@ Follow `CLAUDE.md` ("Widgets" and "Action cards"). Don't write files in `_system
    node <productivityOs>/tools/widgets/widgets.mjs create '{"id":"…","title":"…","view":"…","size":"m","fields":[…],"source":{…},"reason":"why the user wants this, with evidence"}'
    ```
    Fix any validation errors it prints. Then tell the user the card is waiting on Home and the dashboard. Approving it adds the widget, and Undo removes it.
+
+## When a manifest isn't enough: a code widget
+Propose a **code widget** only when the views above can't do it: a custom layout or interaction, or a computed view that `where`/`sort` can't express. Examples: a CI traffic light per project, or a timeline. An agent builds it through a ticket and PR, so it costs usage. Prefer a manifest whenever one works.
+
+```
+node <productivityOs>/tools/widgets/code-widgets.mjs propose '{"id":"…","title":"…","purpose":"what it shows and why the user wants it","source":{…},"fields":[…]}'
+```
+- Same `source` and `fields` rules as above. Code widgets can't read `today`, and they get exactly the fields listed (plus title, path and slug).
+- `purpose` becomes the ticket's intent, so be specific about what the view looks like.
+- Approving the card opens the ticket. When the PR merges, the widget shows up on its own with an Undo card.

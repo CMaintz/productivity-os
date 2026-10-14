@@ -1,0 +1,8 @@
+// dash.maintz.dev: a static-assets-only Worker serving dist/. No server code, no secrets:
+// the page talks to Supabase directly, and RLS decides what it may read or write.
+{
+  "name": "productivity-dashboard",
+  "compatibility_date": "2026-09-25",
+  "assets": { "directory": "./dist", "not_found_handling": "single-page-application" },
+  "routes": [{ "pattern": "dash.maintz.dev", "custom_domain": true }]
+}

@@ -18,6 +18,7 @@ import { applyDecision, levelFor, parsePolicy, renderPolicy } from './policy.mjs
 import { HANDLERS, runClaude, undoAction } from './handlers.mjs';
 import { appendResult, cardsDir, createCard, listCards, updateCard } from './cards.mjs';
 import { suggestAll } from './suggest.mjs';
+import { loadConfig, pull, push, rest } from '../dashboard/sync.mjs';
 
 const SNOOZE_HOURS = 24;
 const LOCK_STALE_MIN = 45;
@@ -126,28 +127,50 @@ export function onMainHost(vault, host = os.hostname()) {
   return !main || main === host;
 }
 
-export function withLock(vault, fn, now = new Date()) {
+/** Runs fn (sync or async) while holding the vault's executor lock; skips if another run holds it. */
+export async function withLock(vault, fn, now = new Date()) {
   const lock = path.join(vault, '_system', 'executor.lock');
   if (fs.existsSync(lock)) {
     const held = JSON.parse(fs.readFileSync(lock, 'utf8'));
     if ((now - new Date(held.at)) / 6e4 < LOCK_STALE_MIN) return { skipped: `locked by pid ${held.pid} on ${held.host}` };
   }
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, host: os.hostname(), at: now.toISOString() }));
-  try { return { result: fn() }; } finally { fs.rmSync(lock, { force: true }); }
+  try { return { result: await fn() }; } finally { fs.rmSync(lock, { force: true }); }
 }
 
-function main() {
+/**
+ * One pass, all under the lock: dashboard presses become card decisions, the cards run,
+ * then the snapshot goes up. Dashboard errors are logged, never fatal.
+ */
+async function lockedPass(vault, dash) {
+  const call = dash ? rest(dash) : null;
+  const report = msg => console.error(`dashboard: ${msg}`);
+  return withLock(vault, async () => {
+    if (call) await pull(vault, dash, call).then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`)).catch(e => report(e.message));
+    const log = runOnce(vault);
+    if (call) await push(vault, dash, call).catch(e => report(e.message));
+    return log;
+  });
+}
+
+async function main() {
   const args = process.argv.slice(2);
   const i = args.indexOf('--vault');
   const vault = i >= 0 ? args[i + 1] : process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault');
   if (!fs.existsSync(cardsDir(vault))) { console.error(`No ${cardsDir(vault)}; run npm run vault first.`); process.exit(1); }
   if (!onMainHost(vault) && !args.includes('--force')) { console.error('Not the main PC (mainHost in _system/tools.json); exiting. Use --force to override.'); process.exit(0); }
-  const pass = () => {
-    const r = withLock(vault, () => runOnce(vault));
-    if (r.skipped) console.log(`executor: skipped, ${r.skipped}`);
-    else console.log(`executor: ${r.result.length ? r.result.join('; ') : 'nothing to do'}`);
+  const dash = loadConfig();
+  let busy = false;
+  // setInterval doesn't wait for async work: never start a pass while the last one runs.
+  const pass = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const r = await lockedPass(vault, dash);
+      console.log(r.skipped ? `executor: skipped, ${r.skipped}` : `executor: ${r.result.length ? r.result.join('; ') : 'nothing to do'}`);
+    } finally { busy = false; }
   };
-  pass();
+  await pass();
   if (!args.includes('--watch')) return;
   const suggest = () => { const n = suggestAll(vault).length; if (n) console.log(`suggest: ${n} new card(s)`); };
   suggest();
@@ -155,4 +178,4 @@ function main() {
   setInterval(suggest, SUGGEST_MINUTES * 60 * 1000);
 }
 
-if (process.argv[1] && path.basename(process.argv[1]) === 'executor.mjs') main();
+if (process.argv[1] && path.basename(process.argv[1]) === 'executor.mjs') main().catch(e => { console.error(`executor: ${e.stack || e.message}`); process.exit(1); });

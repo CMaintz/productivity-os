@@ -3,3 +3,8 @@ node_modules/
 
 # Foundry loop telemetry (local observability)
 .foundry/
+
+# dashboard build output
+dashboard/dist/
+dashboard/.astro/
+dashboard/.env

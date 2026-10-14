@@ -1,0 +1,10 @@
+{
+  "widgets": [
+    { "id": "today" },
+    { "id": "attention" },
+    { "id": "cards" },
+    { "id": "sessions" },
+    { "id": "writing" },
+    { "id": "projects" }
+  ]
+}

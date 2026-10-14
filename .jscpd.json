@@ -4,6 +4,9 @@
     "**/src/main/resources/**",
     "**/build/**",
     "**/target/**",
-    "**/*.golden.txt"
+    "**/*.golden.txt",
+    "**/package-lock.json",
+    "dashboard/src/lib/demo-snapshot.json",
+    "vault-template/_system/widgets/views.md"
   ]
 }

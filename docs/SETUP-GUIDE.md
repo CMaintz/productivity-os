@@ -121,6 +121,41 @@ Rules the local Claude follows:
    - The `crosspost` job in Actions should create the article, with a canonical link back to maintz.dev.
    - Ticking **LinkedIn** instead opens an issue with a draft to paste.
 
+## 7b. Widgets
+1. 🧑 Obsidian → Community plugins: install **Datacore**, which renders widgets inside notes.
+2. 🤖 `npm run vault` then `node tools/vault/init.mjs --update-system`. This adds the default widgets and layout, `Widgets.md`, the shared `views.md` and the `/widget` skill. Widget files you already have are never overwritten.
+3. 🧑 Open `Widgets.md` in Obsidian. The writing pipeline and "needs attention" widgets should render.
+
+## 8. Web dashboard (dash.maintz.dev)
+The PC publishes a metadata-only snapshot to a Supabase project of its own, and the page shows it behind GitHub sign-in. Button presses go back to the PC, which applies them to the cards. No note text, tasks or prompts leave the PC.
+
+1. 🧑 **Create a new Supabase project** (free tier), e.g. `productivity-os`. Keep it separate from the site's comments project. Note the project URL and the **anon/publishable** key (Settings → API).
+2. 🧑 **Create the tables:** Supabase → SQL editor → paste `supabase/migrations/0001_dashboard.sql` → Run. 🤖 Claude can put it on your clipboard: `Get-Content supabase/migrations/0001_dashboard.sql -Raw | Set-Clipboard`.
+3. 🧑 **GitHub sign-in:**
+   - On GitHub → Settings → Developer settings → **OAuth Apps** → New:
+     - Homepage `https://dash.maintz.dev`
+     - Callback `https://<project-ref>.supabase.co/auth/v1/callback`
+   - In Supabase → Authentication → Providers → **GitHub**: paste its Client ID and secret.
+   - Authentication → URL Configuration: Site URL `https://dash.maintz.dev`, and add `http://localhost:4321` to the redirect URLs.
+4. 🤖 Create `dashboard/.env` from `dashboard/.env.example` with the URL and anon key. Both are public by design.
+5. 🤖 `npm --workspace dashboard run deploy`. This builds the site and runs `wrangler deploy`, using the Cloudflare login from step 6.2. The custom domain `dash.maintz.dev` is created on the first deploy.
+6. 🧑 **Sign in** at https://dash.maintz.dev once; it will say "No snapshot yet".
+   - Then Supabase → Authentication → Users → copy **your user id**.
+   - Then Authentication → Sign In / Providers → turn **off "Allow new users to sign up"**. RLS already hides your data from anyone else, but nobody else needs an account.
+7. 🧑 **Connect the PC.** Create `%USERPROFILE%\.productivity-os\dashboard.json`, outside the vault so it never syncs:
+   ```json
+   { "url": "https://<project-ref>.supabase.co", "ownerId": "<your user id>", "serviceKey": "<service_role key>" }
+   ```
+   The service role key is in Settings → API. It bypasses RLS, so it stays on this PC only. 🤖 Claude can create the file with `url` and `ownerId` filled in and leave `serviceKey` for you to paste in Notepad.
+8. 🤖 `npm run dashboard` pushes a snapshot right away. Then restart the executor task so it syncs every minute:
+   ```powershell
+   Stop-ScheduledTask 'productivity-os executor'; Start-ScheduledTask 'productivity-os executor'
+   ```
+   🧑 Reload the dashboard. Pressing **Do it** on a card should update it in Obsidian within a minute.
+9. 🧑 **Optional:** Cloudflare Zero Trust → Access → a self-hosted app for `dash.maintz.dev`, allowing only your email. That's a second lock in front of the GitHub sign-in.
+
+Try the page without any of this: `npm --workspace dashboard run dev`, then open http://localhost:4321/?demo.
+
 ## Daily use, once set up
 | When | What |
 |---|---|
@@ -131,3 +166,4 @@ Rules the local Claude follows:
 | End of day | `/shutdown` |
 | After moving folders | `npm run inventory` then `npm run vault` |
 | Writing | https://maintz.dev/keystatic, then merge the post's PR to publish |
+| Away from the PC | https://dash.maintz.dev: today, cards (with buttons), sessions, projects needing attention |

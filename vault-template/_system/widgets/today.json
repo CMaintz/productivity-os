@@ -1,0 +1,7 @@
+{
+  "id": "today",
+  "title": "Today",
+  "view": "today",
+  "size": "m",
+  "source": { "kind": "snapshot", "collection": "today" }
+}

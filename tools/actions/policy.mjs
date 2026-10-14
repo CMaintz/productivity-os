@@ -11,6 +11,7 @@ export const DEFAULTS = {
   triage_inbox: { level: 'auto-notice', max: 'silent', promoteAfter: 5 },
   pause_stale_project: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
   fix_ci: { level: 'suggest', max: 'auto-notice', promoteAfter: 10 },
+  create_widget: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

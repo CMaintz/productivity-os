@@ -1,0 +1,12 @@
+{
+  "id": "attention",
+  "title": "Needs attention",
+  "view": "table",
+  "size": "m",
+  "fields": ["slug", "ci", "failing_prs", "agent_blocked", "next"],
+  "source": {
+    "kind": "snapshot",
+    "collection": "projects",
+    "where": { "$or": [{ "ci": "failing" }, { "failing_prs": { "gt": 0 } }, { "agent_blocked": { "gt": 0 } }] }
+  }
+}

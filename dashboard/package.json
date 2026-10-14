@@ -1,0 +1,24 @@
+{
+  "name": "dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "astro check",
+    "smoke": "node --test test/smoke.test.mjs",
+    "deploy": "astro build && wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/preact": "^6.0.6",
+    "@supabase/supabase-js": "^2.117.2",
+    "astro": "^7.3.5",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "playwright-core": "^1.56.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.141.0"
+  }
+}

@@ -417,7 +417,9 @@ A pipeline for building a new product, or a big feature for an existing project.
 Status (Oct 2026):
 - **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/resume` and `/next`.
 - **Done:** action cards with Meta Bind buttons, the executor, the trust ladder, rule-based suggestions and `/suggest` (Phase 4 core).
-- **Next:** the web dashboard at `dash.maintz.dev` (Supabase snapshot + card buttons), then widgets and the Product Forge.
+- **Done:** the web dashboard MVP at `dash.maintz.dev`: Supabase snapshot, card buttons, sessions, attention (issue #9).
+- **Done:** the widget runtime (#11). Preact views are shared by the dashboard and Obsidian (Datacore), declarative widgets live in the vault, and there's a layout and `create_widget` cards.
+- **Next:** code widgets built by agents (PR + preview + auto-deploy), then the Product Forge.
 
 0. **Projects inventory & renovation (first real use):**
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).

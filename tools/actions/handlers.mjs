@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readFrontmatter, setFrontmatter } from '../lib/frontmatter.mjs';
 import { promote } from './policy.mjs';
+import { ID_PATTERN, validateManifest } from '../widgets/manifest.mjs';
 
 const MAX_SUMMARY = 1500;
 const TIMEOUT_MS = 30 * 60 * 1000;
@@ -56,7 +57,41 @@ function setField(card, ctx) {
   return { ok: true, summary: `Set \`${key}: ${value}\` in [[${file.replace(/\.md$/, '')}]] (was \`${previous}\`).`, undo: { file, key, value: previous } };
 }
 
+const LAYOUT = path.join('_system', 'layouts', 'dashboard.json');
+const readLayout = vault => {
+  const file = path.join(vault, LAYOUT);
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { widgets: [] };
+};
+const writeLayout = (vault, layout) => {
+  fs.mkdirSync(path.dirname(path.join(vault, LAYOUT)), { recursive: true });
+  fs.writeFileSync(path.join(vault, LAYOUT), JSON.stringify(layout, null, 2) + '\n');
+};
+
+/** Writes the approved manifest and appends it to the dashboard layout. */
+function createWidget(card, ctx) {
+  const m = card.params.manifest;
+  const errors = validateManifest(m);
+  if (errors.length) return { ok: false, summary: `Invalid manifest: ${errors.join('; ')}` };
+  const file = path.join(ctx.vault, '_system', 'widgets', `${m.id}.json`);
+  if (fs.existsSync(file)) return { ok: false, summary: `A widget named \`${m.id}\` already exists.` };
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(m, null, 2) + '\n');
+  const layout = readLayout(ctx.vault);
+  if (!layout.widgets.some(w => w.id === m.id)) layout.widgets.push({ id: m.id });
+  writeLayout(ctx.vault, layout);
+  return { ok: true, summary: `Added widget \`${m.id}\` to the dashboard.`, undo: { removeWidget: m.id } };
+}
+
+function removeWidget(vault, id) {
+  if (!ID_PATTERN.test(String(id))) return { ok: false, summary: `Refused: "${id}" isn't a widget id.` };
+  fs.rmSync(path.join(vault, '_system', 'widgets', `${id}.json`), { force: true });
+  const layout = readLayout(vault);
+  writeLayout(vault, { ...layout, widgets: layout.widgets.filter(w => w.id !== id) });
+  return { ok: true, summary: `Removed widget \`${id}\` and its layout entry.` };
+}
+
 export const HANDLERS = {
+  create_widget: createWidget,
   fix_ci: claudeIn(card => card.params.cwd, REPO_TOOLS),
   claude_task: claudeIn(card => card.params.cwd, REPO_TOOLS),
   triage_inbox: claudeIn((_card, ctx) => ctx.vault, VAULT_TOOLS),
@@ -68,9 +103,10 @@ export const HANDLERS = {
   },
 };
 
-/** Reverses an action that stored an exact undo (set_field style). Others need a manual undo. */
+/** Reverses an action that stored an exact undo (a field edit or an added widget). Others need a manual undo. */
 export function undoAction(card, ctx) {
   const u = card.undo;
+  if (u?.removeWidget) return removeWidget(ctx.vault, u.removeWidget);
   if (!u?.file) return { ok: false, summary: 'No automatic undo for this action; follow the Undo line above.' };
   const full = path.join(ctx.vault, u.file);
   fs.writeFileSync(full, setFrontmatter(fs.readFileSync(full, 'utf8'), u.key, u.value));

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // jscpd and ts-morph are run by habit-hooks (the smell detector), not imported.
+  "ignoreDependencies": ["jscpd", "ts-morph"],
+  "workspaces": {
+    ".": {
+      "entry": ["tools/**/*.mjs!", "tools/**/*.d.mts"],
+      "project": ["tools/**/*.{mjs,mts}"]
+    },
+    // The Obsidian bundle entry is built by tools/widgets/build-views.mjs, which knip can't follow.
+    "dashboard": {
+      "entry": ["src/pages/**/*.astro!", "src/widgets/obsidian.ts!", "test/**/*.mjs"]
+    }
+  }
+}

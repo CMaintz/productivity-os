@@ -1,6 +1,12 @@
 # productivity-os
 
-A personal productivity OS: an Obsidian vault, Claude Code and a dashboard at `dash.maintz.dev`. The full design is in [docs/BRAINSTORM.md](docs/BRAINSTORM.md).
+A personal productivity OS: an Obsidian vault, Claude Code and a dashboard at `dash.maintz.dev`.
+
+Layout:
+- `tools/` holds the PC-side scripts: inventory, reorganise, vault, hooks, GitHub sync, action cards and the executor, and the dashboard sync.
+- `vault-template/` is the vault.
+- `dashboard/` is the web dashboard (an Astro static app).
+- `supabase/` holds the dashboard schema. The full design is in [docs/BRAINSTORM.md](docs/BRAINSTORM.md).
 
 **Everything you need to do yourself is listed in [docs/SETUP-GUIDE.md](docs/SETUP-GUIDE.md).** Run `claude` in this repo and type `/pos-setup`, and a local Claude works through it with you.
 

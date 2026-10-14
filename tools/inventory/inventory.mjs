@@ -19,6 +19,8 @@ const SKIP_DIRS = new Set([
   '.vs', '.vscode', '.git', '.svn', '.cache', 'coverage', 'Pods', 'DerivedData',
 ]);
 
+const DOC_AREAS = new Set(['_notes', '_archive']);
+
 const PROJECT_MARKERS = [
   'package.json', 'composer.json', 'pom.xml', 'build.gradle', 'build.gradle.kts',
   'settings.gradle', 'pyproject.toml', 'requirements.txt', 'setup.py', 'Cargo.toml',
@@ -112,26 +114,32 @@ export function findProjects(root, maxDepth) {
   const found = [];
   const containers = []; // folders that only hold other projects (grouping dirs)
   const loose = []; // md/pdf files sitting outside any project
-  function walk(dir, depth) {
+  // Inside a docs area, a folder of loose files is notes, not a project, so only
+  // repos and marked projects count there. Unmarked code in _archive drops out
+  // too: archived scratch is not something to reorganise. The depth cap is
+  // lifted there, since a repo still ends the walk and notes nest deep.
+  function walk(dir, depth, inDocs = false) {
     let ents;
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     const names = ents.map(e => e.name);
+    inDocs ||= DOC_AREAS.has(path.basename(dir).toLowerCase());
     if (depth > 0 && isProjectDir(dir, names)) { found.push(dir); return; }
-    if (depth >= maxDepth) { if (depth > 0) found.push(dir); return; }
+    if (depth >= maxDepth && !inDocs) { if (depth > 0) found.push(dir); return; }
     const subdirs = ents.filter(e => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.'));
     const looseFiles = ents.filter(e => e.isFile()).length;
+    const looseProject = depth > 0 && subdirs.length === 0 && !inDocs;
     for (const e of ents) {
-      if (e.isFile() && isDocFile(e.name) && !(depth > 0 && subdirs.length === 0)) {
+      if (e.isFile() && isDocFile(e.name) && !looseProject) {
         const full = path.join(dir, e.name);
         let st; try { st = fs.statSync(full); } catch { continue; }
         loose.push({ path: full, type: classifyDoc(path.relative(root, full)), size: st.size, modified: new Date(st.mtimeMs).toISOString() });
       }
     }
     if (depth > 0) {
-      if (subdirs.length === 0) { found.push(dir); return; } // leaf folder with loose files
-      containers.push({ path: dir, looseFiles });
+      if (looseProject) { found.push(dir); return; }
+      if (subdirs.length) containers.push({ path: dir, looseFiles });
     }
-    for (const s of subdirs) walk(path.join(dir, s.name), depth + 1);
+    for (const s of subdirs) walk(path.join(dir, s.name), depth + 1, inDocs);
   }
   walk(root, 0);
   return { projects: found, containers, loose };

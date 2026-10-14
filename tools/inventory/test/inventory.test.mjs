@@ -80,6 +80,24 @@ test('inventory finds projects, git state, docs and flags', () => {
   assert.ok(fs.existsSync(path.join(a, 'node_modules/big/index.js')));
 });
 
+test('folders inside _notes and _archive are docs, not projects, unless they are repos', () => {
+  const { home } = fixture();
+  const P = path.join(home, 'Projects');
+  write(path.join(P, '_notes', 'atlas', 'research', 'about', 'deeper', 'page.md'));
+  write(path.join(P, 'fam', '_Notes', 'audits', '2026-10-03.md'));
+  write(path.join(P, '_archive', 'proto', 'design', 'SPEC.md'));
+  write(path.join(P, '_archive', 'old-repo', 'pom.xml'));
+  const gitRepo = path.join(P, '_archive', 'a', 'b', 'c', 'git-repo');
+  write(path.join(gitRepo, 'x.txt')); sh(gitRepo, 'init', '-q');
+  const inv = buildInventory({ roots: [P], home, github: null });
+  const names = inv.projects.map(p => p.name);
+  assert.ok(names.includes('old-repo'));
+  assert.ok(names.includes('git-repo'), 'repo below the depth cap inside _archive');
+  for (const junk of ['about', 'deeper', 'audits', 'design', 'research', 'proto']) assert.ok(!names.includes(junk), junk);
+  const loose = inv.loose.map(d => path.basename(d.path)).sort();
+  assert.deepEqual(loose, ['2026-10-03.md', 'SPEC.md', 'ideas.md', 'page.md', 'site-notes.md', 'spec.pdf']);
+});
+
 test('helpers', () => {
   assert.equal(claudeEncode('C:\\Users\\akash\\Projects\\foo'), 'C--Users-akash-Projects-foo');
   assert.equal(classifyDoc('docs/decisions/2026-01-01-x.md'), 'decision');

@@ -6,12 +6,17 @@ import path from 'node:path';
 import { buildSnapshot } from '../snapshot.mjs';
 import { loadConfig, push, pull, rest, syncDashboard } from '../sync.mjs';
 import { createCard, listCards } from '../../actions/cards.mjs';
+import { copyTemplate } from '../../vault/init.mjs';
+import { fileURLToPath } from 'node:url';
+
+const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'vault-template');
 
 const NOW = new Date('2026-10-14T12:00:00Z');
 const CONFIG = { url: 'https://x.supabase.co', serviceKey: 'svc', ownerId: '00000000-0000-0000-0000-000000000001' };
 
 function vault() {
   const v = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-'));
+  copyTemplate(TEMPLATE, v);
   for (const d of ['_system/actions', 'Projects', 'Inbox', 'Sessions', 'Daily']) fs.mkdirSync(path.join(v, d), { recursive: true });
   fs.writeFileSync(path.join(v, 'Projects', 'site.md'), '---\ntype: project\nstatus: active\npriority: 1\nnext: "ship editor"\nrepo: o/site\nci: failing\nopen_prs: 2\nfailing_prs: 1\nagent_blocked: 0\nupdated: 2026-10-13\n---\n# site\n\n## Tasks\n- [ ] secret task text\n');
   fs.writeFileSync(path.join(v, 'Projects', 'gone.md'), '---\ntype: project\nstatus: archived\n---\n');
@@ -40,14 +45,15 @@ function fakeSupabase(events = []) {
 
 test('snapshot carries metadata only: no task text, prompt text or note bodies', () => {
   const s = buildSnapshot(vault(), { now: NOW, host: 'desk' });
-  assert.deepEqual(s.today.top3, ['Fix CI', 'Write post']);
-  assert.equal(s.today.openTasks, 1);
+  const rows = id => s.widgets[id].rows;
+  assert.deepEqual(rows('today')[0].top3, ['Fix CI', 'Write post']);
+  assert.equal(rows('today')[0].openTasks, 1);
   assert.deepEqual(s.counts, { pendingCards: 1, waitingSessions: 1, attention: 1, activeProjects: 1, inbox: 1 });
-  assert.equal(s.projects.length, 1, 'archived projects are left out');
-  assert.equal(s.projects[0].next, 'ship editor');
-  assert.equal(s.sessions[0].project, 'site');
-  assert.equal(s.cards[0].title, 'Look at this');
-  assert.equal(s.cards[0].file, '_system/actions/2026-10-14-look-at-this.md');
+  assert.deepEqual(rows('projects').map(p => p.slug), ['site'], 'archived projects are left out');
+  assert.equal(rows('projects')[0].next, 'ship editor');
+  assert.equal(rows('sessions')[0].project, 'site');
+  assert.equal(rows('cards')[0].title, 'Look at this');
+  assert.equal(rows('cards')[0].file, '_system/actions/2026-10-14-look-at-this.md');
   const json = JSON.stringify(s);
   assert.doesNotMatch(json, /secret task text|my private prompt/);
 });
@@ -89,7 +95,7 @@ test('card results never leave the PC, only their outcome', () => {
   const card = listCards(v)[0];
   fs.writeFileSync(card.file, `${card.text}**Done (2026-10-14 13:00):** quoted a private note here\n`);
   const s = buildSnapshot(v, { now: NOW });
-  assert.equal(s.cards[0].result, 'Done (2026-10-14 13:00)');
+  assert.equal(s.widgets.cards.rows[0].result, 'Done (2026-10-14 13:00)');
   assert.doesNotMatch(JSON.stringify(s), /private note/);
 });
 
@@ -106,6 +112,7 @@ test('syncDashboard pushes the snapshot for the owner and never throws', async (
   assert.deepEqual(r, { applied: [] });
   assert.equal(db.snapshot.owner_id, CONFIG.ownerId);
   assert.equal(db.snapshot.data.counts.pendingCards, 1);
+  assert.equal(db.snapshot.data.version, 2);
   const broken = await syncDashboard(v, { config: CONFIG, fetchImpl: async () => ({ ok: false, status: 500, text: async () => 'boom' }), now: NOW });
   assert.match(broken.error, /500 boom/);
   assert.deepEqual(await syncDashboard(v, { config: null }), { skipped: 'not configured' });

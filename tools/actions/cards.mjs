@@ -9,9 +9,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fieldsOf, setFrontmatter } from '../lib/frontmatter.mjs';
 import { isNever, levelFor, parsePolicy } from './policy.mjs';
+import { vaultFromArgs } from '../lib/cli.mjs';
 
 export const ACTIONS_DIR = path.join('_system', 'actions');
 const OPEN = ['pending', 'approved', 'running', 'snoozed'];
@@ -102,8 +102,7 @@ export function createCard(vault, spec, now = new Date().toISOString()) {
 
 function main() {
   const [cmd, json] = process.argv.slice(2);
-  const i = process.argv.indexOf('--vault');
-  const vault = i > 0 ? process.argv[i + 1] : process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault');
+  const vault = vaultFromArgs();
   if (cmd !== 'create' || !json) { console.error("Usage: cards.mjs create '<json spec>' [--vault <dir>]"); process.exit(2); }
   const spec = JSON.parse(json);
   for (const k of ['action', 'key', 'title', 'reason']) if (!spec[k]) { console.error(`spec.${k} is required`); process.exit(2); }

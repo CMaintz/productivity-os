@@ -1,0 +1,9 @@
+{
+  "id": "writing",
+  "title": "Writing pipeline",
+  "view": "kanban",
+  "size": "full",
+  "groupBy": "status",
+  "fields": ["status", "publish_date"],
+  "source": { "kind": "notes", "folder": "Writing", "where": { "type": "post", "status": { "ne": "published" } } }
+}

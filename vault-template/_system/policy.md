@@ -15,6 +15,7 @@ After *promote after* approvals in a row, a card proposes the next level (up to 
 | triage_inbox | auto-notice | silent | 5 | 0 |
 | pause_stale_project | suggest | auto-notice | 5 | 0 |
 | fix_ci | suggest | auto-notice | 10 | 0 |
+| create_widget | suggest | auto-notice | 5 | 0 |
 | reminder | suggest | suggest | — | 0 |
 | claude_task | suggest | suggest | — | 0 |
 | promote_policy | suggest | suggest | — | 0 |

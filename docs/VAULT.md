@@ -97,7 +97,20 @@ powershell -ExecutionPolicy Bypass -File tools\actions\install-executor.ps1   # 
 
 The snapshot holds metadata only (titles, statuses, counts, one-line reasons), never note text, tasks or prompts. Setup is in `docs/SETUP-GUIDE.md` step 8. The code is in `dashboard/`, `tools/dashboard/` and `supabase/migrations/`.
 
-## 9. Sync to other PCs and Android
+## 9. Widgets
+Everything on the dashboard is a widget: a small JSON file in `_system/widgets/`, placed by `_system/layouts/dashboard.json`.
+- **Sources:**
+  - `snapshot` covers projects, cards, sessions and today.
+  - `notes` covers any folder, publishing only the frontmatter fields the widget lists.
+- **Views:** `stat`, `list`, `table`, `kanban`, `bar`, plus the built-in `today` and `cards`.
+- **Getting a new one:** ask `/widget show my drafts by platform`. It arrives as an action card; approve it to add the widget, or Undo to remove it.
+- **In Obsidian:** the same Preact views render through the **Datacore** plugin. `Widgets.md` shows how to embed one. Install Datacore (Community plugins) for this.
+- **Code:**
+  - `dashboard/src/widgets/` holds the views.
+  - `tools/widgets/` holds the query engine, validation and manifests.
+  - `npm run widgets:build` regenerates `views.md` and the demo data. Tests fail if you forget.
+
+## 10. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

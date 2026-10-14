@@ -1,0 +1,13 @@
+{
+  "id": "sessions",
+  "title": "Claude sessions",
+  "view": "table",
+  "size": "full",
+  "fields": ["project", "status", "waiting_for", "prompts", "updated"],
+  "source": {
+    "kind": "snapshot",
+    "collection": "sessions",
+    "where": { "status": { "ne": "ended" } },
+    "sort": [{ "field": "status", "dir": "desc" }, { "field": "updated", "dir": "desc" }]
+  }
+}

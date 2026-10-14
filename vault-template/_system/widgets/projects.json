@@ -1,0 +1,13 @@
+{
+  "id": "projects",
+  "title": "Active projects",
+  "view": "table",
+  "size": "full",
+  "fields": ["slug", "priority", "ci", "open_prs", "next", "updated"],
+  "source": {
+    "kind": "snapshot",
+    "collection": "projects",
+    "where": { "status": "active" },
+    "sort": [{ "field": "priority", "dir": "asc" }, { "field": "updated", "dir": "desc" }]
+  }
+}

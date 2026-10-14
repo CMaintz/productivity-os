@@ -1,9 +1,10 @@
 ---
 import '../styles/dashboard.css';
+import Dashboard from '../components/Dashboard';
 ---
 
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,14 +14,6 @@ import '../styles/dashboard.css';
     <title>Dashboard · maintz.dev</title>
   </head>
   <body>
-    <header class="top">
-      <a class="logo" href="/">CM<span>dash</span></a>
-      <div id="user" class="user"></div>
-    </header>
-    <main id="main" aria-live="polite"><p class="empty">Loading…</p></main>
-    <script>
-      import { start } from '../lib/app';
-      void start();
-    </script>
+    <Dashboard client:only="preact" />
   </body>
 </html>

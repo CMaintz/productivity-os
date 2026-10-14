@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fieldsOf, readFrontmatter } from '../lib/frontmatter.mjs';
 import { listCards } from '../actions/cards.mjs';
+import { loadWidgets } from '../widgets/widgets.mjs';
 
 const MAX_CARDS = 60;
 const SESSION_DAYS = 7;
@@ -19,7 +20,8 @@ function projects(vault) {
   return mdIn(dir).map(f => {
     const x = fieldsOf(fs.readFileSync(path.join(dir, f), 'utf8'));
     const pick = ['status', 'priority', 'next', 'repo', 'ci', 'open_prs', 'failing_prs', 'agent_blocked', 'updated'];
-    return { slug: path.basename(f, '.md'), ...Object.fromEntries(pick.map(k => [k, x[k] ?? null])) };
+    const slug = path.basename(f, '.md');
+    return { title: slug, slug, ...Object.fromEntries(pick.map(k => [k, x[k] ?? null])) };
   }).filter(p => p.status !== 'archived');
 }
 
@@ -57,20 +59,23 @@ function today(vault, now) {
   return { date, top3, openTasks: (body.match(/^- \[ \]/gm) ?? []).length };
 }
 
+/** The vault as widget-ready collections: what `snapshot` sources query. */
+export function collections(vault, now = new Date()) {
+  return { projects: projects(vault), cards: cards(vault), sessions: sessions(vault, now), today: [today(vault, now)] };
+}
+
 export function buildSnapshot(vault, { now = new Date(), host = '' } = {}) {
-  const ps = projects(vault);
-  const cs = cards(vault);
-  const ss = sessions(vault, now);
+  const c = collections(vault, now);
+  const { layout, widgets } = loadWidgets(vault, c);
   return {
-    version: 1, generatedAt: now.toISOString(), host,
-    today: today(vault, now),
+    version: 2, generatedAt: now.toISOString(), host,
     counts: {
-      pendingCards: cs.filter(c => c.status === 'pending').length,
-      waitingSessions: ss.filter(s => s.status === 'waiting').length,
-      attention: ps.filter(p => p.ci === 'failing' || p.failing_prs > 0 || p.agent_blocked > 0).length,
-      activeProjects: ps.filter(p => p.status === 'active').length,
+      pendingCards: c.cards.filter(x => x.status === 'pending').length,
+      waitingSessions: c.sessions.filter(x => x.status === 'waiting').length,
+      attention: c.projects.filter(p => p.ci === 'failing' || p.failing_prs > 0 || p.agent_blocked > 0).length,
+      activeProjects: c.projects.filter(p => p.status === 'active').length,
       inbox: mdIn(path.join(vault, 'Inbox')).length,
     },
-    cards: cs, sessions: ss, projects: ps,
+    layout, widgets,
   };
 }

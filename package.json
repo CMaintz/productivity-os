@@ -4,13 +4,15 @@
   "type": "module",
   "scripts": {
     "inventory": "node tools/inventory/inventory.mjs --out out --github CMaintz",
-    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs tools/dashboard/test/dashboard.test.mjs tools/dashboard/test/sql.test.mjs",
+    "test": "node --test tools/inventory/test/inventory.test.mjs tools/reorg/test/move.test.mjs tools/vault/test/init.test.mjs tools/hooks/test/hooks.test.mjs tools/github/test/github.test.mjs tools/actions/test/actions.test.mjs tools/dashboard/test/dashboard.test.mjs tools/dashboard/test/sql.test.mjs tools/widgets/test/widgets.test.mjs tools/widgets/test/views.test.mjs",
     "vault": "node tools/vault/init.mjs --from-inventory out/inventory.json --git",
     "hooks": "node tools/hooks/install.mjs",
     "github": "node tools/github/sync.mjs",
     "suggest": "node tools/actions/suggest.mjs",
     "executor": "node tools/actions/executor.mjs --once",
-    "dashboard": "node tools/dashboard/sync.mjs"
+    "dashboard": "node tools/dashboard/sync.mjs",
+    "widgets:build": "node tools/widgets/build-views.mjs && node tools/widgets/demo.mjs",
+    "widget": "node tools/widgets/widgets.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",
     "@eslint/js": "^10.0.1",
+    "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "jscpd": "^5.4.0",
     "knip": "^6.39.0",

@@ -35,8 +35,10 @@ for (const [label, viewport] of [['desktop', { width: 1280, height: 900 }], ['ph
       page.on('pageerror', e => errors.push(String(e)));
       await page.goto(`http://127.0.0.1:${server.address().port}/?demo`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#cards');
-      for (const id of ['today', 'cards', 'sessions', 'attention', 'projects']) check(`${label}: #${id} renders`, await page.locator(`#${id}`).isVisible());
-      check(`${label}: two pending cards with buttons`, (await page.locator('#cards > ul.cards:not(.auto) > .card').count()) === 2);
+      for (const id of ['today', 'attention', 'cards', 'sessions', 'writing', 'projects']) check(`${label}: #${id} renders`, await page.locator(`#${id}`).isVisible());
+      check(`${label}: two pending cards with buttons`, (await page.locator('#cards ul.cards:not(.auto) > .card').count()) === 2);
+      check(`${label}: declarative kanban widget groups notes by status`, (await page.locator('#writing .kanban > section').count()) === 3);
+      check(`${label}: today shows the Top 3`, (await page.locator('#today .top3 li').count()) === 3);
       check(`${label}: waiting session listed first`, (await page.locator('#sessions tbody tr').first().textContent()).includes('waiting'));
       const first = page.locator('#cards .card').first();
       await first.locator('input.reason').fill('just testing');

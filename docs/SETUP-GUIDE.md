@@ -121,6 +121,11 @@ Rules the local Claude follows:
    - The `crosspost` job in Actions should create the article, with a canonical link back to maintz.dev.
    - Ticking **LinkedIn** instead opens an issue with a draft to paste.
 
+## 7b. Widgets
+1. 🧑 Obsidian → Community plugins: install **Datacore**, which renders widgets inside notes.
+2. 🤖 `npm run vault` then `node tools/vault/init.mjs --update-system`. This adds the default widgets and layout, `Widgets.md`, the shared `views.md` and the `/widget` skill. Widget files you already have are never overwritten.
+3. 🧑 Open `Widgets.md` in Obsidian. The writing pipeline and "needs attention" widgets should render.
+
 ## 8. Web dashboard (dash.maintz.dev)
 The PC publishes a metadata-only snapshot to a Supabase project of its own, and the page shows it behind GitHub sign-in. Button presses go back to the PC, which applies them to the cards. No note text, tasks or prompts leave the PC.
 

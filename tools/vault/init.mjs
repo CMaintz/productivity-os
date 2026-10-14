@@ -41,8 +41,8 @@ export function copyTemplate(src, dest, created = [], skipped = []) {
   return { created, skipped };
 }
 
-// Files the system owns. Your notes, Home.md, policy and memory are never touched.
-const SYSTEM = ['CLAUDE.md', path.join('.claude', 'skills'), 'Bases'];
+// Files the system owns. Your notes, Home.md, policy, memory, widget manifests and layout are never touched.
+const SYSTEM = ['CLAUDE.md', 'Widgets.md', path.join('.claude', 'skills'), 'Bases', path.join('_system', 'widgets', 'views.md')];
 
 function listFiles(dir) {
   if (!fs.existsSync(dir)) return [];

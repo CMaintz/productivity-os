@@ -1,0 +1,13 @@
+{
+  "id": "cards",
+  "title": "Waiting on me",
+  "view": "cards",
+  "size": "full",
+  "source": {
+    "kind": "snapshot",
+    "collection": "cards",
+    "where": { "status": { "in": ["pending", "approved", "running", "done", "failed"] } },
+    "sort": [{ "field": "created", "dir": "desc" }],
+    "limit": 30
+  }
+}

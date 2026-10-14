@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { demoSnapshot } from './demo';
+import demo from './demo-snapshot.json';
 import type { CardPress, Snapshot } from './types';
 
 export interface Source {
@@ -18,7 +18,7 @@ function demoSource(): Source {
     user: async () => ({ login: 'demo' }),
     signIn: async () => {},
     signOut: async () => {},
-    snapshot: async () => demoSnapshot(),
+    snapshot: async () => ({ ...(demo as unknown as Snapshot), generatedAt: new Date(Date.now() - 60_000).toISOString() }),
     press: async () => {},
     watch: () => () => {},
   };

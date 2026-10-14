@@ -69,7 +69,9 @@ export function updateSystem(src, vault, stamp = Date.now()) {
 export function writeToolsConfig(vault, repoRoot = path.resolve(TEMPLATE, '..')) {
   const file = path.join(vault, '_system', 'tools.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const config = { productivityOs: repoRoot.replace(/\\/g, '/'), githubSync: 'node <productivityOs>/tools/github/sync.mjs' };
+  const prev = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  // mainHost: the PC that runs the executor. Set once, on the first setup; edit to move it.
+  const config = { ...prev, productivityOs: repoRoot.replace(/\\/g, '/'), mainHost: prev.mainHost || os.hostname() };
   fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
 }
 

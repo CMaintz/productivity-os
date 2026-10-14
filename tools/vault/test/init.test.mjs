@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { copyTemplate, updateSystem, writeToolsConfig } from '../init.mjs';
-import { syncProjects, projectNote, setFrontmatter, DOCS_START } from '../projects.mjs';
+import { syncProjects, projectNote, DOCS_START } from '../projects.mjs';
+import { setFrontmatter } from '../../lib/frontmatter.mjs';
 
 const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'vault-template');
 const TODAY = new Date('2026-10-11');

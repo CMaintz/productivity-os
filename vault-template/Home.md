@@ -15,6 +15,9 @@ sort by priority
 ## Waiting on me
 ![[Actions.base#Pending]]
 
+## Ran on their own
+![[Actions.base#Ran on their own]]
+
 ## Claude sessions
 ![[Sessions.base#Active]]
 

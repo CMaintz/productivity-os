@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { updateNote, readFrontmatter, activityLine } from '../sessions.mjs';
+import { updateNote, activityLine } from '../sessions.mjs';
+import { readFrontmatter } from '../../lib/frontmatter.mjs';
 import { withHook, withoutHook, hookCommand, EVENTS } from '../install.mjs';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'session-hook.mjs');

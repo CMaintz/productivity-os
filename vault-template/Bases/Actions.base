@@ -14,6 +14,17 @@ views:
       - context
       - expires
   - type: table
+    name: Ran on their own
+    filters:
+      and:
+        - 'decided_by == "policy"'
+        - 'status != "expired"'
+    order:
+      - file.name
+      - status
+      - action
+      - finished_at
+  - type: table
     name: Recent
     filters:
       and:
@@ -22,4 +33,5 @@ views:
       - file.name
       - status
       - action
-      - context
+      - decided_by
+      - finished_at

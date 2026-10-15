@@ -9,8 +9,13 @@ export function fakeGitHub(issueNumbers) {
     const num = Number(args[2]);
     if (a === 'repo' && b === 'clone') { fs.mkdirSync(args[3], { recursive: true }); return ''; }
     if (a === 'issue' && b === 'list') return JSON.stringify([...gh.issues.values()].map(i => ({ number: i.number, state: i.state, labels: [...i.labels].map(name => ({ name })) })));
-    if (a === 'pr' && b === 'list') return JSON.stringify(gh.prs.filter(p => p.state === 'OPEN'));
-    if (a === 'pr' && b === 'checks') return JSON.stringify(gh.checks[num] ?? []);
+    if (a === 'pr' && b === 'list') return JSON.stringify(gh.prs);
+    if (a === 'pr' && b === 'checks') {
+      const checks = JSON.stringify(gh.checks[num] ?? []);
+      if ((gh.checks[num] ?? []).some(c => c.bucket !== 'pass' && c.bucket !== 'skipping')) throw Object.assign(new Error('exit 1'), { stdout: checks });
+      return checks;
+    }
+    if (a === 'pr' && b === 'view') { const p = gh.prs.find(x => x.number === num); return JSON.stringify({ mergeStateStatus: p.mergeState ?? 'CLEAN', headRefOid: p.headRefOid }); }
     if (a === 'pr' && b === 'merge') { const p = gh.prs.find(x => x.number === num); p.state = 'MERGED'; return ''; }
     if (a === 'issue' && b === 'edit') {
       const i = gh.issues.get(num);
@@ -37,10 +42,10 @@ export function fakeSystem() {
   sys.git = () => '';
   sys.alive = pid => running.has(pid);
   sys.kill = pid => { sys.killed.push(pid); running.delete(pid); };
-  sys.spawnClaude = (prompt, cwd, log) => { const pid = ++sys.pid; running.add(pid); sys.started.push({ pid, prompt, cwd, log }); return pid; };
-  /** The newest worker exits with this result. */
-  sys.finish = (result, isError = false) => {
-    const w = sys.started.at(-1);
+  sys.spawnClaude = (prompt, cwd, log, tools) => { const pid = ++sys.pid; running.add(pid); sys.started.push({ pid, prompt, cwd, log, tools }); return pid; };
+  /** A run exits with this result: the newest one, or the newest whose prompt matches `which`. */
+  sys.finish = (result, isError = false, which) => {
+    const w = [...sys.started].reverse().find(x => running.has(x.pid) && (!which || which.test(x.prompt)));
     fs.writeFileSync(w.log, JSON.stringify({ is_error: isError, result }));
     running.delete(w.pid);
   };

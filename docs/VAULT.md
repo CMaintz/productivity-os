@@ -174,6 +174,13 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
   - **ask you** on a card: write under `## Answer` and press Do it
 - **Usage:** if `_system/usage.json` says the 5-hour or weekly window is at `usageLimit`% (default 80), no new worker starts until it resets. A worker that hits the limit pauses the build too.
 - **Done:** when every ticket is closed, the forge is `built` and a card says so. Verifying (slice 3) is next.
+- **Merge rules:** a PR is only proposed for merging when GitHub calls it clean (required checks reported, no conflicts) and every check is green. A red PR counts as a failed try, and the worker retries on the same branch.
+
+**Guardrails:**
+- Workers get `gh` only for their ticket and PR: view, comment, label, PR create and checks. That means no merge, `api` or `repo` commands.
+- Comments from anyone but you are treated as untrusted data.
+- The product repo's `main` is protected (changes through PRs only) where your GitHub plan allows it.
+- A GitHub hiccup skips one pass; it never fails the build.
 
 Build state, workers and their logs live in `_system/forge-builds/`. The dashboard shows ticket progress.
 

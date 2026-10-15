@@ -56,6 +56,15 @@ function pushDocs(run, repo, dir) {
   }
 }
 
+/**
+ * Changes to main only through PRs, so a worker can't push there directly. Best effort: GitHub
+ * doesn't offer branch protection on private repos without a paid plan, and then this is skipped.
+ */
+function protectMain(run, repo) {
+  const body = { required_status_checks: null, enforce_admins: false, required_pull_request_reviews: { required_approving_review_count: 0 }, restrictions: null };
+  try { run(['api', '-X', 'PUT', `repos/${repo}/branches/main/protection`, '--input', '-'], JSON.stringify(body)); } catch { /* not available on this plan */ }
+}
+
 const record = (note, key, value) => fs.writeFileSync(note, setFrontmatter(fs.readFileSync(note, 'utf8'), key, JSON.stringify(value)));
 
 /** The handler: repo, docs, labels, tickets in dependency order, then the epic linking them. */
@@ -70,6 +79,7 @@ export function createForgeRepo(card, ctx) {
   if (!exists(ctx.gh, ['repo', 'view', repo, '--json', 'name'])) ctx.gh(['repo', 'create', repo, '--private', '--add-readme', '--description', `${name}, from the Product Forge`]);
   record(note, 'repo', `https://github.com/${repo}`);
   pushDocs(ctx.gh, repo, dir);
+  protectMain(ctx.gh, repo);
   ensureLabels(ctx.gh, repo, PRODUCT_LABELS);
   const issueOf = { ...(fieldsOf(fs.readFileSync(note, 'utf8')).issues || {}) };
   for (const t of topoOrder(tickets).filter(x => !issueOf[x.n])) {

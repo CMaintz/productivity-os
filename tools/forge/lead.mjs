@@ -1,5 +1,6 @@
-// The lead agent for a stuck ticket. It runs read-only (claude -p in the clone, no write tools)
-// and ends with one decision line; this module carries the decision out on the forge's repo:
+// The lead agent for a stuck ticket. It runs detached and read-only (claude -p in the clone: no
+// write tools, gh only to view) and ends with one decision line; this module carries the
+// decision out on the forge's repo, and only there:
 //   UNBLOCK: <comment>   comment on the ticket and hand it back to the workers
 //   REPLAN: <tickets>     create replacement tickets, close the old one
 //   ESCALATE: <question>  ask the owner on a card; their answer releases the ticket
@@ -10,10 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { createCard, listCards } from '../actions/cards.mjs';
 import { createIssue } from '../lib/gh.mjs';
 import { parsePlan } from './stages.mjs';
+import { startRun } from './workers.mjs';
 import { ticketBody } from './repo.mjs';
 
 const PROMPT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts', 'lead.md');
-const LEAD_TOOLS = 'Read,Glob,Grep,Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git log:*),Bash(git diff:*)';
+const LEAD_TOOLS = 'Read,Glob,Grep,Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr diff:*)';
 const DECISION = /^(UNBLOCK|REPLAN|ESCALATE):[ \t]*/gm;
 
 /** The last decision in the lead's output: { kind, body }, or null when there's none. */
@@ -31,27 +33,28 @@ export function release(ctx, b, n, guidance) {
   const t = b.tickets[n];
   comment(ctx, b, t.issue, guidance);
   relabel(ctx, b, t.issue, ['agent:ready'], ['agent:blocked']);
-  Object.assign(t, { state: 'ready', attempts: 0, blocked: null, lead: null });
+  Object.assign(t, { state: 'ready', attempts: 0, blocked: null });
 }
 
 function replan(ctx, b, n, body) {
   const { tickets, problems } = parsePlan(body);
-  if (!tickets.length || problems.length) return `the lead's re-plan didn't parse (${problems.join('; ') || 'no tickets'})`;
   const next = Math.max(...Object.keys(b.tickets).map(Number)) + 1;
-  const local = new Map(tickets.map((t, i) => [t.n, next + i]));
+  const real = problems.filter(p => !/depends on missing T(\d+)/.test(p) || !b.tickets[p.match(/T(\d+)$/)[1]]);
+  if (!tickets.length || real.length) return `the re-plan didn't parse (${real.join('; ') || 'no tickets'})`;
+  if (tickets.some(t => t.n < next)) return `new tickets must be numbered from T${next}`;
   const issueOf = Object.fromEntries(Object.entries(b.tickets).map(([k, t]) => [k, t.issue]));
   const made = [];
   for (const t of tickets) {
-    const num = local.get(t.n);
-    const deps = t.dependsOn.map(d => local.get(d) ?? d).filter(d => d !== Number(n));
-    const url = createIssue(ctx.gh, b.repo, { title: `T${num}: ${t.title}`, body: ticketBody({ ...t, n: num, dependsOn: deps }, issueOf), labels: ['agent-feature'] });
+    const deps = t.dependsOn.filter(d => d !== Number(n));
+    const url = createIssue(ctx.gh, b.repo, { title: `T${t.n}: ${t.title}`, body: ticketBody({ ...t, dependsOn: deps }, issueOf), labels: ['agent-feature'] });
     const issue = Number(String(url).match(/\/issues\/(\d+)/)?.[1]);
-    issueOf[num] = issue;
-    b.tickets[num] = { issue, deps, state: 'waiting', attempts: 0 };
+    issueOf[t.n] = issue;
+    b.tickets[t.n] = { issue, deps, state: 'waiting', attempts: 0, blocks: 0 };
+    ctx.persist();
     made.push(`#${issue}`);
   }
   ctx.gh(['issue', 'close', String(b.tickets[n].issue), '--repo', b.repo, '--comment', `Replaced by ${made.join(', ')} (Product Forge lead agent re-plan).`]);
-  Object.assign(b.tickets[n], { state: 'replaced', replacedBy: [...local.values()] });
+  Object.assign(b.tickets[n], { state: 'replaced', replacedBy: tickets.map(t => t.n) });
   return null;
 }
 
@@ -68,13 +71,21 @@ function escalate(vault, ctx, b, n, question) {
   Object.assign(t, { state: 'asked', question: key });
 }
 
-/** Runs the lead on one blocked ticket and applies its decision. Returns a log line. */
-export function lead(vault, ctx, b, n) {
+/** Starts the lead on one blocked ticket (detached); its decision is applied when it finishes. */
+export function startLead(vault, ctx, b, n) {
   const t = b.tickets[n];
-  const vars = { REPO: b.repo, ISSUE: String(t.issue), ISSUE_URL: `https://github.com/${b.repo}/issues/${t.issue}`, N: String(n), FAILURE: t.blocked ?? 'The ticket is labelled agent:blocked.' };
+  const keys = Object.keys(b.tickets).map(Number);
+  const vars = { REPO: b.repo, OWNER: b.owner, ISSUE: String(t.issue), ISSUE_URL: `https://github.com/${b.repo}/issues/${t.issue}`, N: String(n), FAILURE: t.blocked ?? 'The ticket is labelled agent:blocked.', NEXT: String(Math.max(...keys) + 1), LAST: String(Math.max(...keys)) };
   const prompt = Object.entries(vars).reduce((s, [k, v]) => s.replaceAll(`{{${k}}}`, v), fs.readFileSync(PROMPT, 'utf8'));
-  const r = ctx.runClaude(prompt, b.clone, LEAD_TOOLS);
-  t.lead = t.blocked ?? 'blocked';
+  t.leadRun = startRun({ prompt, cwd: b.clone, tools: LEAD_TOOLS, logDir: ctx.logDir, name: `lead-T${n}`, now: ctx.now, sys: ctx.sys });
+  t.lead = t.blocks;
+  ctx.persist();
+  return `T${n}: lead agent started`;
+}
+
+/** Applies a finished lead's decision. Returns a log line. */
+export function finishLead(vault, ctx, b, n, r) {
+  b.tickets[n].leadRun = null;
   const d = r.ok ? parseDecision(r.text) : null;
   if (d?.kind === 'UNBLOCK' && d.body) { release(ctx, b, n, `Lead agent: ${d.body}`); return `T${n}: lead unblocked it`; }
   if (d?.kind === 'REPLAN') {
@@ -96,9 +107,14 @@ const answerOf = text => (String(text).split(/^## Answer\s*$/m)[1] ?? '').split(
 export function collectAnswer(vault, ctx, b, n) {
   const t = b.tickets[n];
   const card = listCards(vault).find(c => c.key === t.question);
-  if (!card || card.status !== 'done') return null;
+  if (!card) return null;
+  if (['rejected', 'expired'].includes(card.status)) {
+    Object.assign(t, { state: 'blocked', question: null });
+    return `T${n}: you declined the question; it stays blocked until you remove agent:blocked on GitHub`;
+  }
+  if (card.status !== 'done') return null;
   const answer = answerOf(card.text) || card.decline_reason;
-  if (!answer) { t.state = 'blocked'; return `T${n}: your answer was empty; it stays blocked`; }
+  if (!answer) { Object.assign(t, { state: 'blocked', question: null }); return `T${n}: your answer was empty; it stays blocked`; }
   release(ctx, b, n, `The owner answered: ${answer}`);
   return `T${n}: released with your answer`;
 }

@@ -68,6 +68,7 @@ function resume(vault, f, now) {
   if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`); return 'stopped'; }
   if (card.action === 'forge_questions') { save(f, { status: 'running', answered: true, feedback: '' }, now, 'questions answered'); return 'answered'; }
   if (card.action === 'forge_create_repo') { save(f, { stage: 'build', status: 'running' }, now, 'repo and tickets created; building'); return 'building'; }
+  if (f.stage === 'built') { save(f, { status: 'done' }, now, 'build reviewed; verifying end-to-end is the next slice'); return 'done'; }
   save(f, { status: 'running', stage: nextStage(f.stage), feedback: '' }, now, `${f.stage}: approved`);
   return 'approved';
 }

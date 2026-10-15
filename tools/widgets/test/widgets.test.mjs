@@ -97,7 +97,7 @@ test('the dashboard demo snapshot is up to date with the pipeline', async () => 
   assert.equal(fs.readFileSync(DEMO_FILE, 'utf8'), demoJson(), 'run: node tools/widgets/demo.mjs');
 });
 
-test('review fixes: operator value types, private where/sort fields and folders, isolation, undo path', () => {
+test('manifests reject wrong operator types and private where/sort fields and folders; one bad widget stays isolated; undo stays in the widgets folder', () => {
   const base = { id: 'w', title: 'W', view: 'list', fields: ['status'], source: { kind: 'notes', folder: 'Writing' } };
   const errs = src => validateManifest({ ...base, source: { ...base.source, ...src } });
   assert.ok(errs({ where: { status: { in: 5 } } }).some(e => e.includes('wrong value type')));

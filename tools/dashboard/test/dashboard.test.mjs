@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { buildSnapshot } from '../snapshot.mjs';
-import { loadConfig, push, pull, rest, syncDashboard } from '../sync.mjs';
+import { loadConfig, pull, rest, syncDashboard } from '../sync.mjs';
 import { createCard, listCards } from '../../actions/cards.mjs';
 import { copyTemplate } from '../../vault/init.mjs';
 import { fileURLToPath } from 'node:url';
@@ -118,7 +118,6 @@ test('syncDashboard pushes the snapshot for the owner and never throws', async (
   const broken = await syncDashboard(v, { config: CONFIG, fetchImpl: async () => ({ ok: false, status: 500, text: async () => 'boom' }), now: NOW });
   assert.match(broken.error, /500 boom/);
   assert.deepEqual(await syncDashboard(v, { config: null }), { skipped: 'not configured' });
-  assert.ok(push);
 });
 
 test('syncDashboard switches off a widget the dashboard keeps reporting crashes for', async () => {

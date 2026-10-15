@@ -14,7 +14,8 @@
     "widgets:build": "node tools/widgets/code-registry.mjs && node tools/widgets/build-views.mjs && node tools/widgets/demo.mjs",
     "widget": "node tools/widgets/widgets.mjs",
     "code-widget": "node tools/widgets/code-widgets.mjs",
-    "forge": "node tools/forge/forge.mjs"
+    "forge": "node tools/forge/forge.mjs",
+    "mutants": "node tools/quality/mutants.mjs"
   },
   "engines": {
     "node": ">=20"

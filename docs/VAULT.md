@@ -172,7 +172,7 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
   - **unblock** it with guidance
   - **re-plan** it into smaller tickets
   - **ask you** on a card: write under `## Answer` and press Do it
-- **Usage:** if `_system/usage.json` says the 5-hour or weekly window is at `usageLimit`% (default 80), no new worker starts until it resets. A worker that hits the limit pauses the build too.
+- **Usage:** the status line from `npm run hooks` records your 5-hour and weekly usage there (a record older than 30 minutes is ignored). If `_system/usage.json` says the 5-hour or weekly window is at `usageLimit`% (default 80), no new worker starts until it resets. A worker that hits the limit pauses the build too.
 - **Done:** when every ticket is closed, the forge is `built` and a card says so. Verifying (slice 3) is next.
 - **Merge rules:** a PR is only proposed for merging when GitHub calls it clean (required checks reported, no conflicts) and every check is green. A red PR counts as a failed try, and the worker retries on the same branch.
 

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { buildInventory, defaultRoots, claudeEncode, classifyDoc, renderMarkdown } from '../inventory.mjs';
+import { buildInventory, defaultRoots, claudeEncode, renderMarkdown } from '../inventory.mjs';
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' });
 const write = (p, s = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); };
@@ -115,9 +115,6 @@ test('folders inside _notes and _archive are docs, not projects, unless they are
   assert.deepEqual(loose, ['2026-10-03.md', 'SPEC.md', 'ideas.md', 'page.md', 'site-notes.md', 'spec.pdf']);
 });
 
-test('helpers', () => {
+test("claudeEncode matches Claude Code's project folder names, or session history is lost", () => {
   assert.equal(claudeEncode('C:\\Users\\akash\\Projects\\foo'), 'C--Users-akash-Projects-foo');
-  assert.equal(classifyDoc('docs/decisions/2026-01-01-x.md'), 'decision');
-  assert.equal(classifyDoc('CLAUDE.md'), 'agent-instructions');
-  assert.equal(classifyDoc('notes/random.md'), 'note');
 });

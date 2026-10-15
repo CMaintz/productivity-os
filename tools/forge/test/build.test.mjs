@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { advanceForges, listForges, newForge } from '../forge.mjs';
 import { loadBuild, mergeTicketPr, progressOf } from '../build.mjs';
+import { WORKER_TOOLS } from '../workers.mjs';
 import { parseDecision } from '../lead.mjs';
 import { listCards } from '../../actions/cards.mjs';
 import { runOnce } from '../../actions/executor.mjs';
@@ -83,6 +84,22 @@ test('build: clone, workers in dependency order, retry, merge card, release, bui
   assert.equal(listForges(w.v)[0].status, 'done');
 });
 
+test('build: no merge card until GitHub itself calls the PR clean (a required check may not have reported yet)', async () => {
+  const w = building();
+  await pass(w, 1);
+  const pr = w.gh.openPr(1, 11, ['pass']);
+  w.gh.prs.find(p => p.number === pr).mergeState = 'BLOCKED';
+  w.sys.finish('shipped');
+  await pass(w, 2);
+  assert.equal(cardBy(w, 'forge_merge_pr'), undefined);
+  w.gh.prs.find(p => p.number === pr).mergeState = 'CLEAN';
+  assert.match((await pass(w, 3)).join(), /merge card proposed/);
+});
+
+test('workers can never merge, call the API or manage repos through gh', () => {
+  assert.doesNotMatch(WORKER_TOOLS, /gh pr merge|gh api|gh repo|Bash\(gh:\*\)|Bash\(gh \*\)/);
+});
+
 test('build: a merge card refuses a PR that turned red', () => {
   const w = building();
   const pr = w.gh.openPr(1, 11, ['pass', 'fail']);
@@ -145,10 +162,10 @@ test('build: a red PR is a failed try; GitHub errors skip the pass without faili
 
 test('build: usage pacing and usage-limit pauses', async () => {
   const w = building();
-  fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 91, weeklyPct: 40, resetsAt: '2026-10-15T11:00:00Z' }));
+  fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 91, weeklyPct: 40, resetsAt: '2026-10-15T11:00:00Z', recordedAt: at(0).toISOString() }));
   assert.match((await pass(w, 1)).join(), /usage at 91% \(limit 80%\); paused until 2026-10-15T11:00:00Z/);
   assert.equal(w.sys.started.length, 0);
-  fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 10, weeklyPct: 10, resetsAt: '2026-10-15T08:00:00Z' }));
+  fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 10, weeklyPct: 10, resetsAt: '2026-10-15T08:00:00Z', recordedAt: at(120).toISOString() }));
   assert.deepEqual(await pass(w, 30), [], 'the pause holds until its reset time');
   assert.match((await pass(w, 121)).join(), /T1: worker started/);
   w.sys.finish('Claude usage limit reached. Try again at 3pm.', true);
@@ -156,6 +173,13 @@ test('build: usage pacing and usage-limit pauses', async () => {
   assert.equal(ticket(w, 1).attempts, 0, "a usage stop isn't the ticket's fault");
   assert.equal(ticket(w, 1).run, null);
   assert.equal(loadBuild(w.v, 'tidy-flat').paused_until, at(122 + 60).toISOString(), 'a reset time in the past pauses for an hour, not zero');
+});
+
+test('build: a stale usage record does not pause the build', async () => {
+  const w = building();
+  fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 95, weeklyPct: 50, resetsAt: '2026-10-15T11:00:00Z', recordedAt: '2026-10-15T07:00:00Z' }));
+  assert.match((await pass(w, 1)).join(), /usage record is from 2026-10-15T07:00:00Z, too old to trust.*T1: worker started/);
+  assert.deepEqual(await pass(w, 2), [], 'said once, not every pass');
 });
 
 test('build: a stuck worker is stopped after the time limit and counts as a failure', async () => {

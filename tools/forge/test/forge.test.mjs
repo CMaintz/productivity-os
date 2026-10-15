@@ -138,7 +138,7 @@ function forgeAt(stage, { stopAfter = [], files = {} } = {}) {
 }
 const go = (v, m, runClaude = fakeClaude([])) => advanceForges(v, { now: at(m), runClaude, run: fakeGh([]), fetchImpl: fetch404 });
 
-test('review fixes: the model works in a folder that excludes the state note, with no web for the spec', async () => {
+test('the model works in a folder that excludes the state note, with no web tools for the spec', async () => {
   const v = vault();
   newForge(v, 'Plant tracker', { mode: 'autonomous', stopAfter: [], now: NOW });
   const calls = [];
@@ -150,7 +150,7 @@ test('review fixes: the model works in a folder that excludes the state note, wi
   assert.doesNotMatch(tools[0], /Web/, 'no web tools while the outline is the input');
 });
 
-test('review fixes: rejecting the naming stop picks a new name, but your own rename sticks', async () => {
+test('rejecting the naming stop picks a new name, but your own rename sticks', async () => {
   const v = forgeAt('naming', { stopAfter: ['naming'] });
   await go(v, 1);
   assert.equal(forge(v).name, 'Tidewell');
@@ -165,7 +165,7 @@ test('review fixes: rejecting the naming stop picks a new name, but your own ren
   assert.equal(forge(v).name, 'My Pick', 'a name you typed is never overwritten');
 });
 
-test('review fixes: stopping during a long stage sticks; a stale output is not accepted', async () => {
+test('stopping during a long stage sticks; an output not rewritten this run is not accepted', async () => {
   const v = forgeAt('stack');
   const stopMidRun = (p, cwd) => { const f = forge(v); fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped')); return fakeClaude([])(p, cwd); };
   await go(v, 1, stopMidRun);
@@ -176,7 +176,7 @@ test('review fixes: stopping during a long stage sticks; a stale output is not a
   assert.match(forge(w).text, /wasn't written this run/);
 });
 
-test('review fixes: repo creation resumes after a failure without duplicates', () => {
+test('repo creation resumes after a failure without duplicates', () => {
   const v = forgeAt('plan', { files: { 'plan.md': PLAN, 'naming.md': NAMING } });
   const f = forge(v);
   fs.writeFileSync(f.file, f.text.replace('name: ""', 'name: "Tidewell"'));
@@ -194,7 +194,7 @@ test('review fixes: repo creation resumes after a failure without duplicates', (
   assert.equal(createForgeRepo({ params: { ...card.params, repo: 'me/other' } }, { vault: v, gh: run }).ok, false, 'a stale card is refused');
 });
 
-test('review fixes: parser edge cases and a broken forge never block the others', async () => {
+test('plan and naming parser edge cases; one broken forge never blocks the others', async () => {
   const ranked = NAMING.replace('| Name | Rationale |\n|---|---|', '| Rank | Name | Rationale |\n|---|---|---|').replace(/^\| (\w[\w ]*) \| short \|$/gm, '| 1 | $1 | short |');
   assert.equal(candidates(ranked)[0], 'Tidewell', 'the Name column, not Rank');
   assert.match(parsePlan(PLAN.replace('### T3: Share', '### T2: Share')).problems.join(), /share a number/);

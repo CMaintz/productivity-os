@@ -180,8 +180,16 @@ function releaseAndStart(vault, b, ctx, log) {
   }
 }
 
-function readUsage(vault) {
-  try { return JSON.parse(fs.readFileSync(path.join(vault, '_system', 'usage.json'), 'utf8')); } catch { return null; }
+const STALE_MIN = 30;
+
+/** The status line's last usage record; one older than STALE_MIN says nothing about now. */
+function readUsage(vault, now, b, log) {
+  let u;
+  try { u = JSON.parse(fs.readFileSync(path.join(vault, '_system', 'usage.json'), 'utf8')); } catch { return null; }
+  if (u.recordedAt && (now - new Date(u.recordedAt)) / 6e4 <= STALE_MIN) { b.stale_noted = null; return u; }
+  if (b.stale_noted !== u.recordedAt) log.push(`usage record is from ${u.recordedAt ?? 'an unknown time'}, too old to trust; unpaced for now`);
+  b.stale_noted = u.recordedAt ?? 'unknown';
+  return null;
 }
 
 function finish(vault, f, b, now) {
@@ -204,10 +212,11 @@ function pass(vault, b, ctx, log) {
 
 /** One build pass for a forge in the build stage. Returns its log lines (empty when nothing changed). */
 export function buildStep(vault, f, { now, gh, sys = system }) {
-  const ctx = { now, gh, sys, usage: readUsage(vault), logDir: path.join(vault, BUILD_DIR, f.slug) };
-  const b = loadBuild(vault, f.slug) ?? enterBuild(vault, f, ctx);
-  ctx.persist = () => saveBuild(vault, b);
   const log = [];
+  const ctx = { now, gh, sys, logDir: path.join(vault, BUILD_DIR, f.slug) };
+  const b = loadBuild(vault, f.slug) ?? enterBuild(vault, f, ctx);
+  ctx.usage = readUsage(vault, now, b, log);
+  ctx.persist = () => saveBuild(vault, b);
   try {
     pass(vault, b, ctx, log);
     b.gh_error = null;

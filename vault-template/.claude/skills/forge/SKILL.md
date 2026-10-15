@@ -5,7 +5,7 @@ description: Start a Product Forge run - turn a product or big-feature idea into
 
 # /forge <idea>
 
-The Product Forge takes an outline through four stages, one per executor pass: **spec → stack → naming → plan**. Every stage writes a file in `Forge/<slug>/`. It stops where you say, and it creates nothing outside the vault until you approve the final "create the repo and tickets" card.
+The Product Forge takes an outline through four stages, one per executor pass: **spec → stack → naming → plan**. The forge's state and log live in `Forge/<slug>.md`; every stage writes its file in the `Forge/<slug>/` folder. It stops where you say, and it creates nothing outside the vault until you approve the final "create the repo and tickets" card.
 
 1. **Get the outline.** Ask for a few lines if the user hasn't given them: what it is, who it's for, and the one thing it must do well. Don't spec it yourself; the forge does that.
 2. **Pick the mode** (ask if unclear):
@@ -17,7 +17,7 @@ The Product Forge takes an outline through four stages, one per executor pass: *
    node <productivityOs>/tools/forge/forge.mjs new "<outline>" --mode interview --stop-after spec,naming
    ```
 5. **Tell the user what happens next:**
-   - Progress shows in `Forge/<slug>/forge.md` (its Log) and on the dashboard.
+   - Progress shows in `Forge/<slug>.md` (its Log) and on the dashboard.
    - At each stop a card appears. **Do it** continues. **No**, with a reason, reruns that stage with the reason as feedback.
-   - The user can rename the product at the naming stop by editing `name:` in `forge.md`.
+   - The user can rename the product at the naming stop by editing `name:` in `Forge/<slug>.md`.
    - Setting `status: stopped` there halts the forge.

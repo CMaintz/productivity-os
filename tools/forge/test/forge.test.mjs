@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { advanceForges, listForges, newForge, forgeRows } from '../forge.mjs';
+import { createForgeRepo } from '../repo.mjs';
 import { STAGES, checkOutput, parsePlan, topoOrder, candidates } from '../stages.mjs';
 import { addAvailability, checkName } from '../naming.mjs';
 import { listCards } from '../../actions/cards.mjs';
 import { runOnce } from '../../actions/executor.mjs';
-import { NAMING, PLAN, SPEC, fakeClaude, fakeGh, fetch404 } from './fixtures.mjs';
+import { NAMING, PLAN, SPEC, ADR, fakeClaude, fakeGh, fetch404 } from './fixtures.mjs';
 
 const NOW = new Date('2026-10-15T09:00:00Z');
 const at = m => new Date(NOW.valueOf() + m * 60_000);
@@ -120,4 +121,90 @@ test('snapshot rows carry headline fields only, never the outline', () => {
   assert.deepEqual(Object.keys(rows[0]).sort(), ['mode', 'slug', 'stage', 'status', 'title', 'updated']);
   assert.doesNotMatch(JSON.stringify(rows), /private details/);
   assert.match(newForge(v, 'Secret idea', { now: NOW }).error, /already exists/);
+});
+
+/** A forge already at `stage`, with the earlier stage files in place. */
+function forgeAt(stage, { stopAfter = [], files = {} } = {}) {
+  const v = vault();
+  newForge(v, 'Tidy flat', { mode: 'autonomous', stopAfter, now: NOW });
+  const f = forge(v);
+  fs.writeFileSync(f.file, f.text.replace('stage: spec', `stage: ${stage}`));
+  for (const [rel, text] of Object.entries({ 'spec.md': SPEC, 'decisions/0001-stack.md': ADR, ...files })) {
+    fs.mkdirSync(path.dirname(path.join(f.dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(f.dir, rel), text);
+  }
+  return v;
+}
+const go = (v, m, runClaude = fakeClaude([])) => advanceForges(v, { now: at(m), runClaude, run: fakeGh([]), fetchImpl: fetch404 });
+
+test('review fixes: the model works in a folder that excludes the state note, with no web for the spec', async () => {
+  const v = vault();
+  newForge(v, 'Plant tracker', { mode: 'autonomous', stopAfter: [], now: NOW });
+  const calls = [];
+  const tools = [];
+  await advanceForges(v, { now: at(1), runClaude: (p, cwd, t) => { tools.push(t); return fakeClaude(calls)(p, cwd); }, run: fakeGh([]), fetchImpl: fetch404 });
+  assert.equal(path.relative(path.join(v, 'Forge'), calls[0].cwd), 'plant-tracker');
+  assert.ok(fs.existsSync(path.join(v, 'Forge', 'plant-tracker.md')), 'state lives next to the workspace, not in it');
+  assert.match(calls[0].prompt, /Outline:\nPlant tracker/, 'the outline arrives in the prompt');
+  assert.doesNotMatch(tools[0], /Web/, 'no web tools while the outline is the input');
+});
+
+test('review fixes: rejecting the naming stop picks a new name, but your own rename sticks', async () => {
+  const v = forgeAt('naming', { stopAfter: ['naming'] });
+  await go(v, 1);
+  assert.equal(forge(v).name, 'Tidewell');
+  press(v, 'rejected', 'Something calmer');
+  await go(v, 2);
+  await go(v, 3, fakeClaude([], { 'naming.md': NAMING.replace('Tidewell', 'Stillwater') }));
+  assert.equal(forge(v).name, 'Stillwater', 'the rejected name is replaced');
+  fs.writeFileSync(forge(v).file, forge(v).text.replace('name: "Stillwater"', 'name: "My Pick"'));
+  press(v, 'rejected', 'again');
+  await go(v, 4);
+  await go(v, 5);
+  assert.equal(forge(v).name, 'My Pick', 'a name you typed is never overwritten');
+});
+
+test('review fixes: stopping during a long stage sticks; a stale output is not accepted', async () => {
+  const v = forgeAt('stack');
+  const stopMidRun = (p, cwd) => { const f = forge(v); fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped')); return fakeClaude([])(p, cwd); };
+  await go(v, 1, stopMidRun);
+  assert.equal(forge(v).status, 'stopped');
+  assert.match(forge(v).text, /you stopped the forge meanwhile/);
+  const w = forgeAt('stack', { files: { 'decisions/0001-stack.md': ADR } });
+  assert.deepEqual(await go(w, 1, () => ({ ok: true, text: 'did nothing' })), ['forge tidy-flat: retry']);
+  assert.match(forge(w).text, /wasn't written this run/);
+});
+
+test('review fixes: repo creation resumes after a failure without duplicates', () => {
+  const v = forgeAt('plan', { files: { 'plan.md': PLAN, 'naming.md': NAMING } });
+  const f = forge(v);
+  fs.writeFileSync(f.file, f.text.replace('name: ""', 'name: "Tidewell"'));
+  const calls = [];
+  const run = fakeGh(calls, { failOn: 'T2: Make a list' });
+  const card = { params: { slug: 'tidy-flat', name: 'Tidewell', repo: 'me/tidewell' } };
+  assert.throws(() => createForgeRepo(card, { vault: v, gh: run }), /502/);
+  assert.equal(createForgeRepo(card, { vault: v, gh: run }).ok, true);
+  const issues = calls.filter(c => c.args[0] === 'issue').map(c => c.args[c.args.indexOf('--title') + 1]);
+  assert.deepEqual(issues, ['T1: Scaffold the repo', 'T2: Make a list', 'T2: Make a list', 'T3: Share a list', 'epic: Tidewell v1'], 'T1 is not created twice');
+  assert.equal(calls.filter(c => c.args[0] === 'repo' && c.args[1] === 'create').length, 1, 'the repo is created once');
+  assert.ok(calls.filter(c => c.args[0] === 'issue').every(c => c.args.includes('agent-feature') || c.args.includes('epic')));
+  const put = calls.find(c => c.args.includes('PUT'));
+  assert.ok(put.args.includes('--input') && JSON.parse(put.input).content, 'docs go over stdin');
+  assert.equal(createForgeRepo({ params: { ...card.params, repo: 'me/other' } }, { vault: v, gh: run }).ok, false, 'a stale card is refused');
+});
+
+test('review fixes: parser edge cases and a broken forge never block the others', async () => {
+  const ranked = NAMING.replace('| Name | Rationale |\n|---|---|', '| Rank | Name | Rationale |\n|---|---|---|').replace(/^\| (\w[\w ]*) \| short \|$/gm, '| 1 | $1 | short |');
+  assert.equal(candidates(ranked)[0], 'Tidewell', 'the Name column, not Rank');
+  assert.match(parsePlan(PLAN.replace('### T3: Share', '### T2: Share')).problems.join(), /share a number/);
+  assert.equal(parsePlan(PLAN.replace('Intent: As the owner', 'Intentionally vague.\nIntent: As the owner')).tickets[0].intent.startsWith('As the owner'), true);
+  const v = vault();
+  newForge(v, 'Broken one', { now: NOW });
+  newForge(v, 'Good one', { mode: 'autonomous', stopAfter: [], now: at(1) });
+  const broken = listForges(v).find(f => f.slug === 'broken-one');
+  fs.writeFileSync(broken.file, broken.text.replace(/^stop_after: .*$/m, 'stop_after: spec, naming'));
+  assert.deepEqual(listForges(v).find(f => f.slug === 'broken-one').stop_after, ['spec', 'naming'], 'a comma list still works');
+  const boom = (p, cwd) => { if (cwd.endsWith('broken-one')) throw new Error('kaput'); return fakeClaude([])(p, cwd); };
+  assert.deepEqual(await go(v, 2, boom), ['forge broken-one: failed']);
+  assert.deepEqual(await go(v, 3, boom), ['forge good-one: next'], 'the next forge still runs');
 });

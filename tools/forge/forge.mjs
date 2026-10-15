@@ -1,9 +1,13 @@
 #!/usr/bin/env node
-// The Product Forge, stages 1-4: an outline in Forge/<slug>/forge.md becomes spec.md, a stack
-// ADR, naming.md (with availability checks) and plan.md, one stage per executor pass. Each
-// stage is a `claude -p` run in the forge folder; the runner checks its output before moving on.
-// Stop-points wait on a forge_review card: approve continues, reject-with-reason reruns the
-// stage with that feedback. The plan ends in a forge_create_repo card (see repo.mjs).
+// The Product Forge, stages 1-4: an outline becomes spec.md, a stack ADR, naming.md (with
+// availability checks) and plan.md, one stage per executor pass. Each stage is a `claude -p`
+// run whose output the runner checks before moving on. Stop-points wait on a forge_review card:
+// approve continues, reject-with-reason reruns the stage with that feedback. The plan ends in a
+// forge_create_repo card (see repo.mjs).
+//
+// Layout: Forge/<slug>.md is the forge's state and log (yours to read and edit: `status: stopped`
+// halts it, `name:` renames it). Forge/<slug>/ is the workspace the model writes in. Claude runs
+// with that folder as its cwd, so it can't edit the state note; the outline reaches it in the prompt.
 //
 // CLI: node tools/forge/forge.mjs new "<outline>" [--mode interview|autonomous] [--stop-after spec,naming] [--vault <dir>]
 
@@ -14,57 +18,67 @@ import { fieldsOf, readFrontmatter, setFrontmatter } from '../lib/frontmatter.mj
 import { createCard, listCards } from '../actions/cards.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
 import { gh } from '../lib/gh.mjs';
-import { STAGE_IDS, candidates, checkOutput, nextStage, stageById } from './stages.mjs';
+import { FORGE_DIR, STAGE_IDS, candidates, checkOutput, forgeNote, nextStage, stageById } from './stages.mjs';
 import { addAvailability, slugOf } from './naming.mjs';
-import { ownerOf } from './repo.mjs';
+import { ownerOf, proposeRepo } from './repo.mjs';
 
-export const FORGE_DIR = 'Forge';
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
-const TOOLS = 'Read,Write,Edit,Glob,Grep,WebSearch,WebFetch';
+// No web access while the outline and spec are the input; research only where it helps.
+const FILE_TOOLS = 'Read,Write,Edit,Glob,Grep';
+const STAGE_TOOLS = { spec: FILE_TOOLS, stack: `${FILE_TOOLS},WebSearch,WebFetch`, naming: `${FILE_TOOLS},WebSearch`, plan: FILE_TOOLS };
 const MAX_ATTEMPTS = 2;
 const ACTIVE = ['running', 'waiting'];
 
 const q = v => JSON.stringify(v);
-const forgeFile = (vault, slug) => path.join(vault, FORGE_DIR, slug, 'forge.md');
-const prompt = (name, vars = {}) => Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), fs.readFileSync(path.join(PROMPTS, `${name}.md`), 'utf8'));
+const prompt = (name, vars) => Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), fs.readFileSync(path.join(PROMPTS, `${name}.md`), 'utf8'));
+const stops = v => (Array.isArray(v) ? v : String(v ?? '').split(',')).map(s => String(s).trim()).filter(s => STAGE_IDS.includes(s));
+const outlineOf = text => (readFrontmatter(text).body.split(/^## Outline\s*$/m)[1] ?? '').split(/^## /m)[0].trim();
 
 export function newForge(vault, outline, { mode = 'interview', stopAfter = ['spec', 'naming'], now = new Date() } = {}) {
   const title = String(outline).split('\n')[0].slice(0, 60).trim();
   const slug = slugOf(title) || `forge-${now.valueOf()}`;
-  const file = forgeFile(vault, slug);
-  if (fs.existsSync(file)) return { error: `Forge/${slug} already exists` };
+  const file = forgeNote(vault, slug);
+  if (fs.existsSync(file)) return { error: `${FORGE_DIR}/${slug} already exists` };
   if (!['interview', 'autonomous'].includes(mode)) return { error: 'mode must be interview or autonomous' };
-  const stops = stopAfter.filter(s => STAGE_IDS.includes(s));
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const fm = { type: 'forge', slug, name: q(''), stage: 'spec', mode, stop_after: q(stops), status: 'running', attempts: 0, answered: false, review_key: q(''), feedback: q(''), repo: q(''), created: q(now.toISOString()), updated: q(now.toISOString()) };
+  fs.mkdirSync(path.join(vault, FORGE_DIR, slug), { recursive: true });
+  const fm = { type: 'forge', slug, name: q(''), auto_name: q(''), stage: 'spec', mode, stop_after: q(stops(stopAfter)), status: 'running', attempts: 0, answered: false, review_key: q(''), feedback: q(''), repo: q(''), created: q(now.toISOString()), updated: q(now.toISOString()) };
   fs.writeFileSync(file, `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n# ${title}\n\n## Outline\n${outline.trim()}\n\n## Log\n`);
   return { file, slug };
 }
 
+const load = file => { const text = fs.readFileSync(file, 'utf8'); return { file, text, ...fieldsOf(text) }; };
+
 export function listForges(vault) {
   const dir = path.join(vault, FORGE_DIR);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(s => fs.existsSync(forgeFile(vault, s))).map(s => {
-    const text = fs.readFileSync(forgeFile(vault, s), 'utf8');
-    return { file: forgeFile(vault, s), dir: path.join(dir, s), text, ...fieldsOf(text) };
-  }).filter(f => f.type === 'forge');
+  return fs.readdirSync(dir).filter(n => n.endsWith('.md')).map(n => load(path.join(dir, n)))
+    .filter(f => f.type === 'forge' && /^[a-z0-9-]+$/.test(String(f.slug)))
+    .map(f => ({ ...f, dir: path.join(dir, f.slug), stop_after: stops(f.stop_after) }));
 }
 
-/** Writes fields (and optionally a log line) back to forge.md. */
+const encode = v => (typeof v === 'string' || typeof v === 'object' ? q(v) : v);
+
+/**
+ * Writes fields (and a log line) onto the note as it is *now*: an edit you made while a stage ran
+ * survives, and if you set `status: stopped` meanwhile, the forge stays stopped.
+ */
 function save(f, fields, now, log) {
-  let text = Object.entries({ ...fields, updated: now.toISOString() }).reduce((t, [k, v]) => setFrontmatter(t, k, typeof v === 'string' ? q(v) : typeof v === 'object' ? q(v) : v), f.text);
-  if (log) text = `${text.trimEnd()}\n- ${now.toISOString().slice(0, 16).replace('T', ' ')} ${log}\n`;
+  const current = load(f.file);
+  const stoppedByYou = current.status === 'stopped' && f.status !== 'stopped';
+  const apply = stoppedByYou ? {} : fields;
+  let text = Object.entries({ ...apply, updated: now.toISOString() }).reduce((t, [k, v]) => setFrontmatter(t, k, encode(v)), current.text);
+  const line = stoppedByYou ? `${log ?? f.stage} (you stopped the forge meanwhile; it stays stopped)` : log;
+  if (line) text = `${text.trimEnd()}\n- ${now.toISOString().slice(0, 16).replace('T', ' ')} ${line}\n`;
   fs.writeFileSync(f.file, text);
-  Object.assign(f, fields, { text });
+  Object.assign(f, load(f.file), { stop_after: stops(fieldsOf(text).stop_after) });
 }
 
 function reviewCard(vault, f, stage, now) {
   const key = `forge:${f.slug}:${stage}:${now.toISOString().slice(0, 16)}`;
-  const forgeLink = `[[${FORGE_DIR}/${f.slug}/forge]]`;
   const spec = stage === 'questions'
     ? { action: 'forge_questions', title: `Forge ${f.slug}: answer a few questions`, reason: 'The spec needs your answers first.', explain: `answer them in [[${FORGE_DIR}/${f.slug}/questions]], then press Do it to write the spec.` }
     : { action: 'forge_review', title: `Forge ${f.name || f.slug}: ${stage} is ready`, reason: `Stop-point after ${stage}. Read it in ${FORGE_DIR}/${f.slug}/.`, explain: 'the forge continues with the next stage. To change it instead, press No and type what to change: the stage reruns with that feedback.' };
-  createCard(vault, { ...spec, key, risk: 'low', context: forgeLink, undo: `set status: stopped in ${FORGE_DIR}/${f.slug}/forge.md.`, params: { slug: f.slug, stage }, expiresDays: 14 }, now.toISOString());
+  createCard(vault, { ...spec, key, risk: 'low', context: `[[${FORGE_DIR}/${f.slug}]]`, undo: `set status: stopped in ${FORGE_DIR}/${f.slug}.md.`, params: { slug: f.slug, stage }, expiresDays: 14 }, now.toISOString());
   return key;
 }
 
@@ -73,90 +87,87 @@ function resume(vault, f, now) {
   const card = listCards(vault).find(c => c.key === f.review_key);
   const status = card?.status ?? 'missing';
   if (['pending', 'snoozed', 'approved', 'running'].includes(status)) return null;
-  if (status === 'rejected') { save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with feedback "${card.decline_reason ?? ''}"`); return 'feedback'; }
-  if (status === 'failed') { save(f, { status: 'failed' }, now, `${f.stage}: ${card.action} failed, see the card`); return 'failed'; }
-  if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: review card is ${status}`); return 'stopped'; }
-  if (card.action === 'forge_questions') { save(f, { status: 'running', answered: true }, now, 'questions answered'); return 'answered'; }
+  if (status === 'rejected') { save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with your feedback`); return 'feedback'; }
+  if (status === 'failed' && card.action === 'forge_create_repo') { save(f, { review_key: proposeRepo(vault, f, now) }, now, 'creating the repo failed (see the card); offering it again'); return 'repo-retry'; }
+  if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`); return 'stopped'; }
+  if (card.action === 'forge_questions') { save(f, { status: 'running', answered: true, feedback: '' }, now, 'questions answered'); return 'answered'; }
   if (card.action === 'forge_create_repo') { save(f, { status: 'done' }, now, 'repo and tickets created; ready to build'); return 'done'; }
   save(f, { status: 'running', stage: nextStage(f.stage), feedback: '' }, now, `${f.stage}: approved`);
   return 'approved';
 }
 
+const mtime = file => (fs.existsSync(file) ? fs.statSync(file).mtimeMs : 0);
+
 function runStage(f, ctx) {
-  const vars = { MODE: f.mode === 'autonomous' ? '- ## Assumptions: every decision you made without asking, one line each, so the owner can review them.\n' : '', NAME: f.name || f.slug };
-  const base = f.stage === 'spec' && f.mode === 'interview' && !f.answered ? 'spec-questions' : f.stage;
+  const asking = f.stage === 'spec' && f.mode === 'interview' && !f.answered;
+  const base = asking ? 'spec-questions' : f.stage;
+  const output = path.join(f.dir, asking ? 'questions.md' : stageById(f.stage).output);
+  const vars = { OUTLINE: outlineOf(f.text), MODE: f.mode === 'autonomous' ? '- ## Assumptions: every decision you made without asking, one line each, so the owner can review them.\n' : '', NAME: f.name || f.slug };
   const feedback = f.feedback ? `\n\nThe owner reviewed the previous version and asked for this change; apply it:\n${f.feedback}\n` : '';
-  return { base, result: ctx.runClaude(prompt(base, vars) + feedback, f.dir, TOOLS) };
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  const before = mtime(output);
+  const result = ctx.runClaude(prompt(base, vars) + feedback, f.dir, STAGE_TOOLS[f.stage]);
+  return { asking, output, result, rewritten: mtime(output) > before };
 }
 
-async function finishStage(vault, f, ctx) {
+function namingFields(f, text) {
+  const top = candidates(text)[0] ?? f.slug;
+  const keepYours = f.name && f.name !== f.auto_name;
+  return keepYours ? { auto_name: top } : { name: top, auto_name: top };
+}
+
+async function finishStage(vault, f, ctx, rewritten) {
   const stage = stageById(f.stage);
   const file = path.join(f.dir, stage.output);
-  if (stage.id === 'naming' && fs.existsSync(file)) {
+  if (rewritten && stage.id === 'naming') {
     const { text } = await addAvailability(fs.readFileSync(file, 'utf8'), { fetchImpl: ctx.fetchImpl, run: ctx.gh, owner: ownerOf(vault) });
     fs.writeFileSync(file, text);
   }
-  const problems = checkOutput(stage, fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
+  const problems = rewritten ? checkOutput(stage, fs.readFileSync(file, 'utf8')) : [`${stage.output} wasn't written this run`];
   if (problems.length) {
     const attempts = Number(f.attempts) + 1;
-    save(f, { attempts, status: attempts >= MAX_ATTEMPTS ? 'failed' : 'running' }, ctx.now, `${f.stage}: output not ready (${problems.join('; ')})${attempts >= MAX_ATTEMPTS ? ', giving up' : ', retrying'}`);
-    return attempts >= MAX_ATTEMPTS ? 'failed' : 'retry';
+    const failed = attempts >= MAX_ATTEMPTS;
+    save(f, { attempts, status: failed ? 'failed' : 'running' }, ctx.now, `${f.stage}: output not ready (${problems.join('; ')})${failed ? ', giving up' : ', retrying'}`);
+    return failed ? 'failed' : 'retry';
   }
-  const fields = { attempts: 0, feedback: '' };
-  if (stage.id === 'naming' && !f.name) fields.name = candidates(fs.readFileSync(file, 'utf8'))[0] ?? f.slug;
-  if (stage.id === 'plan') return proposeRepo(vault, f, fields, ctx.now);
+  const fields = { attempts: 0, feedback: '', ...(stage.id === 'naming' ? namingFields(f, fs.readFileSync(file, 'utf8')) : {}) };
+  if (stage.id === 'plan') { save(f, { ...fields, status: 'waiting', review_key: proposeRepo(vault, f, ctx.now) }, ctx.now, 'plan: done, waiting for you to create the repo'); return 'repo'; }
   if (f.stop_after.includes(stage.id)) { save(f, { ...fields, status: 'waiting', review_key: reviewCard(vault, f, stage.id, ctx.now) }, ctx.now, `${stage.id}: done, waiting for your review`); return 'review'; }
   save(f, { ...fields, stage: nextStage(stage.id) }, ctx.now, `${stage.id}: done`);
   return 'next';
-}
-
-function proposeRepo(vault, f, fields, now) {
-  const name = f.name || f.slug;
-  const owner = ownerOf(vault);
-  const key = `forge-repo:${f.slug}:${now.toISOString().slice(0, 16)}`;
-  createCard(vault, {
-    action: 'forge_create_repo', key, risk: 'medium', title: `Forge ${name}: create the repo and tickets`,
-    reason: `The plan is ready in ${FORGE_DIR}/${f.slug}/plan.md.`, context: `[[${FORGE_DIR}/${f.slug}/plan]]`,
-    explain: `creates the private repo ${owner}/${slugOf(name)} with the spec, ADR and plan in docs/, Foundry's labels, an epic and one agent-feature issue per ticket (tickets without dependencies get agent:ready). To change the plan instead, press No with what to change.`,
-    undo: `not automatic (deleting is yours to do): gh repo delete ${owner}/${slugOf(name)}`,
-    params: { slug: f.slug, name, owner }, expiresDays: 14,
-  }, now.toISOString());
-  save(f, { ...fields, status: 'waiting', review_key: key }, now, 'plan: done, waiting for you to create the repo');
-  return 'repo';
 }
 
 /** One step for one forge. Returns what happened, or null when it's waiting on you. */
 export async function advance(vault, f, ctx) {
   if (f.status === 'waiting') return resume(vault, f, ctx.now);
   if (f.status !== 'running') return null;
-  const { base, result } = runStage(f, ctx);
+  const { asking, output, result, rewritten } = runStage(f, ctx);
   if (!result.ok) { save(f, { status: 'failed' }, ctx.now, `${f.stage}: claude failed: ${String(result.text).slice(0, 200)}`); return 'failed'; }
-  if (base === 'spec-questions') {
-    if (!fs.existsSync(path.join(f.dir, 'questions.md'))) { save(f, { status: 'failed' }, ctx.now, 'spec: no questions.md written'); return 'failed'; }
-    save(f, { status: 'waiting', review_key: reviewCard(vault, f, 'questions', ctx.now) }, ctx.now, 'spec: questions written, waiting for your answers');
-    return 'questions';
-  }
-  return finishStage(vault, f, ctx);
+  if (!asking) return finishStage(vault, f, ctx, rewritten);
+  if (!rewritten || !fs.existsSync(output)) { save(f, { status: 'failed' }, ctx.now, 'spec: no questions.md written'); return 'failed'; }
+  save(f, { status: 'waiting', feedback: '', review_key: reviewCard(vault, f, 'questions', ctx.now) }, ctx.now, 'spec: questions written, waiting for your answers');
+  return 'questions';
 }
 
 /** The executor's hook: moves at most one active forge one step (claude runs are long). */
 export async function advanceForges(vault, { now = new Date(), runClaude, run = gh, fetchImpl = fetch } = {}) {
   const ctx = { now, runClaude, gh: run, fetchImpl };
   for (const f of listForges(vault).filter(x => ACTIVE.includes(x.status)).sort((a, b) => String(a.updated).localeCompare(String(b.updated)))) {
-    const r = await advance(vault, f, ctx);
+    let r;
+    try { r = await advance(vault, f, ctx); } catch (e) { save(f, { status: 'failed' }, now, `${f.stage}: error: ${e.message}`); r = 'failed'; }
     if (r) return [`forge ${f.slug}: ${r}`];
   }
   return [];
 }
 
-/** Headline fields for the dashboard snapshot: never the outline, spec or plan text. */
-export const forgeRows = vault => listForges(vault).map(f => ({ title: f.name || readFrontmatter(f.text).body.match(/^# (.+)$/m)?.[1] || f.slug, slug: f.slug, stage: f.stage, status: f.status, mode: f.mode, updated: f.updated }));
+/** Headline fields for the dashboard snapshot: the chosen name or slug, never the outline. */
+export const forgeRows = vault => listForges(vault).map(f => ({ title: f.name || f.slug, slug: f.slug, stage: f.stage, status: f.status, mode: f.mode, updated: f.updated }));
 
 function main() {
   const args = process.argv.slice(2);
   const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
   if (args[0] !== 'new' || !args[1]) { console.error('Usage: forge.mjs new "<outline>" [--mode interview|autonomous] [--stop-after spec,naming] [--vault <dir>]'); process.exit(2); }
-  const r = newForge(vaultFromArgs(), args[1], { mode: opt('--mode') ?? 'interview', stopAfter: (opt('--stop-after') ?? 'spec,naming').split(',').filter(Boolean) });
+  const r = newForge(vaultFromArgs(), args[1], { mode: opt('--mode') ?? 'interview', stopAfter: (opt('--stop-after') ?? 'spec,naming').split(',') });
   if (r.error) { console.error(r.error); process.exit(1); }
   console.log(`Started ${FORGE_DIR}/${r.slug}. The executor runs one stage per pass; stop-points show up as cards.`);
 }

@@ -61,7 +61,7 @@ Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-
 - **Before proposing.** Read `_system/memory/preferences.md` and the **Never suggest** list in `_system/policy.md` first. When a user rejects a card with a `decline_reason`, add the lesson to `preferences.md`.
 
 ## Product Forge
-`Forge/<slug>/` folders belong to the Product Forge (see `/forge`). Don't edit their outputs by hand while `status` is `running`; review at the stop-point cards instead. The forge never creates anything outside the vault without an approved card.
+`Forge/<slug>.md` notes and `Forge/<slug>/` folders belong to the Product Forge (see `/forge`). Don't edit their outputs by hand while `status` is `running`; review at the stop-point cards instead. The forge never creates anything outside the vault without an approved card.
 
 ## Widgets
 Dashboard widgets are JSON manifests in `_system/widgets/`, laid out in `_system/layouts/dashboard.json`. Rules:

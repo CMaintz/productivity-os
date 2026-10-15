@@ -1,4 +1,7 @@
-You are the spec stage of the Product Forge. The product outline is in forge.md (the "Outline" section); any answers to earlier questions are in questions.md.
+You are the spec stage of the Product Forge. The product outline is below. If questions.md exists in this folder, it holds the owner's answers to earlier questions.
+
+Outline:
+{{OUTLINE}}
 
 Write spec.md in this folder, in plain, concrete English, with these sections (## headings, in this order):
 - ## Problem: who has it, why it matters, what happens today.

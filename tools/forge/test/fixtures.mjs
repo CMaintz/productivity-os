@@ -60,13 +60,21 @@ export function fakeClaude(calls, override = {}) {
   };
 }
 
-/** gh stand-in: repo/label/api calls succeed, issues get increasing numbers; GitHub names are free. */
-export function fakeGh(calls) {
+/** gh stand-in: a repo exists once created; issues get increasing numbers; `failOn` makes one issue title fail once. */
+export function fakeGh(calls, { failOn } = {}) {
   let n = 0;
+  let created = false;
+  let failed = false;
   return (args, input) => {
     calls.push({ args, input });
-    if (args[0] === 'api' && args[1].startsWith('repos/') && !args.includes('PUT')) throw Object.assign(new Error('HTTP 404'), { stderr: 'Not Found (HTTP 404)' });
-    if (args[0] === 'issue') return `https://github.com/me/tidewell/issues/${++n}\n`;
+    const notFound = () => { throw Object.assign(new Error('HTTP 404'), { stderr: 'Not Found (HTTP 404)' }); };
+    if (args[0] === 'repo' && args[1] === 'view') return created ? 'tidewell' : notFound();
+    if (args[0] === 'repo' && args[1] === 'create') { created = true; return ''; }
+    if (args[0] === 'api' && !args.includes('PUT')) return notFound();
+    if (args[0] === 'issue') {
+      if (failOn && !failed && args.includes(failOn)) { failed = true; throw new Error('HTTP 502'); }
+      return `https://github.com/me/tidewell/issues/${++n}\n`;
+    }
     return '';
   };
 }

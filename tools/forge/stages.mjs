@@ -1,5 +1,10 @@
 // The Forge's stages: what each one writes and the sections that file must have before the
 // forge moves on. Also parses plan.md's tickets, which become GitHub issues.
+import path from 'node:path';
+
+export const FORGE_DIR = 'Forge';
+/** A forge's state note; its workspace is the folder of the same name next to it. */
+export const forgeNote = (vault, slug) => path.join(vault, FORGE_DIR, `${slug}.md`);
 
 export const STAGES = [
   { id: 'spec', output: 'spec.md', sections: ['Problem', 'Users', 'User stories', 'Non-goals', 'Data model', 'Open questions'] },
@@ -24,25 +29,30 @@ export function checkOutput(stage, text) {
   return problems;
 }
 
-/** Names from naming.md's candidates table: the first column after the header, in rank order. */
+const cellsOf = line => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+
+/** Names from naming.md's candidates table, in rank order: the column headed "Name" (else the first). */
 export function candidates(text) {
   const section = String(text).split(/^## +Candidates.*$/m)[1]?.split(/^## /m)[0] ?? '';
-  return section.split('\n').filter(l => /^\|/.test(l.trim()))
-    .map(l => l.split('|').map(c => c.trim())[1] ?? '')
-    .filter((c, i) => i > 1 && c && !/^-+$/.test(c))
-    .map(c => c.replace(/[*`]/g, ''));
+  const rows = section.split('\n').filter(l => /^\|/.test(l.trim())).map(cellsOf);
+  if (rows.length < 3) return [];
+  const col = Math.max(0, rows[0].findIndex(h => /^\**name\**$/i.test(h)));
+  return rows.slice(2).map(r => (r[col] ?? '').replace(/[*`]/g, '').trim()).filter(c => c && !/^\d+\.?$/.test(c));
 }
 
 const TICKET = /^### +T(\d+): *(.+)$/gm;
 const FIELDS = ['Depends on', 'Intent', 'Acceptance criteria', 'Scope boundaries', 'Pointers'];
 
+// A field label: "Intent:", "**Intent:**" or "**Intent**:", at the start of a line.
+const label = f => new RegExp(`^\\*{0,2}${f}\\b(?:\\*{0,2}:|:\\*{0,2})`, 'mi');
+
 function ticketFields(body) {
   const out = {};
   for (const f of FIELDS) {
-    const m = body.match(new RegExp(`^\\*{0,2}${f}:?\\*{0,2}:? *(.*)$`, 'mi'));
+    const m = body.match(new RegExp(`${label(f).source} *(.*)$`, 'mi'));
     if (!m) continue;
     const rest = body.slice(m.index + m[0].length);
-    const next = FIELDS.map(g => rest.search(new RegExp(`^\\*{0,2}${g}:?\\*{0,2}:?`, 'mi'))).filter(i => i >= 0);
+    const next = FIELDS.map(g => rest.search(label(g))).filter(i => i >= 0);
     out[f] = `${m[1]}\n${rest.slice(0, next.length ? Math.min(...next) : undefined)}`.trim();
   }
   return out;
@@ -56,11 +66,12 @@ export function parsePlan(text) {
   const tickets = heads.map((m, i) => {
     const body = src.slice(m.index + m[0].length, heads[i + 1]?.index ?? src.length).split(/^## /m)[0];
     const f = ticketFields(body);
-    const dependsOn = [...(f['Depends on'] ?? '').matchAll(/T(\d+)/g)].map(d => Number(d[1]));
+    const dependsOn = [...(f['Depends on'] ?? '').matchAll(/\bT(\d+)\b/g)].map(d => Number(d[1]));
     for (const k of FIELDS.slice(1)) if (!f[k]) problems.push(`T${m[1]} has no ${k}`);
     return { n: Number(m[1]), title: m[2].trim(), dependsOn, intent: f.Intent ?? '', criteria: f['Acceptance criteria'] ?? '', scope: f['Scope boundaries'] ?? '', pointers: f.Pointers ?? '' };
   });
   const ids = new Set(tickets.map(t => t.n));
+  if (ids.size !== tickets.length) problems.push('two tickets share a number');
   for (const t of tickets) for (const d of t.dependsOn) if (!ids.has(d)) problems.push(`T${t.n} depends on missing T${d}`);
   if (!problems.length && !topoOrder(tickets)) problems.push('ticket dependencies form a cycle');
   return { tickets, problems };

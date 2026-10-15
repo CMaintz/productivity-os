@@ -7,12 +7,12 @@ export const gh = (args, input) => execFileSync('gh', args, { encoding: 'utf8', 
 
 /** Foundry's agent labels plus the ones this repo's flows use. */
 export const LABELS = {
-  'agent:ready': '0e8a16', 'agent:working': 'fbca04', 'agent:blocked': 'b60205',
+  'agent-feature': '1d76db', 'agent:ready': '0e8a16', 'agent:working': 'fbca04', 'agent:blocked': 'b60205',
   'widget:code': '5319e7', 'widget:needs-review': 'd93f0b', epic: '3e4b9e',
 };
 
 /** Creates or updates the given labels on a repo (idempotent). */
-export function ensureLabels(run, repo, names = Object.keys(LABELS)) {
+export function ensureLabels(run, repo, names) {
   for (const name of names) run(['label', 'create', name, '--repo', repo, '--color', LABELS[name] ?? 'ededed', '--force']);
 }
 

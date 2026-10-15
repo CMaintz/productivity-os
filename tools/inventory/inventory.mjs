@@ -194,8 +194,11 @@ function gitFacts(dir) {
     else if (/ahead/.test(track || '')) unpushed.push(`${name} ${track}`);
   }
   const stash = git(dir, ['stash', 'list']);
+  // A linked worktree's git dir lives under the main checkout's common dir.
+  const [gitDir, commonDir] = (git(dir, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir']) || '').split('\n');
   return {
     isGit: true,
+    worktree: !!gitDir && !!commonDir && path.resolve(gitDir) !== path.resolve(commonDir),
     branch: git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']),
     remotes,
     github: remotes.map(normRemote).find(r => r && !r.includes(':')) || null,
@@ -226,6 +229,7 @@ export function inspectProject(dir, root, home) {
   if (g.isGit && g.stashes) flags.push(`stashes:${g.stashes}`);
   if (g.isGit && !g.remotes.length) flags.push('no-remote');
   if (!g.isGit) flags.push('not-git');
+  if (g.worktree) flags.push('worktree');
   if (f.files === 0) flags.push('empty');
   if (f.nestedGit.length) flags.push('nested-git');
   if (f.heavyDirs.some(h => /venv/.test(h))) flags.push('venv(rebuild after move)');
@@ -303,7 +307,8 @@ export function buildInventory({ roots, home, github }) {
     for (const dir of r.projects) projects.push(inspectProject(dir, root, home));
   }
   const byRemote = {};
-  for (const p of projects) if (p.github) (byRemote[p.github] ||= []).push(p.path);
+  // Worktrees share their checkout's remote by design, so they aren't duplicate clones.
+  for (const p of projects) if (p.github && !p.worktree) (byRemote[p.github] ||= []).push(p.path);
   const duplicates = Object.entries(byRemote).filter(([, v]) => v.length > 1).map(([github, paths]) => ({ github, paths }));
   let githubOnly = null;
   if (github) {

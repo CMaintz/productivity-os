@@ -1,0 +1,79 @@
+name: widget-automerge
+# Merges a code widget PR on its own once every check on its head is green and the permission
+# guard passes (tools/widgets/guard.mjs, docs/VAULT.md section 10). Anything else gets the
+# guard's reasons as a comment and the widget:needs-review label.
+#
+# Runs on workflow_run, so it has write access: it never runs code from the PR. The guard and
+# the modules it imports come from main and are copied over the PR checkout; the PR's files are
+# only read (git diff, JSON). Same-repo PRs only.
+on:
+  # workflow_run is what gets write access after the checks; no PR code runs here (see above).
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [gate, dashboard, security, ratchet]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+concurrency:
+  group: widget-automerge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Find the PR and decide whether it's ours to merge
+        id: pr
+        run: |
+          pr=$(gh pr list --head "$HEAD_BRANCH" --state open --json number,headRefOid --jq ".[] | select(.headRefOid == \"$HEAD_SHA\") | .number" | head -1)
+          if [ -z "$pr" ]; then echo "No open PR at $HEAD_SHA (newer push or closed)."; exit 0; fi
+          labels=$(gh pr view "$pr" --json labels,closingIssuesReferences --jq '[.labels[].name] | join(" ")')
+          issues=$(gh pr view "$pr" --json closingIssuesReferences --jq '.closingIssuesReferences[].number')
+          for i in $issues; do labels="$labels $(gh issue view "$i" --json labels --jq '[.labels[].name] | join(" ")')"; done
+          case " $labels " in *" widget:code "*) ;; *) echo "#$pr isn't a widget:code PR."; exit 0 ;; esac
+          case " $labels " in *" widget:needs-review "*) echo "#$pr already needs review."; exit 0 ;; esac
+          pending=$(gh pr checks "$pr" --json name,bucket --jq '[.[] | select(.bucket != "pass" and .bucket != "skipping")] | length')
+          if [ "$pending" != "0" ]; then echo "#$pr has $pending check(s) not green yet; a later run decides."; exit 0; fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+      - if: steps.pr.outputs.number
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: main, path: trusted, persist-credentials: false }
+      - if: steps.pr.outputs.number
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "${{ env.HEAD_SHA }}", path: pr, fetch-depth: 0, persist-credentials: false }
+      - if: steps.pr.outputs.number
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
+      - name: Run the guard from main against the PR
+        if: steps.pr.outputs.number
+        id: guard
+        working-directory: pr
+        run: |
+          cp ../trusted/tools/widgets/guard.mjs ../trusted/tools/widgets/manifest.mjs ../trusted/tools/widgets/code-registry.mjs tools/widgets/
+          set +e; node tools/widgets/guard.mjs origin/main > ../guard.txt; code=$?; set -e
+          cat ../guard.txt
+          echo "ok=$([ $code -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Merge and deploy
+        if: steps.guard.outputs.ok == 'true'
+        run: |
+          gh pr merge "$PR" --squash --delete-branch --match-head-commit "$HEAD_SHA"
+          gh workflow run dashboard.yml --ref main
+        env: { PR: "${{ steps.pr.outputs.number }}" }
+      - name: Hand it to a person
+        if: steps.guard.outputs.ok == 'false'
+        run: |
+          gh label create widget:needs-review --color d93f0b --force
+          gh pr edit "$PR" --add-label widget:needs-review
+          { echo "This widget PR needs a person: the permission guard didn't pass."; echo; echo '```'; cat guard.txt; echo '```'; } > body.md
+          gh pr comment "$PR" --body-file body.md
+        env: { PR: "${{ steps.pr.outputs.number }}" }

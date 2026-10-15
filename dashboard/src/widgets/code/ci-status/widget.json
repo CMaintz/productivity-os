@@ -1,0 +1,14 @@
+{
+  "id": "ci-status",
+  "title": "CI status",
+  "view": "code:ci-status",
+  "size": "m",
+  "fields": ["slug", "ci", "failing_prs", "updated"],
+  "source": {
+    "kind": "snapshot",
+    "collection": "projects",
+    "where": { "status": "active", "ci": { "exists": true } },
+    "limit": 30
+  },
+  "permissions": { "collections": ["projects"], "fields": ["slug", "ci", "failing_prs", "updated", "status"], "connectors": [] }
+}

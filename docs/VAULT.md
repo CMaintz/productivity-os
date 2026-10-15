@@ -110,7 +110,37 @@ Everything on the dashboard is a widget: a small JSON file in `_system/widgets/`
   - `tools/widgets/` holds the query engine, validation and manifests.
   - `npm run widgets:build` regenerates `views.md` and the demo data. Tests fail if you forget.
 
-## 10. Sync to other PCs and Android
+## 10. Code widgets
+When a manifest isn't enough (custom layout, interaction, or a view `where`/`sort` can't express), the orchestrator asks for a **code widget**: a small Preact component an agent builds, tests and ships through a PR. Code widgets render on the **web dashboard only**; in Obsidian their panel says so.
+
+1. **Request:** `/widget` proposes a `build_code_widget` card. Approving it opens an `agent:ready` + `widget:code` ticket for the Foundry `/feature` loop. These cards always need your click.
+2. **Build:** the agent adds `dashboard/src/widgets/code/<id>/`:
+   - `widget.ts`: `createWidget(host)` returns `({ m, rows, ctx }) => VNode`, using `host.h`.
+   - `widget.json`: the manifest, with `view: "code:<id>"`, a `snapshot` source over projects, cards or sessions, and a `permissions` block listing exactly the collection and fields it reads, with `connectors: []`.
+   - `fixture.json`: sample `rows`, plus `expect`, strings the render must contain.
+
+   It then runs `node tools/widgets/code-registry.mjs`, which writes `code/catalog.ts` (manifests and fixtures) and `code/renderers.ts` (the code).
+3. **Isolation:**
+   - Each code widget runs in its own **sandboxed iframe** (`allow-scripts` only). That gives it an opaque origin with no access to the page, your session, storage or card buttons.
+   - The frame's CSP allows no network at all.
+   - It receives its rows and the time, and can only send back its height or an error.
+   - The dashboard page itself never loads widget code; it only imports the catalog.
+   - An ESLint rule also keeps widget code free of network, storage, DOM globals, timers and dynamic code.
+4. **Ship:**
+   - `node tools/widgets/guard.mjs` passes only when the PR:
+     - stays inside widget folders, plus the two generated files, which must be exactly what the generator writes
+     - keeps `view` equal to `code:<id>`
+     - doesn't widen what any widget reads: its permissions or its source
+   - Then CI auto-merges and deploys. Anything else is labelled `widget:needs-review` for you.
+5. **Install:** the executor checks merged `widget:code` PRs every 10 minutes (via `gh`). Each new widget arrives as an **auto-notice** card, already live, with **Undo**. Undo takes it off the dashboard at once, and a follow-up card offers to remove its code. A GitHub hiccup is retried; only a real 404 counts as "removed".
+6. **Off-switch:**
+   - The dashboard reports crashes to Supabase: widget id and message, under the id of the frame that crashed.
+   - After 3 crashes in 24 hours, the executor switches the widget off (`"disabled": true` in the layout) and proposes a `fix_widget` ticket. The ticket carries only the error types; the messages stay on the vault card.
+   - The fix ships the same way and switches it back on.
+
+Preview any code widget from its fixture: `npm --workspace dashboard run dev`, then `/?demo&widget=<id>` (or `widget=all`).
+
+## 11. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

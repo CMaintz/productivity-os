@@ -4,3 +4,8 @@
   Referrer-Policy: no-referrer
   X-Robots-Tag: noindex, nofollow
   Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Code widgets run in this page inside a sandboxed iframe: framable by the dashboard only, and no network at all.
+/widget-frame*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'

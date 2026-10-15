@@ -28,13 +28,14 @@ function vault() {
 }
 
 /** A tiny in-memory PostgREST: just the calls sync.mjs makes. */
-function fakeSupabase(events = []) {
-  const db = { snapshot: null, events, calls: [] };
+function fakeSupabase(events = [], errors = []) {
+  const db = { snapshot: null, events, errors, calls: [] };
   const fetchImpl = async (url, init) => {
     const u = new URL(url); db.calls.push(`${init.method} ${u.pathname}`);
     assert.equal(init.headers.apikey, 'svc');
     const ok = body => ({ ok: true, status: body === null ? 204 : 200, json: async () => body, text: async () => '' });
     if (u.pathname.endsWith('/snapshot')) { db.snapshot = JSON.parse(init.body)[0]; return ok(null); }
+    if (u.pathname.endsWith('/widget_errors')) return ok(init.method === 'GET' ? db.errors : null);
     if (init.method === 'GET') return ok(db.events.filter(e => !e.applied_at));
     const id = Number(u.searchParams.get('id').replace('eq.', ''));
     Object.assign(db.events.find(e => e.id === id), JSON.parse(init.body));
@@ -109,7 +110,8 @@ test('syncDashboard pushes the snapshot for the owner and never throws', async (
   const v = vault();
   const { db, fetchImpl } = fakeSupabase();
   const r = await syncDashboard(v, { config: CONFIG, fetchImpl, now: NOW });
-  assert.deepEqual(r, { applied: [] });
+  assert.deepEqual(r, { applied: [], disabled: [] });
+  assert.ok(db.calls.includes('DELETE /rest/v1/widget_errors'), 'old crash reports are pruned');
   assert.equal(db.snapshot.owner_id, CONFIG.ownerId);
   assert.equal(db.snapshot.data.counts.pendingCards, 1);
   assert.equal(db.snapshot.data.version, 2);
@@ -117,4 +119,14 @@ test('syncDashboard pushes the snapshot for the owner and never throws', async (
   assert.match(broken.error, /500 boom/);
   assert.deepEqual(await syncDashboard(v, { config: null }), { skipped: 'not configured' });
   assert.ok(push);
+});
+
+test('syncDashboard switches off a widget the dashboard keeps reporting crashes for', async () => {
+  const v = vault();
+  fs.mkdirSync(path.join(v, '_system', 'layouts'), { recursive: true });
+  fs.writeFileSync(path.join(v, '_system', 'layouts', 'dashboard.json'), JSON.stringify({ widgets: [{ id: 'projects' }] }));
+  const crash = { widget_id: 'projects', message: 'boom', created_at: '2026-10-14T11:00:00Z' };
+  const { fetchImpl, db } = fakeSupabase([], [crash, crash, crash]);
+  assert.deepEqual((await syncDashboard(v, { config: CONFIG, fetchImpl, now: NOW })).disabled, ['projects']);
+  assert.deepEqual(db.snapshot.data.layout, [{ id: 'projects', disabled: true }], 'the published layout tells the Board to skip it');
 });

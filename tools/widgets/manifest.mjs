@@ -12,6 +12,10 @@ const OP_VALUE = {
 };
 const FIELD = /^[A-Za-z_][\w-]{0,40}$/;
 const ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+// A coded widget's view: `code:<id>`, rendered by dashboard/src/widgets/code/<id>/widget.ts.
+export const CODE_VIEW = /^code:([a-z0-9][a-z0-9-]{0,40})$/;
+// What a code widget may read. No connectors exist yet, so a widget asking for one never validates.
+export const CODE_COLLECTIONS = ['projects', 'cards', 'sessions'];
 
 // Frontmatter that must never leave the PC, or be filtered or sorted on, whatever a manifest asks for.
 export const PRIVATE_FIELDS = ['last_prompt', 'decline_reason', 'params', 'undo', 'cwd', 'session_id'];
@@ -60,13 +64,49 @@ function checkFields(m, errors) {
   if (m.source?.kind === 'notes' && !(m.fields?.length)) errors.push('notes widgets must list the fields they show');
 }
 
-/** Returns the list of problems; an empty list means the manifest is valid. */
-export function validateManifest(m) {
+const whereFields = (w = {}) => Object.entries(w).flatMap(([k, v]) => (k === '$or' && Array.isArray(v) ? v.flatMap(whereFields) : [k]));
+
+/** Every field a manifest reads: shown, grouped, summed, filtered or sorted on. */
+export function fieldsUsed(m) {
+  const s = m.source ?? {};
+  return [...new Set([...(m.fields ?? []), m.groupBy, m.valueField, ...whereFields(s.where), ...(s.sort ?? []).map(x => x?.field)].filter(Boolean))].sort();
+}
+
+const sorted = list => JSON.stringify([...list].sort());
+const sameSet = (a, b) => Array.isArray(a) && sorted(a) === sorted(b);
+
+/** A code widget states exactly what it reads, so a reviewer (or the guard) can see any widening. */
+function checkPermissions(m, errors) {
+  const p = m.permissions;
+  if (!p || typeof p !== 'object') return errors.push('code widgets need a permissions block');
+  const s = m.source ?? {};
+  if (s.kind !== 'snapshot' || !CODE_COLLECTIONS.includes(s.collection)) errors.push(`code widgets may only read the snapshot collections ${CODE_COLLECTIONS.join(', ')}`);
+  if (!sameSet(p.collections ?? [], s.kind === 'snapshot' ? [s.collection] : [])) errors.push('permissions.collections must match source.collection');
+  if (!sameSet(p.folders ?? [], s.kind === 'notes' ? [s.folder] : [])) errors.push('permissions.folders must match source.folder');
+  if (!sameSet(p.fields, fieldsUsed(m))) errors.push(`permissions.fields must list exactly the fields it reads: ${fieldsUsed(m).join(', ')}`);
+  if (!Array.isArray(p.connectors) || p.connectors.length) errors.push('permissions.connectors must be [] (connectors need your review)');
+}
+
+function checkView(m, codeIds, errors) {
+  const code = CODE_VIEW.exec(m.view ?? '');
+  if (!code) {
+    if (!VIEWS.includes(m.view)) errors.push(`view must be one of ${VIEWS.join(', ')} or code:<id>`);
+    return;
+  }
+  if (codeIds && !codeIds.includes(code[1])) errors.push(`no code widget "${code[1]}" is deployed`);
+  checkPermissions(m, errors);
+}
+
+/**
+ * Returns the list of problems; an empty list means the manifest is valid. `codeIds`, when
+ * given, is the list of code widgets this build has; without it any well-formed code view passes.
+ */
+export function validateManifest(m, { codeIds } = {}) {
   const errors = [];
   if (!m || typeof m !== 'object') return ['manifest must be an object'];
   if (!ID.test(m.id ?? '')) errors.push('id must be lowercase-kebab, max 41 chars');
   if (typeof m.title !== 'string' || !m.title.trim() || m.title.length > 80) errors.push('title must be 1-80 chars');
-  if (!VIEWS.includes(m.view)) errors.push(`view must be one of ${VIEWS.join(', ')}`);
+  checkView(m, codeIds, errors);
   if (m.size !== undefined && !SIZES.includes(m.size)) errors.push(`size must be one of ${SIZES.join(', ')}`);
   checkSource(m.source, errors);
   checkFields(m, errors);

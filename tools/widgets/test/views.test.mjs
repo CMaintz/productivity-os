@@ -4,20 +4,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { VIEWS_FILE, bundleViews } from '../build-views.mjs';
+import { h, text } from './render.mjs';
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const codeBlock = md => md.match(/```js\n([\s\S]*?)```/)[1];
 const loadViews = () => new AsyncFunction(codeBlock(fs.readFileSync(VIEWS_FILE, 'utf8')))();
-
-/** A tiny h + renderer: enough to turn the views into text for assertions. */
-const h = (type, props, ...children) => ({ type, props: props ?? {}, children: children.flat() });
-function text(node) {
-  if (node === null || node === undefined || node === false) return '';
-  if (typeof node !== 'object') return String(node);
-  if (Array.isArray(node)) return node.map(text).join('');
-  if (typeof node.type === 'function') return text(node.type({ ...node.props, children: node.children }));
-  return `<${node.type}>${node.children.map(text).join('')}</${node.type}>`;
-}
 
 const page = (path, fm) => ({ $path: path, $name: path.split('/').pop().replace(/\.md$/, ''), $frontmatter: fm, value: k => fm[k] });
 function fakeDc(pages) {
@@ -74,4 +65,13 @@ test('widgetView loads a manifest by id from the vault and renders it', async ()
   assert.match(text(h(View, {})), /draft/);
   await widgetView(dc, '../../etc/passwd');
   assert.deepEqual(read, ['_system/widgets/writing.json', '_system/widgets/etcpasswd.json'], 'ids are sanitised');
+});
+
+test('code widgets are web-only: Obsidian shows a pointer instead of running their code', async () => {
+  const { widgetView } = await loadViews();
+  const manifest = JSON.parse(fs.readFileSync('dashboard/src/widgets/code/ci-status/widget.json', 'utf8'));
+  const { dc } = fakeDc([page('Projects/site.md', { status: 'active', ci: 'failing' })]);
+  dc.app = { vault: { adapter: { read: async () => JSON.stringify(manifest) } } };
+  assert.match(text(h(await widgetView(dc, 'ci-status'), {})), /render on the web dashboard/);
+  assert.doesNotMatch(fs.readFileSync(VIEWS_FILE, 'utf8'), /CiStatus|ci-status/, 'no widget code in the Obsidian bundle');
 });

@@ -1,0 +1,8 @@
+{
+  "rows": [
+    { "slug": "productivity-os", "ci": "passing", "failing_prs": 0, "updated": "2026-10-14" },
+    { "slug": "cmaintz-site", "ci": "failing", "failing_prs": 1, "updated": "2026-10-13" },
+    { "slug": "foundry", "ci": "pending", "failing_prs": 0, "updated": "2026-10-14" }
+  ],
+  "expect": ["1 failing", "cmaintz-site", "failing · 1 PR failing", "foundry"]
+}

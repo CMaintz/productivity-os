@@ -18,6 +18,16 @@ const LAYOUT_FILE = path.join('_system', 'layouts', 'dashboard.json');
 const DEFAULT_LAYOUT = ['today', 'cards', 'sessions', 'attention', 'projects'].map(id => ({ id }));
 
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
+
+/** The raw layout file (entries keep every field, e.g. `disabled` and `since`). */
+export const readLayout = vault => {
+  const file = path.join(vault, LAYOUT_FILE);
+  return fs.existsSync(file) ? readJson(file) : { widgets: [] };
+};
+export const writeLayout = (vault, layout) => {
+  fs.mkdirSync(path.dirname(path.join(vault, LAYOUT_FILE)), { recursive: true });
+  fs.writeFileSync(path.join(vault, LAYOUT_FILE), JSON.stringify(layout, null, 2) + '\n');
+};
 const titleOf = (text, file) => readFrontmatter(text).body.match(/^# (.+)$/m)?.[1] ?? path.basename(file, '.md');
 
 /** A folder's notes as rows: title, vault path and the frontmatter values only. */
@@ -65,7 +75,7 @@ function buildWidget(vault, id, m, collections) {
 function loadLayout(vault) {
   const file = path.join(vault, LAYOUT_FILE);
   const SIZES = ['s', 'm', 'l', 'full'];
-  const entry = w => ({ id: w.id, ...(SIZES.includes(w.size) ? { size: w.size } : {}) });
+  const entry = w => ({ id: w.id, ...(SIZES.includes(w.size) ? { size: w.size } : {}), ...(w.disabled === true ? { disabled: true } : {}) });
   try { return fs.existsSync(file) ? readJson(file).widgets.filter(w => typeof w?.id === 'string').map(entry) : DEFAULT_LAYOUT; } catch { return DEFAULT_LAYOUT; }
 }
 
@@ -74,7 +84,7 @@ export function loadWidgets(vault, collections) {
   const manifests = loadManifests(vault);
   const layout = loadLayout(vault);
   const widgets = {};
-  for (const { id } of layout) widgets[id] = buildWidget(vault, id, manifests.get(id), collections);
+  for (const { id, disabled } of layout) if (!disabled) widgets[id] = buildWidget(vault, id, manifests.get(id), collections);
   return { layout, widgets };
 }
 

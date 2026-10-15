@@ -1,5 +1,5 @@
 // What each action type does when its card is approved. Each handler gets the card and a
-// context ({ vault, runClaude, policy }) and returns { ok, summary, undo? }. `undo`, when
+// context ({ vault, now, runClaude, gh, policy }) and returns { ok, summary, undo? }. `undo`, when
 // present, is stored on the card so the Undo button can reverse the action exactly.
 
 import fs from 'node:fs';
@@ -8,6 +8,8 @@ import { spawnSync } from 'node:child_process';
 import { readFrontmatter, setFrontmatter } from '../lib/frontmatter.mjs';
 import { promote } from './policy.mjs';
 import { ID_PATTERN, validateManifest } from '../widgets/manifest.mjs';
+import { readLayout, writeLayout } from '../widgets/widgets.mjs';
+import { installWidget, openBuildTicket, openFixTicket, proposeCodeRemoval } from '../widgets/code-widgets.mjs';
 
 const MAX_SUMMARY = 1500;
 const TIMEOUT_MS = 30 * 60 * 1000;
@@ -57,16 +59,6 @@ function setField(card, ctx) {
   return { ok: true, summary: `Set \`${key}: ${value}\` in [[${file.replace(/\.md$/, '')}]] (was \`${previous}\`).`, undo: { file, key, value: previous } };
 }
 
-const LAYOUT = path.join('_system', 'layouts', 'dashboard.json');
-const readLayout = vault => {
-  const file = path.join(vault, LAYOUT);
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { widgets: [] };
-};
-const writeLayout = (vault, layout) => {
-  fs.mkdirSync(path.dirname(path.join(vault, LAYOUT)), { recursive: true });
-  fs.writeFileSync(path.join(vault, LAYOUT), JSON.stringify(layout, null, 2) + '\n');
-};
-
 /** Writes the approved manifest and appends it to the dashboard layout. */
 function createWidget(card, ctx) {
   const m = card.params.manifest;
@@ -92,6 +84,9 @@ function removeWidget(vault, id) {
 
 export const HANDLERS = {
   create_widget: createWidget,
+  build_code_widget: openBuildTicket,
+  install_code_widget: installWidget,
+  fix_widget: openFixTicket,
   fix_ci: claudeIn(card => card.params.cwd, REPO_TOOLS),
   claude_task: claudeIn(card => card.params.cwd, REPO_TOOLS),
   triage_inbox: claudeIn((_card, ctx) => ctx.vault, VAULT_TOOLS),
@@ -106,7 +101,11 @@ export const HANDLERS = {
 /** Reverses an action that stored an exact undo (a field edit or an added widget). Others need a manual undo. */
 export function undoAction(card, ctx) {
   const u = card.undo;
-  if (u?.removeWidget) return removeWidget(ctx.vault, u.removeWidget);
+  if (u?.removeWidget) {
+    const r = removeWidget(ctx.vault, u.removeWidget);
+    if (r.ok && u.removeCode && proposeCodeRemoval(ctx.vault, u.removeWidget, ctx.now.toISOString())) r.summary += ' A card offers to remove its code from the repo.';
+    return r;
+  }
   if (!u?.file) return { ok: false, summary: 'No automatic undo for this action; follow the Undo line above.' };
   const full = path.join(ctx.vault, u.file);
   fs.writeFileSync(full, setFrontmatter(fs.readFileSync(full, 'utf8'), u.key, u.value));

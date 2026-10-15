@@ -18,21 +18,24 @@ import { applyDecision, levelFor, parsePolicy, renderPolicy } from './policy.mjs
 import { HANDLERS, runClaude, undoAction } from './handlers.mjs';
 import { appendResult, cardsDir, createCard, listCards, updateCard } from './cards.mjs';
 import { suggestAll } from './suggest.mjs';
-import { loadConfig, pull, push, rest } from '../dashboard/sync.mjs';
+import { loadConfig, pull, pullWidgetErrors, push, rest } from '../dashboard/sync.mjs';
+import { readToolsConfig } from '../lib/tools-config.mjs';
+import { gh, installMerged } from '../widgets/code-widgets.mjs';
 
 const SNOOZE_HOURS = 24;
 const LOCK_STALE_MIN = 45;
 const WATCH_SECONDS = 60;
 const SUGGEST_MINUTES = 60;
+const INSTALL_MINUTES = 10;
 const STUCK_HOURS = 2;
 
 const hoursSince = (iso, now) => (now - new Date(iso)) / 36e5;
 const stamp = now => now.toISOString().slice(0, 16).replace('T', ' ');
 
-function context(vault, now, runner) {
+function context(vault, now, runner, ghRunner) {
   const policyFile = path.join(vault, '_system', 'policy.md');
   const policy = parsePolicy(fs.existsSync(policyFile) ? fs.readFileSync(policyFile, 'utf8') : '');
-  return { vault, now, runClaude: runner, policy, policyFile, promotions: [], log: [] };
+  return { vault, now, runClaude: runner, gh: ghRunner, policy, policyFile, promotions: [], log: [] };
 }
 
 function save(card, text) { fs.writeFileSync(card.file, text); return text; }
@@ -103,9 +106,9 @@ function promotionSpec({ action, to }) {
   };
 }
 
-/** One full pass over the vault. Exported for tests; `runner` replaces `claude -p`. */
-export function runOnce(vault, { now = new Date(), runner = runClaude } = {}) {
-  const ctx = context(vault, now, runner);
+/** One full pass over the vault. Exported for tests; `runner` replaces `claude -p`, `ghRunner` the gh CLI. */
+export function runOnce(vault, { now = new Date(), runner = runClaude, ghRunner = gh } = {}) {
+  const ctx = context(vault, now, runner, ghRunner);
   for (const card of listCards(vault)) {
     const text = handleDecision(ctx, card);
     if (card.status === 'approved' && !card.finished_at) execute(ctx, { ...card, text }, text);
@@ -122,8 +125,7 @@ export function runOnce(vault, { now = new Date(), runner = runClaude } = {}) {
 
 // ---------- guards: main PC only, one at a time ----------
 export function onMainHost(vault, host = os.hostname()) {
-  const file = path.join(vault, '_system', 'tools.json');
-  const main = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')).mainHost : null;
+  const main = readToolsConfig(vault).mainHost;
   return !main || main === host;
 }
 
@@ -147,6 +149,7 @@ async function lockedPass(vault, dash) {
   const report = msg => console.error(`dashboard: ${msg}`);
   return withLock(vault, async () => {
     if (call) await pull(vault, dash, call).then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`)).catch(e => report(e.message));
+    if (call) await pullWidgetErrors(vault, dash, call).then(off => off.length && console.log(`dashboard: switched off ${off.join(', ')}`)).catch(e => report(e.message));
     const log = runOnce(vault);
     if (call) await push(vault, dash, call).catch(e => report(e.message));
     return log;
@@ -176,6 +179,12 @@ async function main() {
   suggest();
   setInterval(pass, WATCH_SECONDS * 1000);
   setInterval(suggest, SUGGEST_MINUTES * 60 * 1000);
+  // Code widgets CI merged since the last look (needs gh logged in; offline is fine).
+  const install = () => withLock(vault, () => installMerged(vault))
+    .then(r => r.result?.length && console.log(`code widgets: ${r.result.join('; ')}`))
+    .catch(e => console.error(`code widgets: ${e.message.split('\n')[0]}`));
+  await install();
+  setInterval(install, INSTALL_MINUTES * 60 * 1000);
 }
 
 if (process.argv[1] && path.basename(process.argv[1]) === 'executor.mjs') main().catch(e => { console.error(`executor: ${e.stack || e.message}`); process.exit(1); });

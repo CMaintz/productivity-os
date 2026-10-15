@@ -63,3 +63,18 @@ tr[data-status='waiting'] td { color: var(--warn); }
 .signin { max-width: 420px; }
 /* Phones: drop the least useful column of each table (prompt count; PR count). */
 @media (max-width: 600px) { main { padding: 0.75rem; } #sessions :is(th, td):nth-child(4), #projects :is(th, td):nth-child(2), #projects :is(th, td):nth-child(4) { display: none; } }
+
+/* ci-status (code widget) */
+.ci-summary { margin: 0 0 0.5rem; font: 700 0.9rem var(--mono); }
+.ci-summary.bad { color: var(--bad); }
+.ci-summary.good { color: var(--accent-2); }
+.ci-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.ci-list li { display: grid; grid-template-columns: auto 1fr; gap: 0 0.5rem; align-items: center; }
+.ci-list .muted { grid-column: 2; font-size: 0.8rem; }
+.ci-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--muted); }
+[data-ci='failing'] .ci-dot { background: var(--bad); }
+[data-ci='pending'] .ci-dot { background: var(--warn); }
+[data-ci='passing'] .ci-dot { background: var(--accent-2); }
+.ci-name { font-weight: 600; overflow-wrap: anywhere; }
+.code-frame { display: block; width: 100%; border: 0; background: transparent; }
+body.widget-frame #root { overflow: hidden; }

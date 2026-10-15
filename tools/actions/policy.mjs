@@ -21,6 +21,9 @@ export const DEFAULTS = {
   forge_review: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   forge_questions: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   forge_create_repo: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  // Merging is a hard ceiling until you promote it: green checks only, one exact commit.
+  forge_merge_pr: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
+  forge_question: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

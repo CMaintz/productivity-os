@@ -86,7 +86,8 @@ test('interview forge: questions, spec stop, feedback rerun, naming stop, plan, 
   press(v, 'approved');
   runOnce(v, { now: at(12), ghRunner: fakeGh(gh) });
   assert.equal(cardFor(v).status, 'done', cardFor(v).text);
-  assert.deepEqual(await step(13), ['forge shared-shopping-lists: done']);
+  assert.deepEqual(await step(13), ['forge shared-shopping-lists: building']);
+  assert.equal(forge(v).stage, 'build');
   assert.equal(forge(v).repo, 'https://github.com/me/tidewell');
   const issues = gh.filter(c => c.args[0] === 'issue').map(titleOf);
   assert.deepEqual(issues, ['T1: Scaffold the repo', 'T2: Make a list', 'T3: Share a list', 'epic: Tidewell v1'], 'dependency order, epic last');
@@ -118,7 +119,7 @@ test('snapshot rows carry headline fields only, never the outline', () => {
   const v = vault();
   newForge(v, 'Secret idea\nwith private details', { now: NOW });
   const rows = forgeRows(v);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ['mode', 'slug', 'stage', 'status', 'title', 'updated']);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['mode', 'progress', 'slug', 'stage', 'status', 'title', 'updated']);
   assert.doesNotMatch(JSON.stringify(rows), /private details/);
   assert.match(newForge(v, 'Secret idea', { now: NOW }).error, /already exists/);
 });

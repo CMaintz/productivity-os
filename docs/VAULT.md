@@ -163,7 +163,19 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
 - adds Foundry's labels
 - opens one issue per ticket in dependency order (tickets with nothing to wait for get `agent:ready`), plus an epic
 
-Building is the next slice (#16).
+**Build** (#19). Once the repo exists, the forge builds it, a step per executor pass:
+- **Clone:** the repo is cloned into `projectsRoot` (from `_system/tools.json`, default `~/Projects`).
+- **Workers:** each ticket whose dependencies are done gets a worker: a detached `claude -p "/feature <issue>"` in its own git worktree on `forge/T<n>`. At most `concurrency` run at once (default 2; set it in `_system/forge-builds/<slug>.json`).
+- **Retries:** a worker that ends without a PR is retried once. After that, the ticket is `agent:blocked`.
+- **Merging:** when a ticket's PR has every check green, a **merge card** proposes squash-merging exactly that commit. Merging stays your click until you promote it on the trust ladder (after 5 approvals, at most auto-notice). A merge closes the ticket and releases the tickets that depend on it.
+- **The lead agent:** stuck tickets get one read-only look from the lead, which decides one of three things:
+  - **unblock** it with guidance
+  - **re-plan** it into smaller tickets
+  - **ask you** on a card: write under `## Answer` and press Do it
+- **Usage:** if `_system/usage.json` says the 5-hour or weekly window is at `usageLimit`% (default 80), no new worker starts until it resets. A worker that hits the limit pauses the build too.
+- **Done:** when every ticket is closed, the forge is `built` and a card says so. Verifying (slice 3) is next.
+
+Build state, workers and their logs live in `_system/forge-builds/`. The dashboard shows ticket progress.
 
 **Safety:**
 - Claude works inside `Forge/<slug>/` only, so it can't change the forge's state or skip your stop-points.

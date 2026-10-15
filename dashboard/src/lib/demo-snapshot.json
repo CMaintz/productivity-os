@@ -254,6 +254,7 @@
           "title",
           "stage",
           "status",
+          "progress",
           "updated"
         ],
         "source": {
@@ -281,6 +282,7 @@
           "title": "shared-shopping-lists-for-flatmates",
           "stage": "spec",
           "status": "running",
+          "progress": null,
           "updated": "2026-10-14T11:30:00.000Z"
         }
       ]

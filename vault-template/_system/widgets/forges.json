@@ -3,7 +3,7 @@
   "title": "Product Forge",
   "view": "table",
   "size": "m",
-  "fields": ["title", "stage", "status", "updated"],
+  "fields": ["title", "stage", "status", "progress", "updated"],
   "source": {
     "kind": "snapshot",
     "collection": "forges",

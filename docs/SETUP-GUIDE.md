@@ -158,7 +158,7 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
 
 ### 8b. Code widgets (agent-built)
 1. 🤖 `gh auth status` on the main PC must show you logged in. The executor uses `gh` to open widget tickets and to see merged widget PRs. It creates the `widget:code` and `widget:needs-review` labels itself.
-2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`. The Product Forge creates new repos under `"githubOwner"` (default `CMaintz`).
+2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`. The Product Forge creates new repos under `"githubOwner"` (default `CMaintz`), clones them into `"projectsRoot"` (default `~/Projects`), and pauses builds at `"usageLimit"`% of your usage window (default 80; needs something writing `_system/usage.json`).
 3. 🧑 The CI side (PR previews, auto-merge for green guarded widget PRs, deploy on merge) lands in a separate workflow PR. Until then, merge widget PRs yourself and run `npm --workspace dashboard run deploy`. The vault side installs them either way.
 
 ## Daily use, once set up

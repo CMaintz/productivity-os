@@ -55,6 +55,8 @@ jobs:
         id: upload
         working-directory: dashboard
         run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::notice::No CLOUDFLARE_API_TOKEN secret yet; skipping the preview."; exit 0; fi
+          set -o pipefail
           npx wrangler versions upload --preview-alias "pr-$PR" | tee upload.log
           url=$(grep -oE 'https://pr-[0-9]+-productivity-dashboard\.[a-z0-9-]+\.workers\.dev' upload.log | head -1 || true)
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -87,7 +89,9 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm --workspace dashboard run build
-      - run: npx wrangler deploy
+      - run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::warning::No CLOUDFLARE_API_TOKEN secret yet; not deploying."; exit 0; fi
+          npx wrangler deploy
         working-directory: dashboard
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

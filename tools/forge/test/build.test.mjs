@@ -3,37 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { advanceForges, listForges, newForge } from '../forge.mjs';
+import { listForges } from '../forge.mjs';
 import { loadBuild, mergeTicketPr, progressOf } from '../build.mjs';
 import { WORKER_TOOLS } from '../workers.mjs';
 import { parseDecision } from '../lead.mjs';
-import { listCards } from '../../actions/cards.mjs';
 import { runOnce } from '../../actions/executor.mjs';
-import { PLAN } from './fixtures.mjs';
-import { fakeGitHub, fakeSystem } from './build-fakes.mjs';
+import { harness } from './build-fakes.mjs';
 
-const NOW = new Date('2026-10-15T09:00:00Z');
-const at = m => new Date(NOW.valueOf() + m * 60_000);
-const ISSUES = { 1: 11, 2: 12, 3: 13 };
-
-/** A forge whose repo card just went through: stage build, plan with T1 <- T2 <- T3. */
-function building() {
-  const v = fs.mkdtempSync(path.join(os.tmpdir(), 'build-'));
-  fs.mkdirSync(path.join(v, '_system', 'actions'), { recursive: true });
-  fs.writeFileSync(path.join(v, '_system', 'changelog.md'), '');
-  fs.writeFileSync(path.join(v, '_system', 'tools.json'), JSON.stringify({ githubOwner: 'me', projectsRoot: path.join(v, 'Projects') }));
-  newForge(v, 'Tidy flat', { now: NOW });
-  const f = listForges(v)[0];
-  fs.writeFileSync(path.join(f.dir, 'plan.md'), PLAN);
-  fs.writeFileSync(f.file, f.text.replace('stage: spec', 'stage: build').replace('name: ""', 'name: "Tidewell"').replace('repo: ""', 'repo: "https://github.com/me/tidewell"').replace('---\n#', `issues: ${JSON.stringify(ISSUES)}\n---\n#`));
-  return { v, gh: fakeGitHub(Object.values(ISSUES)), sys: fakeSystem() };
-}
-
-const pass = (w, m, runClaude = () => ({ ok: true, text: 'UNBLOCK: try again' })) => advanceForges(w.v, { now: at(m), runClaude, run: w.gh.run, sys: w.sys });
-const ticket = (w, n) => loadBuild(w.v, 'tidy-flat').tickets[n];
-const labels = (w, issue) => [...w.gh.issues.get(issue).labels].sort();
-const cardBy = (w, action) => listCards(w.v).filter(c => c.action === action).at(-1);
-const press = (c, status, extra = '') => fs.writeFileSync(c.file, c.text.replace(/^status: .*$/m, `status: ${status}`) + extra);
+const { NOW, at, building, pass, ticket, labels, cardBy, press } = harness();
 
 test('lead decisions: the last decision line wins; none means null', () => {
   assert.deepEqual(parseDecision('thinking...\nUNBLOCK: no\nmore\nESCALATE: Pay for X?'), { kind: 'ESCALATE', body: 'Pay for X?' });
@@ -80,8 +57,7 @@ test('build: clone, workers in dependency order, retry, merge card, release, bui
   const built = cardBy(w, 'forge_review');
   assert.match(built.text, /All 3 tickets are done/);
   press(built, 'done');
-  await pass(w, 11);
-  assert.equal(listForges(w.v)[0].status, 'done');
+  assert.match((await pass(w, 11)).join(), /verify round 1/, 'approving the build starts verifying it');
 });
 
 test('build: no merge card until GitHub itself calls the PR clean (a required check may not have reported yet)', async () => {

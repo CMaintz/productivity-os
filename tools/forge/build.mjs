@@ -21,6 +21,7 @@ import { collectAnswer, finishLead, startLead } from './lead.mjs';
 import { startWorker, system, workerStatus } from './workers.mjs';
 import { parsePlan } from './stages.mjs';
 import { ownerOf } from './repo.mjs';
+import { resumeVerify, verifyStep } from './verify.mjs';
 
 const BUILD_DIR = path.join('_system', 'forge-builds');
 const MAX_ATTEMPTS = 2;
@@ -195,6 +196,7 @@ function readUsage(vault, now, b, log) {
 function finish(vault, f, b, now) {
   const all = Object.keys(b.tickets);
   b.finished = now.toISOString();
+  if (b.verify) { save(f, { stage: 'verify', status: 'running' }, now, 'build: verify fixes done; verifying again'); return; }
   const key = `forge-built:${b.slug}`;
   createCard(vault, { action: 'forge_review', key, risk: 'low', title: `Forge ${b.name}: built`, reason: `All ${all.length} tickets are done (started ${b.started.slice(0, 10)}).`, context: `https://github.com/${b.repo}`, explain: 'marks the build reviewed. Verifying end-to-end (slice 3) comes next.', params: { slug: b.slug, stage: 'built' } }, now.toISOString());
   save(f, { stage: 'built', status: 'waiting', review_key: key }, now, `build: all ${all.length} tickets done`);
@@ -210,13 +212,38 @@ function pass(vault, b, ctx, log) {
   releaseAndStart(vault, b, ctx, log);
 }
 
-/** One build pass for a forge in the build stage. Returns its log lines (empty when nothing changed). */
-export function buildStep(vault, f, { now, gh, sys = system }) {
-  const log = [];
+/** The build state and the context build and verify passes share. */
+function open(vault, f, { now, gh, sys = system }) {
   const ctx = { now, gh, sys, logDir: path.join(vault, BUILD_DIR, f.slug) };
   const b = loadBuild(vault, f.slug) ?? enterBuild(vault, f, ctx);
-  ctx.usage = readUsage(vault, now, b, log);
   ctx.persist = () => saveBuild(vault, b);
+  return { b, ctx };
+}
+
+/** One pass of the build or verify stage (a finished build can hand over to verify in the same pass). */
+export function buildOrVerify(vault, f, opts) {
+  const lines = f.stage === 'build' ? buildStep(vault, f, opts).map(l => `build: ${l}`) : [];
+  if (f.stage !== 'verify' || f.status !== 'running') return lines;
+  const { b, ctx } = open(vault, f, opts);
+  lines.push(...verifyStep(vault, f, b, ctx));
+  saveBuild(vault, b);
+  return lines;
+}
+
+/** Your answer on a "verify needs your call" card. */
+export function verifyDecision(vault, f, opts, accepted) {
+  const { b, ctx } = open(vault, f, opts);
+  const line = resumeVerify(vault, f, b, ctx, accepted);
+  saveBuild(vault, b);
+  return line;
+}
+
+/** One build pass for a forge in the build stage. Returns its log lines (empty when nothing changed). */
+export function buildStep(vault, f, opts) {
+  const log = [];
+  const { b, ctx } = open(vault, f, opts);
+  const { now } = opts;
+  ctx.usage = readUsage(vault, now, b, log);
   try {
     pass(vault, b, ctx, log);
     b.gh_error = null;

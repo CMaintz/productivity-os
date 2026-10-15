@@ -24,7 +24,7 @@ import { listForges, save, stops } from './state.mjs';
 export { listForges };
 import { addAvailability, slugOf } from './naming.mjs';
 import { ownerOf, proposeRepo } from './repo.mjs';
-import { buildStep, progressOf } from './build.mjs';
+import { buildOrVerify, progressOf, verifyDecision } from './build.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 // No web access while the outline and spec are the input; research only where it helps.
@@ -59,16 +59,18 @@ function reviewCard(vault, f, stage, now) {
 }
 
 /** A waiting forge: what its card says decides the next step. */
-function resume(vault, f, now) {
+function resume(vault, f, ctx) {
+  const { now } = ctx;
   const card = listCards(vault).find(c => c.key === f.review_key);
   const status = card?.status ?? 'missing';
   if (['pending', 'snoozed', 'approved', 'running'].includes(status)) return null;
+  if (f.stage === 'verify' && card?.action === 'forge_review' && ['done', 'rejected'].includes(status)) return verifyDecision(vault, f, ctx, status === 'rejected');
   if (status === 'rejected') { save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with your feedback`); return 'feedback'; }
   if (status === 'failed' && card.action === 'forge_create_repo') { save(f, { review_key: proposeRepo(vault, f, now) }, now, 'creating the repo failed (see the card); offering it again'); return 'repo-retry'; }
   if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`); return 'stopped'; }
   if (card.action === 'forge_questions') { save(f, { status: 'running', answered: true, feedback: '' }, now, 'questions answered'); return 'answered'; }
   if (card.action === 'forge_create_repo') { save(f, { stage: 'build', status: 'running' }, now, 'repo and tickets created; building'); return 'building'; }
-  if (f.stage === 'built') { save(f, { status: 'done' }, now, 'build reviewed; verifying end-to-end is the next slice'); return 'done'; }
+  if (f.stage === 'built') { save(f, { stage: 'verify', status: 'running' }, now, 'build reviewed; verifying end-to-end'); return 'verifying'; }
   save(f, { status: 'running', stage: nextStage(f.stage), feedback: '' }, now, `${f.stage}: approved`);
   return 'approved';
 }
@@ -116,11 +118,17 @@ async function finishStage(vault, f, ctx, rewritten) {
 
 /** One step for one forge. Returns what happened, or null when it's waiting on you. */
 export async function advance(vault, f, ctx) {
-  if (f.status === 'waiting') return resume(vault, f, ctx.now);
+  const lines = [];
+  if (f.status === 'waiting') {
+    const r = resume(vault, f, ctx);
+    // Into verify (or back to it) goes on in the same pass; every other stage waits for the next one.
+    if (!r || f.stage !== 'verify' || f.status !== 'running') return r;
+    if (r !== 'verifying') lines.push(r);
+  }
   if (f.status !== 'running') return null;
-  if (f.stage === 'build') {
-    const lines = buildStep(vault, f, ctx);
-    return lines.length ? `build: ${lines.join('; ')}` : null;
+  if (f.stage === 'build' || f.stage === 'verify') {
+    lines.push(...buildOrVerify(vault, f, ctx));
+    return lines.length ? lines.join('; ') : null;
   }
   const { asking, output, result, rewritten } = runStage(f, ctx);
   if (!result.ok) { save(f, { status: 'failed' }, ctx.now, `${f.stage}: claude failed: ${String(result.text).slice(0, 200)}`); return 'failed'; }

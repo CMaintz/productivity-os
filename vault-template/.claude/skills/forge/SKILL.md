@@ -21,4 +21,4 @@ The Product Forge takes an outline through four stages, one per executor pass: *
    - At each stop a card appears. **Do it** continues. **No**, with a reason, reruns that stage with the reason as feedback.
    - The user can rename the product at the naming stop by editing `name:` in `Forge/<slug>.md`.
    - Setting `status: stopped` there halts the forge.
-   - After the repo card, the forge builds: agents work the tickets, merge cards ask before each merge, and a lead agent asks the user on a card when a ticket is truly stuck.
+   - After the repo card, the forge builds: agents work the tickets, merge cards ask before each merge, and a lead agent asks the user on a card when a ticket is truly stuck. Then verify rounds check every user story end-to-end and send findings back into the build, asking the user if they stop converging.

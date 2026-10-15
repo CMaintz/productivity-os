@@ -43,24 +43,24 @@ export const system = {
   },
 };
 
-export const worktreeOf = (clone, n) => path.join(`${clone}-worktrees`, `T${n}`);
+export const worktreeOf = (clone, name) => path.join(`${clone}-worktrees`, name);
 
-/** A worktree for T<n>: on the existing remote forge/T<n> when an earlier attempt pushed one, else on main. */
-function prepareWorktree(sys, clone, n, attempt) {
+/** A worktree on branch forge/<name>: from that remote branch when an earlier attempt pushed one, else from main. */
+export function prepareWorktree(sys, clone, name, attempt = 0) {
   sys.git(['fetch', '--quiet', '--prune', 'origin'], clone);
   sys.git(['worktree', 'prune'], clone);
-  let wt = worktreeOf(clone, n);
+  let wt = worktreeOf(clone, name);
   if (fs.existsSync(wt)) {
     try { sys.git(['worktree', 'remove', '--force', wt], clone); } catch { wt = `${wt}-${attempt}`; }
   }
-  const remote = sys.git(['ls-remote', '--heads', 'origin', `forge/T${n}`], clone).trim();
-  sys.git(['worktree', 'add', '-B', `forge/T${n}`, wt, remote ? `origin/forge/T${n}` : 'origin/main'], clone);
+  const remote = sys.git(['ls-remote', '--heads', 'origin', `forge/${name}`], clone).trim();
+  sys.git(['worktree', 'add', '-B', `forge/${name}`, wt, remote ? `origin/forge/${name}` : 'origin/main'], clone);
   return wt;
 }
 
 /** Starts the worker for T<n>. Returns the run record to persist. */
 export function startWorker({ clone, n, issueUrl, owner, logDir, now, attempt = 0, sys = system }) {
-  const wt = prepareWorktree(sys, clone, n, attempt);
+  const wt = prepareWorktree(sys, clone, `T${n}`, attempt);
   fs.mkdirSync(logDir, { recursive: true });
   const log = path.join(logDir, `T${n}-${now.valueOf()}.json`);
   const prompt = `/feature ${issueUrl}

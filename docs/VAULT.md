@@ -176,6 +176,14 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
 - **Done:** when every ticket is closed, the forge is `built` and a card says so. Verifying (slice 3) is next.
 - **Merge rules:** a PR is only proposed for merging when GitHub calls it clean (required checks reported, no conflicts) and every check is green. A red PR counts as a failed try, and the worker retries on the same branch.
 
+**Verify** (#22). Approving the "built" card starts a verify round: three detached checks on merged `main`.
+- **qa:** writes or updates a Playwright E2E test for every user story (shipped as a PR, which goes through a merge card). It runs them along with axe, Lighthouse, `npm audit` and a license check.
+- **architecture and spec:** two reviewers, read-only, comparing the code with the ADRs and with `docs/spec.md`.
+- **Reports:** each check ends with a JSON report. Code decides what counts: a story in the spec without a qa check, or a check without a usable report, is a high finding.
+- **Findings:** medium and high findings become `verify` tickets, the build fixes them, and the next round runs on its own. Low findings are listed in the forge's log.
+- **Stopping:** after 3 rounds, or a round no better than the last, a card asks you. **Do it** fixes what's open and verifies once more; **No** accepts the product as it is.
+- **Done:** a clean round marks the forge `verified`. The demo (slice 4) is next.
+
 **Guardrails:**
 - Workers get `gh` only for their ticket and PR: view, comment, label, PR create and checks. That means no merge, `api` or `repo` commands.
 - Comments from anyone but you are treated as untrusted data.

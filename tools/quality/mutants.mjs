@@ -29,6 +29,13 @@ const MUTANTS = [
   ["usage: dropped window reads 0", "tools/hooks/statusline.mjs", "const pct = v => (Number.isFinite(v) ? v : null);", "const pct = v => (Number.isFinite(v) ? v : 0);"],
   ["usage: stale record trusted", "tools/forge/build.mjs", "(now - new Date(u.recordedAt)) / 6e4 <= STALE_MIN", "true"],
   ["code widgets: off-switch never trips", "tools/widgets/code-widgets.mjs", "if (mine.length < ERROR_LIMIT) return w;", "return w;"],
+  ["verify: untested stories pass", "tools/forge/verify.mjs", "for (const n of storyNumbers(spec).filter(s => !covered.has(s)))", "for (const n of storyNumbers(spec).filter(() => false))"],
+  ["verify: a missing report is ignored", "tools/forge/verify.mjs", "if (parsed.error) { findings.push(", "if (parsed.error) { continue; findings.push("],
+  ["verify: never asks when not converging", "tools/forge/verify.mjs", "if (last !== undefined && actionable.length >= last)", "if (false)"],
+  ["verify: unbounded rounds", "tools/forge/verify.mjs", "if (v.round >= MAX_ROUNDS + v.extra)", "if (false)"],
+  ["verify: reviewers may write", "tools/forge/verify.mjs", "{ id: 'architecture', label: 'architecture review', prompt: 'verify-architecture', tools: 'Read,Glob,Grep' }", "{ id: 'architecture', label: 'architecture review', prompt: 'verify-architecture', tools: WORKER_TOOLS }"],
+  ["verify: low findings ticketed", "tools/forge/verify.mjs", "const actionable = findings.filter(x => x.severity !== 'low');", "const actionable = findings;"],
+  ["verify: duplicate tickets", "tools/forge/verify.mjs", "if (known) {", "if (false) {"],
 ];
 
 const survivors = [];

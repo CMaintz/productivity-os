@@ -42,6 +42,7 @@ The vault location defaults to `~/Vault`. Set `PRODUCTIVITY_VAULT` to use anothe
 
 ## 5. Keeping the vault up to date
 - **After moving project folders** (or now and then): `npm run inventory` then `npm run vault`. New projects get notes. Existing notes get their `path`/`repo` updated and their **Docs** section rebuilt (Repo vs Local only). Your tasks, log and status are left alone.
+  A note belongs to one checkout: it is matched by `path`, then by `repo` or name when its folder moved. A second clone of a repo gets its own note, prefixed with its parent folder when the name is taken, and worktrees get none.
 - **When the template improves** (new skills, Bases, contract): `node tools/vault/init.mjs --update-system`. This replaces `CLAUDE.md`, `.claude/skills/` and `Bases/`, and copies the old versions to `_system/backup/<timestamp>/`. `Home.md` is yours, so it's never replaced. If you set the vault up before sessions existed, add this to it:
   ```markdown
   ## Claude sessions

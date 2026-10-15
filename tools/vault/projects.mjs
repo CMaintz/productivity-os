@@ -4,7 +4,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { setFrontmatter } from '../lib/frontmatter.mjs';
+import { fieldsOf, setFrontmatter } from '../lib/frontmatter.mjs';
+import { samePath } from '../lib/paths.mjs';
 
 const ACTIVE_DAYS = 60;
 const MAX_DOCS = 30;
@@ -90,26 +91,63 @@ export function refreshNote(note, p) {
   return replaceBlock(out, DOCS, docsBlock(p));
 }
 
-/** Existing project notes, indexed by their `repo` frontmatter and by file slug. */
-function indexNotes(dir) {
-  const byRepo = new Map(); const bySlug = new Map();
-  for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+function readNotes(dir) {
+  return fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => {
     const file = path.join(dir, f);
-    const repo = fs.readFileSync(file, 'utf8').match(/^repo:\s*(\S+)\s*$/m)?.[1];
-    if (repo) byRepo.set(repo.toLowerCase(), file);
-    bySlug.set(path.basename(f, '.md'), file);
+    const { path: notePath, repo } = fieldsOf(fs.readFileSync(file, 'utf8'));
+    return { file, slug: path.basename(f, '.md'), repo: repo ? String(repo).toLowerCase() : null, path: notePath ? String(notePath) : null };
+  });
+}
+
+/**
+ * Pairs each project with its note in three passes over all projects: exact path, then
+ * repo, then name. Path wins, so two checkouts of one repo keep separate notes. Repo and
+ * name only pick up notes no project matched by path, which is how a moved or renamed
+ * folder finds its old note; a name match never takes a note about a different repo.
+ */
+function matchNotes(projects, notes) {
+  const claimed = new Set(); const match = new Map();
+  const pass = test => {
+    for (const p of projects) {
+      if (match.has(p)) continue;
+      const n = notes.find(n => !claimed.has(n) && test(n, p));
+      if (n) { claimed.add(n); match.set(p, n); }
+    }
+  };
+  pass((n, p) => samePath(n.path, p.path));
+  pass((n, p) => !!p.github && n.repo === p.github.toLowerCase());
+  pass((n, p) => n.slug === slug(p.name) && (!n.repo || n.repo === p.github?.toLowerCase()));
+  return match;
+}
+
+/** The note for the checkout at `dir`, matched by its `path` frontmatter. */
+export function noteForPath(vault, dir) {
+  const notesDir = path.join(vault, 'Projects');
+  if (!fs.existsSync(notesDir)) return null;
+  return readNotes(notesDir).find(n => samePath(n.path, dir))?.file ?? null;
+}
+
+// A name already taken by another checkout's note gets the parent folder as a prefix.
+function newNoteFile(dir, p) {
+  const base = slug(p.name);
+  if (!fs.existsSync(path.join(dir, `${base}.md`))) return path.join(dir, `${base}.md`);
+  const prefixed = `${slug(path.basename(path.dirname(p.path)))}-${base}`;
+  for (let i = 1; ; i++) {
+    const file = path.join(dir, `${prefixed}${i > 1 ? `-${i}` : ''}.md`);
+    if (!fs.existsSync(file)) return file;
   }
-  return { byRepo, bySlug };
 }
 
 export function syncProjects(vault, inventory, today = new Date()) {
   const dir = path.join(vault, 'Projects'); fs.mkdirSync(dir, { recursive: true });
-  const notes = indexNotes(dir);
+  // Worktrees are branches of a checkout that already has a note.
+  const projects = (inventory.projects || []).filter(p => !p.worktree);
+  const match = matchNotes(projects, readNotes(dir));
   const result = { created: [], refreshed: [], unchanged: [] };
-  for (const p of inventory.projects || []) {
-    const existing = (p.github && notes.byRepo.get(p.github.toLowerCase())) || notes.bySlug.get(slug(p.name));
+  for (const p of projects) {
+    const existing = match.get(p)?.file;
     if (!existing) {
-      const file = path.join(dir, `${slug(p.name)}.md`);
+      const file = newNoteFile(dir, p);
       fs.writeFileSync(file, projectNote(p, today)); result.created.push(file); continue;
     }
     const before = fs.readFileSync(existing, 'utf8'); const after = refreshNote(before, p);

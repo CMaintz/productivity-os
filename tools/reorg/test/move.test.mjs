@@ -51,6 +51,28 @@ test('history follows project and subfolders but not prefix-colliding siblings',
   assert.deepEqual(r, [claudeEncode(to), claudeEncode(path.join(to, 'sub'))].sort());
 });
 
+const worktree = (root, name) => path.join(root, '.claude', 'worktrees', name);
+const baseline = (f, to) => [claudeEncode(to), claudeEncode(path.join(to, 'sub'))];
+
+test('history follows worktree sessions that started in the parent repo', () => {
+  const f = fixture();
+  const wt = worktree(f.clean, 'feat');
+  const lowerCase = wt[0].toLowerCase() + wt.slice(1);
+  write(path.join(f.hist, claudeEncode(wt), 's4.jsonl'), [f.clean, lowerCase].map(cwd => JSON.stringify({ cwd })).join('\n') + '\n');
+  const to = path.join(f.P, 'java', 'thing');
+  const r = historyRenames(f.clean, to, f.home).map(h => path.basename(h.to)).sort();
+  assert.deepEqual(r, [...baseline(f, to), claudeEncode(worktree(to, 'feat'))].sort());
+});
+
+test('history follows folders holding only subagent transcripts', () => {
+  const f = fixture();
+  const agentsWt = worktree(f.clean, 'agents');
+  write(path.join(f.hist, claudeEncode(agentsWt), 'id', 'subagents', 'a.jsonl'), JSON.stringify({ cwd: agentsWt }) + '\n');
+  const to = path.join(f.P, 'java', 'thing');
+  const r = historyRenames(f.clean, to, f.home).map(h => path.basename(h.to)).sort();
+  assert.deepEqual(r, [...baseline(f, to), claudeEncode(worktree(to, 'agents'))].sort());
+});
+
 test('apply moves, carries history, skips blocked; undo restores', () => {
   const f = fixture();
   const to = path.join(f.P, 'java', 'thing');

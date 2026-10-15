@@ -179,9 +179,16 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
 **Verify** (#22). Approving the "built" card starts a verify round: three detached checks on merged `main`.
 - **qa:** writes or updates a Playwright E2E test for every user story (shipped as a PR, which goes through a merge card). It runs them along with axe, Lighthouse, `npm audit` and a license check.
 - **architecture and spec:** two reviewers, read-only, comparing the code with the ADRs and with `docs/spec.md`.
-- **Reports:** each check ends with a JSON report. Code decides what counts: a story in the spec without a qa check, or a check without a usable report, is a high finding.
+- **Reports:** each check ends with a JSON report, but code decides what counts. Each of these is a finding:
+  - a story without both a qa check and a test in the repo tagged `story <n>`
+  - any failing check, whatever severity qa gave it
+  - a spec whose stories can't be read
+  - a check without a usable report
+- **Your E2E tests land on main:** qa's test PR joins the build for a merge card.
+- **Usage limit:** a check stopped by the usage limit is retried after an hour, not filed as a bug.
+- **Reviewer text:** it reaches workers only quoted and marked as untrusted.
 - **Findings:** medium and high findings become `verify` tickets, the build fixes them, and the next round runs on its own. Low findings are listed in the forge's log.
-- **Stopping:** after 3 rounds, or a round no better than the last, a card asks you. **Do it** fixes what's open and verifies once more; **No** accepts the product as it is.
+- **Stopping:** after 3 rounds, or a round no better than the last, a card asks you. **Do it** fixes what's open and allows exactly one more round; **No** accepts the product as it is.
 - **Done:** a clean round marks the forge `verified`. The demo (slice 4) is next.
 
 **Guardrails:**

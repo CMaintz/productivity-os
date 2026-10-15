@@ -141,7 +141,33 @@ When a manifest isn't enough (custom layout, interaction, or a view `where`/`sor
 
 Preview any code widget from its fixture: `npm --workspace dashboard run dev`, then `/?demo&widget=<id>` (or `widget=all`).
 
-## 11. Sync to other PCs and Android
+## 11. Product Forge
+`/forge <idea>` (or `npm run forge -- new "<outline>" --mode interview --stop-after spec,naming`) turns a few lines into a planned product, one stage per executor pass, all inside `Forge/<slug>/`:
+
+1. **Spec** (`spec.md`): problem, users, user stories with acceptance criteria, non-goals, data model and open questions.
+   - In **interview** mode it first writes up to 5 questions to `questions.md` and waits for your answers.
+   - In **autonomous** mode it lists its assumptions instead.
+2. **Stack** (`decisions/0001-stack.md`): an ADR that keeps Astro + Cloudflare + Supabase unless the spec clearly needs something else.
+3. **Naming** (`naming.md`): 10–20 ranked candidates, plus an **Availability** table filled in by code, not the model. It checks `.com`/`.dev` (RDAP), npm and GitHub, and links trademark searches. "?" means a lookup failed. The top candidate becomes `name:` in `forge.md`; change it there if you prefer another.
+4. **Plan** (`plan.md`): milestones and tickets in Foundry's format, with dependencies.
+
+**Stop-points:** after each stage in `stop_after`, a card waits for you.
+- **Do it** continues.
+- **No**, with a reason, reruns the stage with your reason as feedback.
+- `status: stopped` in `forge.md` halts the forge.
+
+**Each stage's output is checked** for its required sections. A bad output is retried once, then the forge stops as `failed`, with the reason in its Log.
+
+**The plan always ends with a "create the repo and tickets" card.** Approving it, through `gh`:
+- creates the private repo, with the spec, ADR, plan and naming in `docs/`
+- adds Foundry's labels
+- opens one issue per ticket in dependency order (tickets with nothing to wait for get `agent:ready`), plus an epic
+
+Building is the next slice (#16).
+
+**Privacy:** outlines, specs and plans never leave the PC; the dashboard only shows each forge's name, stage and status.
+
+## 12. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

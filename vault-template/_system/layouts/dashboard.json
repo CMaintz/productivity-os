@@ -4,6 +4,7 @@
     { "id": "attention" },
     { "id": "cards" },
     { "id": "sessions" },
+    { "id": "forges" },
     { "id": "writing" },
     { "id": "projects" }
   ]

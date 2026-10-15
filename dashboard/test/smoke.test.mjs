@@ -66,7 +66,7 @@ const noScroll = page => page.evaluate(() => document.documentElement.scrollWidt
 for (const [label, viewport] of VIEWPORTS) {
   test(`demo dashboard on ${label}`, () => withPage(viewport, '/?demo', async (page, errors) => {
     await page.waitForSelector('#cards');
-    for (const id of ['today', 'attention', 'cards', 'sessions', 'writing', 'projects']) check(`${label}: #${id} renders`, await page.locator(`#${id}`).isVisible());
+    for (const id of ['today', 'attention', 'cards', 'sessions', 'forges', 'writing', 'projects']) check(`${label}: #${id} renders`, await page.locator(`#${id}`).isVisible());
     check(`${label}: two pending cards with buttons`, (await page.locator('#cards ul.cards:not(.auto) > .card').count()) === 2);
     check(`${label}: declarative kanban widget groups notes by status`, (await page.locator('#writing .kanban > section').count()) === 3);
     check(`${label}: today shows the Top 3`, (await page.locator('#today .top3 li').count()) === 3);

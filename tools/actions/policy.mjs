@@ -17,6 +17,10 @@ export const DEFAULTS = {
   build_code_widget: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   install_code_widget: { level: 'auto-notice', max: 'auto-notice', promoteAfter: 0 },
   fix_widget: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  // Forge stop-points are yours by definition; creating a repo is outward.
+  forge_review: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  forge_questions: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  forge_create_repo: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

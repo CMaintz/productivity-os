@@ -4,6 +4,7 @@
 //     _system/actions/ledger.jsonl, and proposes promotions as new cards
 //   - runs approved cards through their handler, writes the result onto the card
 //   - un-snoozes cards after a day, expires stale ones, performs Undo
+//   - moves one Product Forge one stage (tools/forge/forge.mjs)
 //
 // Runs on the main PC only (mainHost in _system/tools.json) and one at a time (a lock file).
 // Usage: node tools/actions/executor.mjs [--once] [--watch] [--vault <dir>] [--force]
@@ -20,7 +21,9 @@ import { appendResult, cardsDir, createCard, listCards, updateCard } from './car
 import { suggestAll } from './suggest.mjs';
 import { loadConfig, pull, pullWidgetErrors, push, rest } from '../dashboard/sync.mjs';
 import { readToolsConfig } from '../lib/tools-config.mjs';
-import { gh, installMerged } from '../widgets/code-widgets.mjs';
+import { installMerged } from '../widgets/code-widgets.mjs';
+import { gh } from '../lib/gh.mjs';
+import { advanceForges } from '../forge/forge.mjs';
 
 const SNOOZE_HOURS = 24;
 const LOCK_STALE_MIN = 45;
@@ -151,6 +154,7 @@ async function lockedPass(vault, dash) {
     if (call) await pull(vault, dash, call).then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`)).catch(e => report(e.message));
     if (call) await pullWidgetErrors(vault, dash, call).then(off => off.length && console.log(`dashboard: switched off ${off.join(', ')}`)).catch(e => report(e.message));
     const log = runOnce(vault);
+    log.push(...await advanceForges(vault, { runClaude }).catch(e => [`forge: ${e.message}`]));
     if (call) await push(vault, dash, call).catch(e => report(e.message));
     return log;
   });

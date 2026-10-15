@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { createIssue, ensureLabels, gh } from '../lib/gh.mjs';
 import { CODE_VIEW, ID_PATTERN, fieldsUsed, validateManifest } from './manifest.mjs';
 import { readLayout, writeLayout, WIDGETS_DIR } from './widgets.mjs';
 import { createCard } from '../actions/cards.mjs';
@@ -18,7 +18,6 @@ import { readToolsConfig } from '../lib/tools-config.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
 
 const DEFAULT_REPO = 'CMaintz/productivity-os';
-const LABELS = { 'agent:ready': '0e8a16', 'widget:code': '5319e7', 'widget:needs-review': 'd93f0b' };
 // Outside _system/widgets/, where every .json is read as a manifest.
 const INSTALLED_FILE = path.join('_system', 'code-widgets-installed.json');
 const ERROR_LIMIT = 3;
@@ -26,8 +25,6 @@ const ERROR_WINDOW_H = 24;
 
 export const repoOf = vault => readToolsConfig(vault).githubRepo || DEFAULT_REPO;
 
-/** Runs the gh CLI; `input` goes to stdin. Tests pass a fake with the same shape. */
-export const gh = (args, input) => execFileSync('gh', args, { encoding: 'utf8', input, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
 
 /** The manifest a requested widget will ship with, permissions derived from what it reads. */
 export function draftManifest({ id, title, source, fields = [] }) {
@@ -78,12 +75,10 @@ ${JSON.stringify(manifest, null, 2)}
 `;
 }
 
-const issueUrl = out => out.trim().split('\n').pop();
-
 function openIssue(ctx, { title, body }) {
   const repo = repoOf(ctx.vault);
-  for (const [name, color] of Object.entries(LABELS)) ctx.gh(['label', 'create', name, '--repo', repo, '--color', color, '--force']);
-  return issueUrl(ctx.gh(['issue', 'create', '--repo', repo, '--title', title, '--label', 'agent:ready', '--label', 'widget:code', '--body-file', '-'], body));
+  ensureLabels(ctx.gh, repo, ['agent:ready', 'widget:code', 'widget:needs-review']);
+  return createIssue(ctx.gh, repo, { title, body, labels: ['agent:ready', 'widget:code'] });
 }
 
 /** build_code_widget handler: opens the ticket the /feature loop picks up. */

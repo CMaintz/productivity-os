@@ -66,7 +66,7 @@ var productivityViews = (() => {
   // tools/widgets/manifest.mjs
   var VIEWS = ["stat", "list", "table", "kanban", "bar", "today", "cards"];
   var SIZES = ["s", "m", "l", "full"];
-  var COLLECTIONS = ["projects", "cards", "sessions", "today"];
+  var COLLECTIONS = ["projects", "cards", "sessions", "today", "forges"];
   var SCALAR = (v) => ["string", "number", "boolean"].includes(typeof v) || v === null;
   var OP_VALUE = {
     eq: SCALAR,
@@ -82,7 +82,7 @@ var productivityViews = (() => {
   var CODE_VIEW = /^code:([a-z0-9][a-z0-9-]{0,40})$/;
   var CODE_COLLECTIONS = ["projects", "cards", "sessions"];
   var PRIVATE_FIELDS = ["last_prompt", "decline_reason", "params", "undo", "cwd", "session_id"];
-  var PRIVATE_FOLDERS = ["_system", "Sessions", ".obsidian", ".claude", ".git"];
+  var PRIVATE_FOLDERS = ["_system", "Sessions", "Forge", ".obsidian", ".claude", ".git"];
   function checkOps(ops, errors, at) {
     for (const [op, x] of Object.entries(ops)) {
       if (!OP_VALUE[op]) errors.push(`${at}: unknown operator "${op}"`);

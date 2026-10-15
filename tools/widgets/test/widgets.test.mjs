@@ -46,7 +46,7 @@ test('manifest validation catches bad shapes, unsafe folders and private fields'
 test('snapshot v2 renders the default layout from widgets and leaks nothing beyond whitelisted fields', () => {
   const s = buildSnapshot(vault(), { now: NOW, host: 'desk' });
   assert.equal(s.version, 2);
-  assert.deepEqual(s.layout.map(w => w.id), ['today', 'attention', 'cards', 'sessions', 'writing', 'projects']);
+  assert.deepEqual(s.layout.map(w => w.id), ['today', 'attention', 'cards', 'sessions', 'forges', 'writing', 'projects']);
   for (const id of Object.keys(s.widgets)) assert.equal(s.widgets[id].error, undefined, `${id}: ${s.widgets[id].error}`);
   assert.deepEqual(s.widgets.attention.rows.map(r => r.slug), ['site']);
   assert.deepEqual(s.widgets.projects.rows.map(r => r.slug), ['site']);

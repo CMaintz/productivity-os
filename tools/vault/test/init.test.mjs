@@ -64,9 +64,9 @@ test('re-sync after a move refreshes path and docs but keeps what the user wrote
 
 test('clones of one repo keep their own notes and worktrees get none', () => {
   const v = tmpVault();
-  const school = { ...explorer('C:\\Users\\akash\\Projects\\school\\movie-explorer'), name: 'movie-explorer' };
-  const archive = { ...explorer('C:\\Users\\akash\\Projects\\_archive\\movie-explorer'), name: 'movie-explorer' };
-  const wt = { ...explorer('C:\\Users\\akash\\Projects\\school\\_wt\\feature'), name: 'feature', worktree: true };
+  const school = { ...explorer(path.resolve('/p/school/movie-explorer')), name: 'movie-explorer' };
+  const archive = { ...explorer(path.resolve('/p/_archive/movie-explorer')), name: 'movie-explorer' };
+  const wt = { ...explorer(path.resolve('/p/school/_wt/feature')), name: 'feature', worktree: true };
   const r = syncProjects(v, { projects: [school, archive, wt] }, TODAY);
   assert.deepEqual(r.created.map(f => path.basename(f)), ['movie-explorer.md', 'archive-movie-explorer.md']);
   const pathOf = f => fs.readFileSync(path.join(v, 'Projects', f), 'utf8').match(/^path: (.*)$/m)[1];
@@ -79,7 +79,7 @@ test('clones of one repo keep their own notes and worktrees get none', () => {
 test('a moved checkout takes its old note only when no project sits at that note\'s path', () => {
   const v = tmpVault();
   syncProjects(v, { projects: [explorer()] }, TODAY);
-  const moved = explorer('C:\\Users\\akash\\Projects\\web\\movie-explorer');
+  const moved = explorer(path.resolve('/p/web/movie-explorer'));
   const clone = explorer();
   const r = syncProjects(v, { projects: [moved, clone] }, TODAY);
   assert.equal(r.unchanged.length, 1, 'the clone still at the old path keeps the note');
@@ -123,10 +123,10 @@ test('tools.json points the vault skills at this repo', () => {
 test('a renamed folder keeps its note even when a new clone of another repo takes its old name', () => {
   const v = tmpVault();
   syncProjects(v, { projects: [explorer()] }, TODAY);
-  const renamed = { ...explorer('C:\\Users\\akash\\Projects\\web\\films'), name: 'films' };
-  const other = { ...explorer('C:\\Users\\akash\\Projects\\work\\movie-explorer'), name: 'movie-explorer', github: 'someone/movie-explorer' };
+  const renamed = { ...explorer(path.resolve('/p/web/films')), name: 'films' };
+  const other = { ...explorer(path.resolve('/p/work/movie-explorer')), name: 'movie-explorer', github: 'someone/movie-explorer' };
   const r = syncProjects(v, { projects: [other, renamed] }, TODAY);
   assert.equal(r.refreshed.length, 1);
   assert.deepEqual(r.created.map(f => path.basename(f)), ['work-movie-explorer.md']);
-  assert.match(fs.readFileSync(path.join(v, 'Projects', 'movie-explorer.md'), 'utf8'), /^path: ".*web\\\\films"$/m);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, 'Projects', 'movie-explorer.md'), 'utf8').match(/^path: (.*)$/m)[1]), renamed.path);
 });

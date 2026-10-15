@@ -94,7 +94,7 @@ test('worktrees are flagged and not counted as duplicate clones', () => {
   assert.ok(byPath[wt].flags.includes('worktree'));
   assert.equal(byPath[a].worktree, false);
   assert.equal(byPath[clone].worktree, false);
-  assert.deepEqual(inv.duplicates, [{ github: 'cmaintz/site', paths: [a, clone] }]);
+  assert.deepEqual(inv.duplicates.map(d => ({ ...d, paths: d.paths.sort() })), [{ github: 'cmaintz/site', paths: [a, clone].sort() }]);
 });
 
 test('folders inside _notes and _archive are docs, not projects, unless they are repos', () => {

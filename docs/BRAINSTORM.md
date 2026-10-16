@@ -420,7 +420,8 @@ Status (Oct 2026):
 - **Done:** the web dashboard MVP at `dash.maintz.dev`: Supabase snapshot, card buttons, sessions, attention (issue #9).
 - **Done:** the widget runtime (#11). Preact views are shared by the dashboard and Obsidian (Datacore), declarative widgets live in the vault, and there's a layout and `create_widget` cards.
 - **Done:** code widgets built by agents (#12): the contract and registry, the sandbox lint, the permission guard, request → ticket → install with Undo, the runtime off-switch, and the `ci-status` sample. The CI workflow (previews, auto-merge, deploy) is a separate PR.
-- **Next:** the dashboard CI workflow, then the Product Forge.
+- **Done:** the dashboard CI workflow (#15).
+- **In progress:** the Product Forge (epic #16). Slice 1, outline → plan with repo and tickets, is #17. Slice 2, build with workers, lead agent, merge cards and usage pacing, is #19. Slice 3, verify end-to-end with a bounded fix loop, is #22. Next comes slice 4, the demo.
 
 0. **Projects inventory & renovation (first real use):**
    - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).

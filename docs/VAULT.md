@@ -141,7 +141,72 @@ When a manifest isn't enough (custom layout, interaction, or a view `where`/`sor
 
 Preview any code widget from its fixture: `npm --workspace dashboard run dev`, then `/?demo&widget=<id>` (or `widget=all`).
 
-## 11. Sync to other PCs and Android
+## 11. Product Forge
+`/forge <idea>` (or `npm run forge -- new "<outline>" --mode interview --stop-after spec,naming`) turns a few lines into a planned product, one stage per executor pass. `Forge/<slug>.md` holds its state and log, and each stage writes into the `Forge/<slug>/` folder:
+
+1. **Spec** (`spec.md`): problem, users, user stories with acceptance criteria, non-goals, data model and open questions.
+   - In **interview** mode it first writes up to 5 questions to `questions.md` and waits for your answers.
+   - In **autonomous** mode it lists its assumptions instead.
+2. **Stack** (`decisions/0001-stack.md`): an ADR that keeps Astro + Cloudflare + Supabase unless the spec clearly needs something else.
+3. **Naming** (`naming.md`): 10–20 ranked candidates, plus an **Availability** table filled in by code, not the model. It checks `.com`/`.dev` (RDAP), npm and GitHub, and links trademark searches. "?" means a lookup failed. The top candidate becomes `name:` in `Forge/<slug>.md`; change it there if you prefer another, and a later rerun won't overwrite your choice.
+4. **Plan** (`plan.md`): milestones and tickets in Foundry's format, with dependencies.
+
+**Stop-points:** after each stage in `stop_after`, a card waits for you.
+- **Do it** continues.
+- **No**, with a reason, reruns the stage with your reason as feedback.
+- `status: stopped` in `Forge/<slug>.md` halts the forge, even mid-stage.
+
+**Each stage's output is checked** for its required sections. A bad output is retried once, then the forge stops as `failed`, with the reason in its Log.
+
+**The plan always ends with a "create the repo and tickets" card.** Approving it, through `gh`:
+- creates the private repo, with the spec, ADR, plan and naming in `docs/`
+- adds Foundry's labels
+- opens one issue per ticket in dependency order (tickets with nothing to wait for get `agent:ready`), plus an epic
+
+**Build** (#19). Once the repo exists, the forge builds it, a step per executor pass:
+- **Clone:** the repo is cloned into `projectsRoot` (from `_system/tools.json`, default `~/Projects`).
+- **Workers:** each ticket whose dependencies are done gets a worker: a detached `claude -p "/feature <issue>"` in its own git worktree on `forge/T<n>`. At most `concurrency` run at once (default 2; set it in `_system/forge-builds/<slug>.json`).
+- **Retries:** a worker that ends without a PR is retried once. After that, the ticket is `agent:blocked`.
+- **Merging:** when a ticket's PR has every check green, a **merge card** proposes squash-merging exactly that commit. Merging stays your click until you promote it on the trust ladder (after 5 approvals, at most auto-notice). A merge closes the ticket and releases the tickets that depend on it.
+- **The lead agent:** stuck tickets get one read-only look from the lead, which decides one of three things:
+  - **unblock** it with guidance
+  - **re-plan** it into smaller tickets
+  - **ask you** on a card: write under `## Answer` and press Do it
+- **Usage:** the status line from `npm run hooks` records your 5-hour and weekly usage there (a record older than 30 minutes is ignored). If `_system/usage.json` says the 5-hour or weekly window is at `usageLimit`% (default 80), no new worker starts until it resets. A worker that hits the limit pauses the build too.
+- **Done:** when every ticket is closed, the forge is `built` and a card says so. Verifying (slice 3) is next.
+- **Merge rules:** a PR is only proposed for merging when GitHub calls it clean (required checks reported, no conflicts) and every check is green. A red PR counts as a failed try, and the worker retries on the same branch.
+
+**Verify** (#22). Approving the "built" card starts a verify round: three detached checks on merged `main`.
+- **qa:** writes or updates a Playwright E2E test for every user story (shipped as a PR, which goes through a merge card). It runs them along with axe, Lighthouse, `npm audit` and a license check.
+- **architecture and spec:** two reviewers, read-only, comparing the code with the ADRs and with `docs/spec.md`.
+- **Reports:** each check ends with a JSON report, but code decides what counts. Each of these is a finding:
+  - a story without both a qa check and a test in the repo tagged `story <n>`
+  - any failing check, whatever severity qa gave it
+  - a spec whose stories can't be read
+  - a check without a usable report
+- **Your E2E tests land on main:** qa's test PR joins the build for a merge card.
+- **Usage limit:** a check stopped by the usage limit is retried after an hour, not filed as a bug.
+- **Reviewer text:** it reaches workers only quoted and marked as untrusted.
+- **Findings:** medium and high findings become `verify` tickets, the build fixes them, and the next round runs on its own. Low findings are listed in the forge's log.
+- **Stopping:** after 3 rounds, or a round no better than the last, a card asks you. **Do it** fixes what's open and allows exactly one more round; **No** accepts the product as it is.
+- **Done:** a clean round marks the forge `verified`. The demo (slice 4) is next.
+
+**Guardrails:**
+- Workers get `gh` only for their ticket and PR: view, comment, label, PR create and checks. That means no merge, `api` or `repo` commands.
+- Comments from anyone but you are treated as untrusted data.
+- The product repo's `main` is protected (changes through PRs only) where your GitHub plan allows it.
+- A GitHub hiccup skips one pass; it never fails the build.
+
+Build state, workers and their logs live in `_system/forge-builds/`. The dashboard shows ticket progress.
+
+**Safety:**
+- Claude works inside `Forge/<slug>/` only, so it can't change the forge's state or skip your stop-points.
+- The spec and plan stages have no web access; only stack and naming may search.
+- Creating the repo is resumable: retrying after a failure reuses what was already made.
+
+**Privacy:** outlines, specs and plans stay on the PC until you approve the repo card; the dashboard only shows each forge's name or slug, stage and status.
+
+## 12. Sync to other PCs and Android
 - **Syncthing** (free). On Android use **Syncthing-Fork**, because the official Android app was discontinued.
   - Share the vault folder with your other devices.
   - The template's `.stignore` excludes `.git`, so git history stays on the main PC only. Syncing a `.git` folder between devices can corrupt it.

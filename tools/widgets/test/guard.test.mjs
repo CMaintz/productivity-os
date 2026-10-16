@@ -53,13 +53,9 @@ test('a widget may not borrow another renderer, and generated files must be exac
   assert.match(pr({ head: newWidget, expected: [] }).problems.join(), /catalog.ts isn't what/, 'unchecked generated files never pass');
 });
 
-test('manifests must be valid: exact permissions, no private fields, no connectors', () => {
-  const undeclared = pr({ head: { [`${DIR}/widget.json`]: manifest(['ci']) } });
-  assert.match(undeclared.problems.join(), /exactly the fields/);
-  const connector = pr({ head: { [`${DIR}/widget.json`]: JSON.stringify({ ...JSON.parse(manifest()), permissions: { collections: ['projects'], fields: ['ci', 'status'], connectors: ['outlook'] } }) } });
-  assert.match(connector.problems.join(), /connectors/);
+test('the guard refuses any manifest error, and checks what only it can: folder id and parseable JSON', () => {
   const secret = manifest(['ci', 'status', 'last_prompt'], { fields: ['ci', 'last_prompt'] });
-  assert.match(pr({ head: { [`${DIR}/widget.json`]: secret } }).problems.join(), /private/);
+  assert.match(pr({ head: { [`${DIR}/widget.json`]: secret } }).problems.join(), /private/, 'manifest rules themselves are tested in code.test');
   assert.match(pr({ head: { [`${DIR}/widget.json`]: manifest(undefined, { id: 'other' }) } }).problems.join(), /doesn't match its folder/);
   assert.match(pr({ head: { [`${DIR}/widget.json`]: '{nope' } }).problems.join(), /isn't valid JSON/);
 });

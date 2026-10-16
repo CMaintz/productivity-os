@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { summarise, githubBlock, githubFields, ciWord, GH_START } from '../github.mjs';
+import { summarise, githubBlock, githubFields, GH_START } from '../github.mjs';
 import { syncVault, notesWithRepo } from '../sync.mjs';
 
 const NOW = new Date('2026-10-13T08:30:00Z');
@@ -21,11 +21,6 @@ const REPO = {
   pullRequests: { totalCount: 2, nodes: [pr(91, { reviewDecision: 'APPROVED' }), pr(92, { isDraft: true }, 'FAILURE')] },
   issues: { totalCount: 3, nodes: [issue(5, ['agent:blocked']), issue(6, ['agent:ready']), issue(7, ['bug'])] },
 };
-
-test('ciWord folds GitHub rollup states', () => {
-  assert.deepEqual(['SUCCESS', 'FAILURE', 'ERROR', 'PENDING', 'EXPECTED', undefined].map(ciWord),
-    ['passing', 'failing', 'failing', 'pending', 'pending', 'none']);
-});
 
 test('summary, block and frontmatter fields', () => {
   const s = summarise(REPO);

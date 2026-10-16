@@ -94,8 +94,9 @@ export function createCard(vault, spec, now = new Date().toISOString()) {
   if (isNever(policy, spec)) return null;
   if (listCards(vault).some(c => c.key === spec.key && OPEN.includes(c.status))) return null;
   fs.mkdirSync(cardsDir(vault), { recursive: true });
-  const file = path.join(cardsDir(vault), `${now.slice(0, 10)}-${slug(spec.title)}.md`);
-  if (fs.existsSync(file)) return null;
+  const base = path.join(cardsDir(vault), `${now.slice(0, 10)}-${slug(spec.title)}`);
+  let file = `${base}.md`;
+  for (let i = 2; fs.existsSync(file); i++) file = `${base}-${i}.md`;
   fs.writeFileSync(file, renderCard(spec, { now, level: levelFor(policy, spec.action) }));
   return file;
 }

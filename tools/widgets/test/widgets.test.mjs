@@ -46,7 +46,7 @@ test('manifest validation catches bad shapes, unsafe folders and private fields'
 test('snapshot v2 renders the default layout from widgets and leaks nothing beyond whitelisted fields', () => {
   const s = buildSnapshot(vault(), { now: NOW, host: 'desk' });
   assert.equal(s.version, 2);
-  assert.deepEqual(s.layout.map(w => w.id), ['today', 'attention', 'cards', 'sessions', 'writing', 'projects']);
+  assert.deepEqual(s.layout.map(w => w.id), ['today', 'attention', 'cards', 'sessions', 'forges', 'writing', 'projects']);
   for (const id of Object.keys(s.widgets)) assert.equal(s.widgets[id].error, undefined, `${id}: ${s.widgets[id].error}`);
   assert.deepEqual(s.widgets.attention.rows.map(r => r.slug), ['site']);
   assert.deepEqual(s.widgets.projects.rows.map(r => r.slug), ['site']);
@@ -97,7 +97,7 @@ test('the dashboard demo snapshot is up to date with the pipeline', async () => 
   assert.equal(fs.readFileSync(DEMO_FILE, 'utf8'), demoJson(), 'run: node tools/widgets/demo.mjs');
 });
 
-test('review fixes: operator value types, private where/sort fields and folders, isolation, undo path', () => {
+test('manifests reject wrong operator types and private where/sort fields and folders; one bad widget stays isolated; undo stays in the widgets folder', () => {
   const base = { id: 'w', title: 'W', view: 'list', fields: ['status'], source: { kind: 'notes', folder: 'Writing' } };
   const errs = src => validateManifest({ ...base, source: { ...base.source, ...src } });
   assert.ok(errs({ where: { status: { in: 5 } } }).some(e => e.includes('wrong value type')));

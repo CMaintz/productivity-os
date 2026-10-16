@@ -23,6 +23,9 @@
       "id": "sessions"
     },
     {
+      "id": "forges"
+    },
+    {
       "id": "writing"
     },
     {
@@ -238,6 +241,49 @@
           "waiting_for": null,
           "prompts": 5,
           "updated": "2026-10-14T08:00:00.000Z"
+        }
+      ]
+    },
+    "forges": {
+      "manifest": {
+        "id": "forges",
+        "title": "Product Forge",
+        "view": "table",
+        "size": "m",
+        "fields": [
+          "title",
+          "stage",
+          "status",
+          "progress",
+          "updated"
+        ],
+        "source": {
+          "kind": "snapshot",
+          "collection": "forges",
+          "where": {
+            "status": {
+              "in": [
+                "running",
+                "waiting",
+                "failed"
+              ]
+            }
+          },
+          "sort": [
+            {
+              "field": "updated",
+              "dir": "desc"
+            }
+          ]
+        }
+      },
+      "rows": [
+        {
+          "title": "shared-shopping-lists-for-flatmates",
+          "stage": "spec",
+          "status": "running",
+          "progress": null,
+          "updated": "2026-10-14T11:30:00.000Z"
         }
       ]
     },

@@ -10,6 +10,8 @@ import { promote } from './policy.mjs';
 import { ID_PATTERN, validateManifest } from '../widgets/manifest.mjs';
 import { readLayout, writeLayout } from '../widgets/widgets.mjs';
 import { installWidget, openBuildTicket, openFixTicket, proposeCodeRemoval } from '../widgets/code-widgets.mjs';
+import { createForgeRepo } from '../forge/repo.mjs';
+import { mergeTicketPr } from '../forge/build.mjs';
 
 const MAX_SUMMARY = 1500;
 const TIMEOUT_MS = 30 * 60 * 1000;
@@ -87,6 +89,12 @@ export const HANDLERS = {
   build_code_widget: openBuildTicket,
   install_code_widget: installWidget,
   fix_widget: openFixTicket,
+  forge_create_repo: createForgeRepo,
+  forge_merge_pr: mergeTicketPr,
+  forge_question: () => ({ ok: true, summary: 'The forge passes your answer to the ticket on its next pass.' }),
+  // The forge reads these cards' outcome on its next step (tools/forge/forge.mjs).
+  forge_review: () => ({ ok: true, summary: 'The forge continues on its next pass.' }),
+  forge_questions: () => ({ ok: true, summary: 'Thanks; the forge writes the spec on its next pass.' }),
   fix_ci: claudeIn(card => card.params.cwd, REPO_TOOLS),
   claude_task: claudeIn(card => card.params.cwd, REPO_TOOLS),
   triage_inbox: claudeIn((_card, ctx) => ctx.vault, VAULT_TOOLS),

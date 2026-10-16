@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fieldsOf, readFrontmatter } from '../lib/frontmatter.mjs';
 import { listCards } from '../actions/cards.mjs';
 import { loadWidgets } from '../widgets/widgets.mjs';
+import { forgeRows } from '../forge/forge.mjs';
 
 const MAX_CARDS = 60;
 const SESSION_DAYS = 7;
@@ -61,7 +62,7 @@ function today(vault, now) {
 
 /** The vault as widget-ready collections: what `snapshot` sources query. */
 export function collections(vault, now = new Date()) {
-  return { projects: projects(vault), cards: cards(vault), sessions: sessions(vault, now), today: [today(vault, now)] };
+  return { projects: projects(vault), cards: cards(vault), sessions: sessions(vault, now), today: [today(vault, now)], forges: forgeRows(vault) };
 }
 
 export function buildSnapshot(vault, { now = new Date(), host = '' } = {}) {

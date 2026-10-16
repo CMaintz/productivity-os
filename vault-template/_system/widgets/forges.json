@@ -1,0 +1,13 @@
+{
+  "id": "forges",
+  "title": "Product Forge",
+  "view": "table",
+  "size": "m",
+  "fields": ["title", "stage", "status", "progress", "updated"],
+  "source": {
+    "kind": "snapshot",
+    "collection": "forges",
+    "where": { "status": { "in": ["running", "waiting", "failed"] } },
+    "sort": [{ "field": "updated", "dir": "desc" }]
+  }
+}

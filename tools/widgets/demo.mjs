@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { copyTemplate } from '../vault/init.mjs';
 import { createCard, listCards, updateCard, appendResult } from '../actions/cards.mjs';
 import { buildSnapshot } from '../dashboard/snapshot.mjs';
+import { newForge } from '../forge/forge.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const DEMO_FILE = path.join(ROOT, 'dashboard', 'src', 'lib', 'demo-snapshot.json');
@@ -58,6 +59,7 @@ export function demoSnapshot() {
   const v = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-vault-'));
   copyTemplate(path.join(ROOT, 'vault-template'), v);
   projects(v); sessions(v); cards(v); writing(v);
+  newForge(v, 'Shared shopping lists for flatmates', { now: new Date(at(30)) });
   note(v, 'Daily/2026-10-14.md', { type: 'daily' }, '# Today\n\n## Top 3\n1. Fix CI on cmaintz-site\n2. Draft the Foundry post\n3. Review agent ticket #12\n\n## Tasks\n- [ ] a\n- [ ] b\n- [ ] c\n- [x] d\n');
   for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(v, 'Inbox', `n${i}.md`), 'x');
   const snap = buildSnapshot(v, { now: NOW, host: 'demo-pc' });

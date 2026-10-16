@@ -62,7 +62,7 @@ Rules the local Claude follows:
 6. 🧑 Set each project's `status` (active, paused, idea…) and `priority` in the Projects base. The inventory guessed status from commit dates. 🤖 Claude can do a first pass if you tell it which projects matter.
 
 ## 4. Claude Code session tracking
-1. 🤖 `npm run hooks`. Adds the session hook to `%USERPROFILE%\.claude\settings.json`, after making a backup.
+1. 🤖 `npm run hooks`. Adds the session hook, and a status line that records your 5-hour and weekly usage to `_system/usage.json` (the Product Forge pauses builds near your limit), to `%USERPROFILE%\.claude\settings.json`, after making a backup. A status line you already have keeps running and showing; `npm run hooks -- --uninstall` restores it.
 2. 🧑 Restart any open Claude Code sessions. 🤖 Check that a new session creates a note in `Vault\Sessions\`.
 3. 🧑 In a Claude Code session inside the vault (`cd $env:USERPROFILE\Vault; claude`): `/plugin marketplace add kepano/obsidian-skills`, then install the skills it lists. This command is interactive, so it has to be you.
 
@@ -158,7 +158,7 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
 
 ### 8b. Code widgets (agent-built)
 1. 🤖 `gh auth status` on the main PC must show you logged in. The executor uses `gh` to open widget tickets and to see merged widget PRs. It creates the `widget:code` and `widget:needs-review` labels itself.
-2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`.
+2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`. The Product Forge creates new repos under `"githubOwner"` (default `CMaintz`), clones them into `"projectsRoot"` (default `~/Projects`), and pauses builds at `"usageLimit"`% of your usage window (default 80; needs something writing `_system/usage.json`).
 3. 🧑 The CI side (PR previews, auto-merge for green guarded widget PRs, deploy on merge) lands in a separate workflow PR. Until then, merge widget PRs yourself and run `npm --workspace dashboard run deploy`. The vault side installs them either way.
 
 ## Daily use, once set up

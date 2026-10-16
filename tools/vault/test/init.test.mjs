@@ -96,7 +96,7 @@ test('older notes without a docs block get one before the Log', () => {
   assert.match(note, /^path: "C:/m);
 });
 
-test('setFrontmatter replaces or adds a key', () => {
+test('setFrontmatter writes values literally, even ones with $ patterns, and adds missing keys', () => {
   assert.equal(setFrontmatter('---\na: 1\n---\nx', 'a', '$2'), '---\na: $2\n---\nx');
   assert.equal(setFrontmatter('---\na: 1\n---\nx', 'b', '2'), '---\na: 1\nb: 2\n---\nx');
 });

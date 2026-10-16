@@ -3,7 +3,7 @@
 
 export const VIEWS = ['stat', 'list', 'table', 'kanban', 'bar', 'today', 'cards'];
 export const SIZES = ['s', 'm', 'l', 'full'];
-export const COLLECTIONS = ['projects', 'cards', 'sessions', 'today'];
+export const COLLECTIONS = ['projects', 'cards', 'sessions', 'today', 'forges'];
 const SCALAR = v => ['string', 'number', 'boolean'].includes(typeof v) || v === null;
 const OP_VALUE = {
   eq: SCALAR, ne: SCALAR,
@@ -21,7 +21,7 @@ export const CODE_COLLECTIONS = ['projects', 'cards', 'sessions'];
 export const PRIVATE_FIELDS = ['last_prompt', 'decline_reason', 'params', 'undo', 'cwd', 'session_id'];
 // Folders a notes widget may not read: sessions and system state are only exposed through the
 // curated `snapshot` collections.
-const PRIVATE_FOLDERS = ['_system', 'Sessions', '.obsidian', '.claude', '.git'];
+const PRIVATE_FOLDERS = ['_system', 'Sessions', 'Forge', '.obsidian', '.claude', '.git'];
 
 function checkOps(ops, errors, at) {
   for (const [op, x] of Object.entries(ops)) {

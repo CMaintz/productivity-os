@@ -62,6 +62,30 @@ test('re-sync after a move refreshes path and docs but keeps what the user wrote
   assert.equal(syncProjects(v, { projects: [moved] }, TODAY).unchanged.length, 1);
 });
 
+test('clones of one repo keep their own notes and worktrees get none', () => {
+  const v = tmpVault();
+  const school = { ...explorer(path.resolve('/p/school/movie-explorer')), name: 'movie-explorer' };
+  const archive = { ...explorer(path.resolve('/p/_archive/movie-explorer')), name: 'movie-explorer' };
+  const wt = { ...explorer(path.resolve('/p/school/_wt/feature')), name: 'feature', worktree: true };
+  const r = syncProjects(v, { projects: [school, archive, wt] }, TODAY);
+  assert.deepEqual(r.created.map(f => path.basename(f)), ['movie-explorer.md', 'archive-movie-explorer.md']);
+  const pathOf = f => fs.readFileSync(path.join(v, 'Projects', f), 'utf8').match(/^path: (.*)$/m)[1];
+  const again = syncProjects(v, { projects: [archive, school, wt] }, TODAY);
+  assert.equal(again.unchanged.length, 2);
+  assert.equal(JSON.parse(pathOf('movie-explorer.md')), school.path);
+  assert.equal(JSON.parse(pathOf('archive-movie-explorer.md')), archive.path);
+});
+
+test('a moved checkout takes its old note only when no project sits at that note\'s path', () => {
+  const v = tmpVault();
+  syncProjects(v, { projects: [explorer()] }, TODAY);
+  const moved = explorer(path.resolve('/p/web/movie-explorer'));
+  const clone = explorer();
+  const r = syncProjects(v, { projects: [moved, clone] }, TODAY);
+  assert.equal(r.unchanged.length, 1, 'the clone still at the old path keeps the note');
+  assert.deepEqual(r.created.map(f => path.basename(f)), ['web-movie-explorer.md']);
+});
+
 test('older notes without a docs block get one before the Log', () => {
   const v = tmpVault();
   fs.mkdirSync(path.join(v, 'Projects'));
@@ -94,4 +118,15 @@ test('tools.json points the vault skills at this repo', () => {
   writeToolsConfig(v, 'C:\\Users\\akash\\Projects\\productivity-os');
   const cfg = JSON.parse(fs.readFileSync(path.join(v, '_system', 'tools.json'), 'utf8'));
   assert.equal(cfg.productivityOs, 'C:/Users/akash/Projects/productivity-os');
+});
+
+test('a renamed folder keeps its note even when a new clone of another repo takes its old name', () => {
+  const v = tmpVault();
+  syncProjects(v, { projects: [explorer()] }, TODAY);
+  const renamed = { ...explorer(path.resolve('/p/web/films')), name: 'films' };
+  const other = { ...explorer(path.resolve('/p/work/movie-explorer')), name: 'movie-explorer', github: 'someone/movie-explorer' };
+  const r = syncProjects(v, { projects: [other, renamed] }, TODAY);
+  assert.equal(r.refreshed.length, 1);
+  assert.deepEqual(r.created.map(f => path.basename(f)), ['work-movie-explorer.md']);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, 'Projects', 'movie-explorer.md'), 'utf8').match(/^path: (.*)$/m)[1]), renamed.path);
 });

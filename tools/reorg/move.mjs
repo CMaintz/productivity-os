@@ -15,6 +15,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { claudeEncode } from '../inventory/inventory.mjs';
+import { samePath } from '../lib/paths.mjs';
 
 const LOCK_HINT = 'close IDEs/terminals/Explorer windows using it, then re-run';
 
@@ -36,7 +37,6 @@ const isInside = (child, parent) => {
   const rel = path.relative(parent, child);
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 };
-const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 
 function git(cwd, args) {
   try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }

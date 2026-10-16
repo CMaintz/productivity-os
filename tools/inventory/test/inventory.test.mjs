@@ -80,6 +80,23 @@ test('inventory finds projects, git state, docs and flags', () => {
   assert.ok(fs.existsSync(path.join(a, 'node_modules/big/index.js')));
 });
 
+test('worktrees are flagged and not counted as duplicate clones', () => {
+  const { home, a } = fixture();
+  const P = path.join(home, 'Projects');
+  const wt = path.join(P, 'web', '_wt', 'feature');
+  sh(a, 'worktree', 'add', '-q', '-b', 'feature', wt);
+  const clone = path.join(P, '_archive', 'site');
+  sh(P, 'clone', '-q', a, clone);
+  sh(clone, 'remote', 'set-url', 'origin', 'https://github.com/CMaintz/site.git');
+  const inv = buildInventory({ roots: [P], home, github: null });
+  const byPath = Object.fromEntries(inv.projects.map(p => [p.path, p]));
+  assert.equal(byPath[wt].worktree, true);
+  assert.ok(byPath[wt].flags.includes('worktree'));
+  assert.equal(byPath[a].worktree, false);
+  assert.equal(byPath[clone].worktree, false);
+  assert.deepEqual(inv.duplicates.map(d => ({ ...d, paths: d.paths.sort() })), [{ github: 'cmaintz/site', paths: [a, clone].sort() }]);
+});
+
 test('folders inside _notes and _archive are docs, not projects, unless they are repos', () => {
   const { home } = fixture();
   const P = path.join(home, 'Projects');

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { updateNote, activityLine } from '../sessions.mjs';
 import { readFrontmatter } from '../../lib/frontmatter.mjs';
 import { withHook, withoutHook, hookCommand, EVENTS } from '../install.mjs';
+import { projectFor } from '../session-hook.mjs';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'session-hook.mjs');
 const project = { slug: 'site', note: 'Projects/site' };
@@ -70,4 +71,21 @@ test('hook script writes the session note, prints nothing, and reuses the note a
 test('hook does nothing when the vault is missing', () => {
   const out = execFileSync('node', [HOOK], { input: JSON.stringify(ev('Stop')), env: { ...process.env, PRODUCTIVITY_VAULT: '/nonexistent/vault' }, encoding: 'utf8' });
   assert.equal(out, '');
+});
+
+test('sessions link to the note whose path is their checkout, and worktrees to their main checkout', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'proj-'));
+  const vault = path.join(root, 'Vault');
+  const main = path.join(root, 'school', 'site');
+  const clone = path.join(root, '_archive', 'site');
+  const wt = path.join(root, 'school', '_wt', 'feature');
+  for (const d of [main, clone]) { fs.mkdirSync(d, { recursive: true }); execFileSync('git', ['init', '-q'], { cwd: d }); }
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: main });
+  execFileSync('git', ['worktree', 'add', '-q', '-b', 'feature', wt], { cwd: main });
+  fs.mkdirSync(path.join(vault, 'Projects'), { recursive: true });
+  fs.writeFileSync(path.join(vault, 'Projects', 'site.md'), `---\npath: ${JSON.stringify(main)}\n---\n`);
+  fs.writeFileSync(path.join(vault, 'Projects', 'archive-site.md'), `---\npath: ${JSON.stringify(clone)}\n---\n`);
+  assert.deepEqual(projectFor(path.join(main, 'src'), vault), { slug: 'site', note: 'Projects/site' });
+  assert.deepEqual(projectFor(clone, vault), { slug: 'archive-site', note: 'Projects/archive-site' });
+  assert.deepEqual(projectFor(wt, vault), { slug: 'site', note: 'Projects/site' });
 });

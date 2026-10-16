@@ -1,0 +1,98 @@
+name: dashboard
+# dash.maintz.dev: smoke test every PR, give same-repo PRs a preview version, deploy main.
+# widget-automerge.yml merges guarded widget:code PRs and then dispatches this workflow on
+# main, because a merge made with GITHUB_TOKEN doesn't trigger push workflows.
+on:
+  pull_request: {}
+  push: { branches: [main] }
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: dashboard-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  PUBLIC_SUPABASE_URL: ${{ vars.DASHBOARD_SUPABASE_URL }}
+  PUBLIC_SUPABASE_ANON_KEY: ${{ vars.DASHBOARD_SUPABASE_ANON_KEY }}
+jobs:
+  # Builds the dashboard and runs the browser smoke test under the production _headers CSPs,
+  # including every code widget in its sandboxed frame. Screenshots are kept as an artifact.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm --workspace dashboard run build
+      - run: npm --workspace dashboard run smoke
+        env: { PW_CHANNEL: chrome }
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dashboard-screenshots
+          path: dashboard/test-results/
+          if-no-files-found: ignore
+
+  # An undeployed Worker version at its own preview URL, linked in a PR comment.
+  # Fork PRs get no secrets, so they're skipped.
+  preview:
+    needs: smoke
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm --workspace dashboard run build
+      - name: Upload the preview version
+        id: upload
+        working-directory: dashboard
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::notice::No CLOUDFLARE_API_TOKEN secret yet; skipping the preview."; exit 0; fi
+          set -o pipefail
+          npx wrangler versions upload --preview-alias "pr-$PR" | tee upload.log
+          url=$(grep -oE 'https://pr-[0-9]+-productivity-dashboard\.[a-z0-9-]+\.workers\.dev' upload.log | head -1 || true)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          PR: ${{ github.event.number }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Comment the preview link
+        if: steps.upload.outputs.url != ''
+        run: |
+          gh pr comment "$PR" --edit-last --create-if-none --body "Dashboard preview of ${HEAD_SHA::7}: $URL/?demo (code widgets: $URL/?demo&widget=all)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          URL: ${{ steps.upload.outputs.url }}
+
+  deploy:
+    needs: smoke
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dashboard-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm --workspace dashboard run build
+      - run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "::warning::No CLOUDFLARE_API_TOKEN secret yet; not deploying."; exit 0; fi
+          npx wrangler deploy
+        working-directory: dashboard
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

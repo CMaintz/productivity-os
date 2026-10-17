@@ -31,10 +31,9 @@ Rules the local Claude follows:
    - [Obsidian](https://obsidian.md)
 3. 🧑 `gh auth login` (opens the browser), then 🤖 confirm with `gh auth status`.
 
-## 1. Merge the open PRs
-1. 🧑 Review and merge **productivity-os #4** (session tracking, docs lists, GitHub sync, `/resume`, `/next`).
-2. 🧑 Merge **cmaintz-site #91** (Keystatic editor and cross-posting), **then #92** (the CI job). Either order works, but this one is cleanest.
-3. 🤖 Pull the merged code: `git pull` in `C:\Users\akash\Projects\productivity-os`.
+## 1. Get the latest code
+1. 🧑 Merge any open PRs you want in first. Each PR body says what it needs from you.
+2. 🤖 Pull the merged code: `git pull` in `C:\Users\akash\Projects\productivity-os`.
 
 ## 2. Reorganise Projects (Phase 0)
 1. 🤖 `npm run inventory`. This only reads; it writes `out\inventory.md`.
@@ -159,7 +158,19 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
 ### 8b. Code widgets (agent-built)
 1. 🤖 `gh auth status` on the main PC must show you logged in. The executor uses `gh` to open widget tickets and to see merged widget PRs. It creates the `widget:code` and `widget:needs-review` labels itself.
 2. 🤖 Optional: if this repo isn't `CMaintz/productivity-os`, add `"githubRepo": "<owner>/<name>"` to `_system/tools.json`. The Product Forge creates new repos under `"githubOwner"` (default `CMaintz`), clones them into `"projectsRoot"` (default `~/Projects`), and pauses builds at `"usageLimit"`% of your usage window (default 80; needs something writing `_system/usage.json`).
-3. 🧑 The CI side (PR previews, auto-merge for green guarded widget PRs, deploy on merge) lands in a separate workflow PR. Until then, merge widget PRs yourself and run `npm --workspace dashboard run deploy`. The vault side installs them either way.
+3. 🧑 **Let CI deploy the dashboard.** On every PR, `dashboard.yml` runs the browser smoke test and uploads a preview version. On merge to main it deploys. `widget-automerge.yml` merges green, guarded widget PRs and then deploys. Without the values below, the preview and deploy jobs are skipped with a notice; until you add them, run `npm --workspace dashboard run deploy` yourself after merging.
+   - **Make a Cloudflare API token:** dash.cloudflare.com → My Profile → API Tokens → **Create Token** → the **Edit Cloudflare Workers** template.
+     - Account resources: your account.
+     - Zone resources: `maintz.dev`. The deploy manages the `dash.maintz.dev` route.
+     - Create it and keep the tab open. Cloudflare shows the token only once.
+   - **Store the token** in your own terminal: `gh secret set CLOUDFLARE_API_TOKEN --repo CMaintz/productivity-os`, then paste the token at the prompt.
+   - **Set the three public values.** 🤖 Claude can run these. The account ID comes from `npx wrangler whoami`, and the Supabase values are the ones from step 8.1.
+     ```
+     gh variable set CLOUDFLARE_ACCOUNT_ID --repo CMaintz/productivity-os --body <account id>
+     gh variable set DASHBOARD_SUPABASE_URL --repo CMaintz/productivity-os --body https://<project-ref>.supabase.co
+     gh variable set DASHBOARD_SUPABASE_ANON_KEY --repo CMaintz/productivity-os --body <anon key>
+     ```
+   - **Test it:** GitHub → Actions → **dashboard** → **Run workflow** on `main`, and confirm the deploy job is green. 🤖 Claude can check: `gh run list --workflow dashboard.yml --limit 1`.
 
 ## Daily use, once set up
 | When | What |

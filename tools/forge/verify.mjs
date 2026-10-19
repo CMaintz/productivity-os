@@ -8,6 +8,7 @@
 // fixing; a run without a usable report is itself a finding. Medium and high findings go back
 // into the build as tickets, as do qa's own test PRs (verification only counts with the tests on
 // main); then verify runs again. After 3 rounds, or a round no better than the last, it asks you.
+// Verified (or accepted), it offers the demo (demo.mjs).
 // Every step is resumable: state is saved as it changes, and a GitHub error just retries later.
 
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { createCard } from '../actions/cards.mjs';
 import { createIssue } from '../lib/gh.mjs';
 import { save } from './state.mjs';
-import { prepareWorktree, startRun, WORKER_TOOLS, workerStatus } from './workers.mjs';
+import { addSpend, jsonBlock, prepareWorktree, startRun, WORKER_TOOLS, workerStatus } from './workers.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 const MAX_ROUNDS = 3;
@@ -32,20 +33,19 @@ const TEST_FILE = /\.(spec|test)\.[cm]?[jt]sx?$/;
 
 /** The last fenced ```json block of a run's answer, validated: { report } or { error }. */
 export function parseReport(text) {
-  const blocks = [...String(text).matchAll(/```json\s*\n([\s\S]*?)```/g)];
-  if (!blocks.length) return { error: 'no JSON report' };
-  let r;
-  try { r = JSON.parse(blocks.at(-1)[1]); } catch (e) { return { error: `the JSON report doesn't parse (${e.message})` }; }
+  const { value: r, error } = jsonBlock(text);
+  if (error) return { error };
   if (!Array.isArray(r?.checks) || r.checks.some(c => typeof c?.name !== 'string' || typeof c.ok !== 'boolean')) return { error: 'checks must be [{ name, ok }]' };
   if (!Array.isArray(r.findings) || r.findings.some(f => typeof f?.title !== 'string' || !SEVERITIES.includes(f.severity))) return { error: `findings need a title and a severity of ${SEVERITIES.join('/')}` };
   return { report: r };
 }
 
-/** The numbered user stories in the spec. */
-export function storyNumbers(spec) {
+/** The numbered user stories in the spec: [{ n, text }]. */
+export function stories(spec) {
   const section = (String(spec).split(/^## +User stories.*$/m)[1] ?? '').split(/^## /m)[0];
-  return [...section.matchAll(/^(\d+)\.\s/gm)].map(m => Number(m[1]));
+  return [...section.matchAll(/^(\d+)\.\s+(.*)$/gm)].map(m => ({ n: Number(m[1]), text: m[2].trim() }));
 }
+export const storyNumbers = spec => stories(spec).map(s => s.n);
 
 /** Story numbers tagged ("story <n>") in the E2E test files of a checkout. */
 function taggedStories(dir) {
@@ -101,6 +101,7 @@ function collect(b, ctx, log) {
     }
     const s = workerStatus(run, { now: ctx.now, sys: ctx.sys });
     if (s === 'running') continue;
+    addSpend(b, s);
     if (s === 'timeout') ctx.sys.kill(run.pid);
     if (s !== 'timeout' && s.usageLimit) {
       v.runs[r.id] = { retryAfter: new Date(ctx.now.valueOf() + HOUR).toISOString() };
@@ -221,11 +222,22 @@ function ask(vault, f, b, ctx, actionable, why, short) {
   return `verify isn't converging (${short}); asking you`;
 }
 
+/** Verified: the demo card asks before anything goes to Cloudflare. */
+function offerDemo(vault, f, b, ctx, reason, log) {
+  const key = `forge-demo:${b.slug}`;
+  createCard(vault, {
+    action: 'forge_demo', key, risk: 'low', title: `Forge ${b.name}: verified; make a demo preview?`, reason, context: `https://github.com/${b.repo}`,
+    explain: 'builds main and runs `wrangler preview --name demo` with your Cloudflare login: an isolated preview, never production. Then an agent screenshots every user story, and you get a summary with known gaps and the usage cost. No leaves it verified without a demo.',
+    undo: 'delete the "demo" preview in the Cloudflare dashboard (Workers → the product → Previews).', params: { slug: b.slug, stage: 'verified' }, expiresDays: 30,
+  }, ctx.now.toISOString());
+  save(f, { stage: 'verified', status: 'waiting', review_key: key }, ctx.now, log);
+}
+
 function verified(vault, f, b, ctx, low) {
   const qa = parseReport(b.verify.results.qa.text).report;
   const checks = qa.checks.map(c => c.name).join(', ');
-  createCard(vault, { action: 'reminder', key: `forge-verified:${b.slug}`, risk: 'low', title: `Forge ${b.name}: verified`, reason: `Verified in ${plural(b.verify.round, 'round')}. Checks passed: ${checks}. ${low.length ? `Low findings left: ${low.map(x => plainTitle(x.title)).join('; ')}.` : 'No findings left.'}`, context: `https://github.com/${b.repo}`, explain: 'nothing runs; the demo (slice 4) comes next.', params: {} }, ctx.now.toISOString());
-  save(f, { stage: 'verified', status: 'done' }, ctx.now);
+  b.verify.low = low.map(x => plainTitle(x.title));
+  offerDemo(vault, f, b, ctx, `Verified in ${plural(b.verify.round, 'round')}. Checks passed: ${checks}. ${low.length ? `Low findings left: ${b.verify.low.join('; ')}.` : 'No findings left.'}`);
   return `verified in ${plural(b.verify.round, 'round')}`;
 }
 
@@ -269,9 +281,11 @@ export function verifyStep(vault, f, b, ctx) {
 export function resumeVerify(vault, f, b, ctx, accepted) {
   const pending = b.verify?.pending ?? [];
   if (accepted) {
-    b.verify.pending = null;
-    save(f, { stage: 'verified', status: 'done' }, ctx.now, `verify: accepted with ${plural(pending.length, 'open finding')}`);
-    return `accepted with ${plural(pending.length, 'open finding')}`;
+    const line = `accepted with ${plural(pending.length, 'open finding')}`;
+    Object.assign(b.verify, { pending: null, accepted: pending.map(x => plainTitle(x.title)) });
+    ctx.persist();
+    offerDemo(vault, f, b, ctx, `You ${line} after ${plural(b.verify.round, 'round')}: ${b.verify.accepted.join('; ')}.`, `verify: ${line}`);
+    return line;
   }
   Object.assign(b.verify, { limit: b.verify.round + 1, pending: null, fixing: pending, fixingTotal: pending.length });
   ctx.persist();

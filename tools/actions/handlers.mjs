@@ -95,6 +95,7 @@ export const HANDLERS = {
   // The forge reads these cards' outcome on its next step (tools/forge/forge.mjs).
   forge_review: () => ({ ok: true, summary: 'The forge continues on its next pass.' }),
   forge_questions: () => ({ ok: true, summary: 'Thanks; the forge writes the spec on its next pass.' }),
+  forge_demo: () => ({ ok: true, summary: 'The forge makes the preview and the tour on its next pass.' }),
   fix_ci: claudeIn(card => card.params.cwd, REPO_TOOLS),
   claude_task: claudeIn(card => card.params.cwd, REPO_TOOLS),
   triage_inbox: claudeIn((_card, ctx) => ctx.vault, VAULT_TOOLS),

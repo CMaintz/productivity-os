@@ -18,10 +18,11 @@ import { fieldsOf } from '../lib/frontmatter.mjs';
 import { save } from './state.mjs';
 import { slugOf } from './naming.mjs';
 import { collectAnswer, finishLead, startLead } from './lead.mjs';
-import { startWorker, system, workerStatus } from './workers.mjs';
+import { addSpend, startWorker, system, workerStatus } from './workers.mjs';
 import { parsePlan } from './stages.mjs';
 import { ownerOf } from './repo.mjs';
 import { resumeVerify, verifyStep } from './verify.mjs';
+import { demoStep } from './demo.mjs';
 
 const BUILD_DIR = path.join('_system', 'forge-builds');
 const MAX_ATTEMPTS = 2;
@@ -114,6 +115,7 @@ function collectLead(vault, b, ctx, n, log) {
   const t = b.tickets[n];
   const s = workerStatus(t.leadRun, { now: ctx.now, sys: ctx.sys });
   if (s === 'running') return;
+  addSpend(b, s);
   if (s === 'timeout') ctx.sys.kill(t.leadRun.pid);
   log.push(finishLead(vault, ctx, b, n, s === 'timeout' ? { ok: false, text: 'timed out' } : s));
 }
@@ -125,6 +127,7 @@ function collect(vault, b, ctx, log) {
     if (!t.run) continue;
     let s = workerStatus(t.run, { now: ctx.now, sys: ctx.sys });
     if (s === 'running') continue;
+    addSpend(b, s);
     if (s === 'timeout') { ctx.sys.kill(t.run.pid); s = { ok: false, text: 'no result after the time limit', usageLimit: false }; }
     if (s.usageLimit) { Object.assign(t, { state: 'ready', run: null }); b.paused_until = pauseUntil(ctx.usage, ctx.now); log.push(`T${n}: hit the usage limit; paused until ${b.paused_until}`); continue; }
     if (t.flagged) { t.run = null; markBlocked(t, s.text || 'The worker labelled it agent:blocked.'); log.push(`T${n}: the worker says it's blocked`); continue; }
@@ -183,13 +186,19 @@ function releaseAndStart(vault, b, ctx, log) {
 
 const STALE_MIN = 30;
 
-/** The status line's last usage record; one older than STALE_MIN says nothing about now. */
-function readUsage(vault, now, b, log) {
+/** The status line's last usage record, or null when there is none or it is too old to say anything about now. */
+function freshUsage(vault, now) {
   let u;
   try { u = JSON.parse(fs.readFileSync(path.join(vault, '_system', 'usage.json'), 'utf8')); } catch { return null; }
-  if (u.recordedAt && (now - new Date(u.recordedAt)) / 6e4 <= STALE_MIN) { b.stale_noted = null; return u; }
-  if (b.stale_noted !== u.recordedAt) log.push(`usage record is from ${u.recordedAt ?? 'an unknown time'}, too old to trust; unpaced for now`);
-  b.stale_noted = u.recordedAt ?? 'unknown';
+  return u.recordedAt && (now - new Date(u.recordedAt)) / 6e4 <= STALE_MIN ? u : { stale: u.recordedAt ?? 'unknown' };
+}
+
+/** The usage record for pacing; a stale one is logged once and ignored. */
+function readUsage(vault, now, b, log) {
+  const u = freshUsage(vault, now);
+  if (!u?.stale) { if (u) b.stale_noted = null; return u; }
+  if (b.stale_noted !== u.stale) log.push(`usage record is from ${u.stale}, too old to trust; unpaced for now`);
+  b.stale_noted = u.stale;
   return null;
 }
 
@@ -212,20 +221,27 @@ function pass(vault, b, ctx, log) {
   releaseAndStart(vault, b, ctx, log);
 }
 
-/** The build state and the context build and verify passes share. */
+/** The build state and the context build, verify and demo passes share. */
 function open(vault, f, { now, gh, sys = system }) {
-  const ctx = { now, gh, sys, logDir: path.join(vault, BUILD_DIR, f.slug) };
+  const ctx = { now, gh, sys, vault, logDir: path.join(vault, BUILD_DIR, f.slug) };
   const b = loadBuild(vault, f.slug) ?? enterBuild(vault, f, ctx);
   ctx.persist = () => saveBuild(vault, b);
+  // Weekly usage when the run was first seen with a fresh record, and now: the demo reports the difference.
+  const u = freshUsage(vault, now);
+  ctx.weekly = u && !u.stale && Number.isFinite(u.weeklyPct) ? u.weeklyPct : null;
+  if (b.weekly_start == null && ctx.weekly != null) b.weekly_start = ctx.weekly;
   return { b, ctx };
 }
 
-/** One pass of the build or verify stage (a finished build can hand over to verify in the same pass). */
+const STEPS = { verify: verifyStep, demo: demoStep };
+
+/** One pass of the build, verify or demo stage (a finished build can hand over to verify in the same pass). */
 export function buildOrVerify(vault, f, opts) {
   const lines = f.stage === 'build' ? buildStep(vault, f, opts).map(l => `build: ${l}`) : [];
-  if (f.stage !== 'verify' || f.status !== 'running') return lines;
+  const step = STEPS[f.stage];
+  if (!step || f.status !== 'running') return lines;
   const { b, ctx } = open(vault, f, opts);
-  lines.push(...verifyStep(vault, f, b, ctx));
+  lines.push(...step(vault, f, b, ctx));
   saveBuild(vault, b);
   return lines;
 }

@@ -166,3 +166,16 @@ test('build: a stuck worker is stopped after the time limit and counts as a fail
   assert.match((await pass(w, 181)).join(), /retrying/);
   assert.deepEqual(w.sys.killed, [pid]);
 });
+
+test('build: what workers and the lead spend counts toward the forge cost', async () => {
+  const w = building();
+  const cost = { total_cost_usd: 0.5, duration_ms: 1000, usage: { input_tokens: 10, output_tokens: 2 } };
+  await pass(w, 1);
+  w.sys.finish('nope', true, undefined, cost);
+  await pass(w, 2);
+  w.sys.finish('still nope', true, undefined, cost);
+  await pass(w, 3);
+  w.sys.finish('UNBLOCK: try the list component.', false, /lead agent/, cost);
+  await pass(w, 4);
+  assert.deepEqual(loadBuild(w.v, 'tidy-flat').spent, { usd: 1.5, input: 30, output: 6, cached: 0, ms: 3000, runs: 3 });
+});

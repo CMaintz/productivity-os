@@ -50,15 +50,22 @@ export function fakeGitHub(issueNumbers) {
 
 export function fakeSystem() {
   const running = new Set();
-  const sys = { started: [], killed: [], pid: 1000 };
+  const sys = { started: [], killed: [], ran: [], pid: 1000 };
   sys.git = () => '';
+  /** Commands the forge runs itself (npm, wrangler); `respond` answers them, a throw is a failure. */
+  sys.respond = () => '';
+  sys.run = (cmd, args, cwd) => { sys.ran.push({ cmd, args, cwd }); return sys.respond(cmd, args, cwd); };
   sys.alive = pid => running.has(pid);
   sys.kill = pid => { sys.killed.push(pid); running.delete(pid); };
-  sys.spawnClaude = (prompt, cwd, log, tools) => { const pid = ++sys.pid; running.add(pid); sys.started.push({ pid, prompt, cwd, log, tools }); return pid; };
+  sys.spawnClaude = (prompt, cwd, log, tools, env) => { const pid = ++sys.pid; running.add(pid); sys.started.push({ pid, prompt, cwd, log, tools, env }); return pid; };
+  /** A detached node script (the demo's preview): it runs until `finishNode` or a test replaces this. */
+  sys.nodes = [];
+  sys.spawnNode = (script, args, log) => { const pid = ++sys.pid; running.add(pid); sys.nodes.push({ pid, script, args, log }); return pid; };
+  sys.finishNode = (out, result) => { fs.writeFileSync(out.args.at(-1), JSON.stringify(result)); running.delete(out.pid); };
   /** A run exits with this result: the newest one, or the newest whose prompt matches `which`. */
-  sys.finish = (result, isError = false, which) => {
+  sys.finish = (result, isError = false, which, extra = {}) => {
     const w = [...sys.started].reverse().find(x => running.has(x.pid) && (!which || which.test(x.prompt)));
-    fs.writeFileSync(w.log, JSON.stringify({ is_error: isError, result }));
+    fs.writeFileSync(w.log, JSON.stringify({ is_error: isError, result, ...extra }));
     running.delete(w.pid);
   };
   return sys;

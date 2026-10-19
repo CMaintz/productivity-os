@@ -24,6 +24,8 @@ export const DEFAULTS = {
   // Merging is a hard ceiling until you promote it: green checks only, one exact commit.
   forge_merge_pr: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
   forge_question: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
+  // A preview under your Cloudflare login, never production: asked until you promote it.
+  forge_demo: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

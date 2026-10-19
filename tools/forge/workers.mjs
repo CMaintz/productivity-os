@@ -19,7 +19,15 @@ const win = process.platform === 'win32';
 export const system = {
   git: (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
   /** A command the forge runs itself (npm, wrangler), waiting for it. Throws on a non-zero exit. */
-  run: (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: win, windowsHide: true, timeout: 20 * 60_000 }),
+  run: (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: win, windowsHide: true, timeout: 20 * 60_000, maxBuffer: 64 * 2 ** 20 }),
+  /** Starts a node script detached, its output in logFile. Returns the pid. */
+  spawnNode: (script, args, logFile) => {
+    const out = fs.openSync(logFile, 'w');
+    const child = spawn(process.execPath, [script, ...args], { detached: true, stdio: ['ignore', out, out], windowsHide: true });
+    child.unref();
+    fs.closeSync(out);
+    return child.pid;
+  },
   /** Alive, and started in this boot: after a reboot a reused pid can't pass for our worker. */
   alive: (pid, started) => {
     const bootedAt = Date.now() - os.uptime() * 1000;
@@ -30,13 +38,13 @@ export const system = {
   kill: pid => {
     try { if (win) execFileSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore' }); else process.kill(-pid); } catch { /* already gone */ }
   },
-  /** Starts `claude -p` detached with the prompt on stdin. Returns the pid. */
-  spawnClaude: (prompt, cwd, logFile, tools) => {
+  /** Starts `claude -p` detached with the prompt on stdin (and `env` instead of ours, if given). Returns the pid. */
+  spawnClaude: (prompt, cwd, logFile, tools, env) => {
     const out = fs.openSync(logFile, 'w');
     const err = fs.openSync(`${logFile}.err`, 'w');
     const args = ['-p', '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', tools];
     const child = spawn(process.env.CLAUDE_BIN || 'claude', win ? args.map(a => (/[\s,()*]/.test(a) ? `"${a}"` : a)) : args,
-      { cwd, detached: true, stdio: ['pipe', out, err], shell: win, windowsHide: true });
+      { cwd, detached: true, stdio: ['pipe', out, err], shell: win, windowsHide: true, ...(env ? { env } : {}) });
     child.stdin.end(prompt);
     child.unref();
     fs.closeSync(out);
@@ -47,15 +55,15 @@ export const system = {
 
 export const worktreeOf = (clone, name) => path.join(`${clone}-worktrees`, name);
 
-/** A worktree on branch forge/<name>: from that remote branch when an earlier attempt pushed one, else from main. */
-export function prepareWorktree(sys, clone, name, attempt = 0) {
+/** A worktree on branch forge/<name>: from that remote branch when an earlier attempt pushed one (unless fromMain), else from main. */
+export function prepareWorktree(sys, clone, name, attempt = 0, { fromMain = false } = {}) {
   sys.git(['fetch', '--quiet', '--prune', 'origin'], clone);
   sys.git(['worktree', 'prune'], clone);
   let wt = worktreeOf(clone, name);
   if (fs.existsSync(wt)) {
     try { sys.git(['worktree', 'remove', '--force', wt], clone); } catch { wt = `${wt}-${attempt}`; }
   }
-  const remote = sys.git(['ls-remote', '--heads', 'origin', `forge/${name}`], clone).trim();
+  const remote = !fromMain && sys.git(['ls-remote', '--heads', 'origin', `forge/${name}`], clone).trim();
   sys.git(['worktree', 'add', '-B', `forge/${name}`, wt, remote ? `origin/forge/${name}` : 'origin/main'], clone);
   return wt;
 }
@@ -73,25 +81,40 @@ If you can't finish, label the issue agent:blocked and comment why.`;
   return { pid: sys.spawnClaude(prompt, wt, log, WORKER_TOOLS), log, started: now.toISOString() };
 }
 
-/** Starts a detached run with the given prompt and tools (the lead). */
-export function startRun({ prompt, cwd, tools, logDir, name, now, sys = system }) {
+/** Starts a detached run with the given prompt and tools (the lead, verify checks, the demo tour). */
+export function startRun({ prompt, cwd, tools, logDir, name, now, env, sys = system }) {
   fs.mkdirSync(logDir, { recursive: true });
   const log = path.join(logDir, `${name}-${now.valueOf()}.json`);
-  return { pid: sys.spawnClaude(prompt, cwd, log, tools), log, started: now.toISOString() };
+  return { pid: sys.spawnClaude(prompt, cwd, log, tools, env), log, started: now.toISOString() };
+}
+
+const SECRETS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN'];
+
+/**
+ * Our environment without Cloudflare and GitHub credentials, for a run that must not deploy or
+ * push: stored logins are hidden behind empty config folders (wrangler and gh read XDG_CONFIG_HOME
+ * and GH_CONFIG_DIR) and git loses its credential helper. Claude's own login is untouched.
+ */
+export function sandboxEnv(dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+  for (const d of ['config', 'gh']) fs.mkdirSync(path.join(dir, d), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'gitconfig'), '');
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !SECRETS.includes(k)));
+  return { ...env, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), XDG_CONFIG_HOME: path.join(dir, 'config'), GH_CONFIG_DIR: path.join(dir, 'gh'), GIT_CONFIG_GLOBAL: path.join(dir, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
 }
 
 /** What a run spent, from claude's JSON result. total_cost_usd is the API price; on a subscription nothing is billed. */
 const spentOf = out => {
   const u = out.usage ?? {};
   const n = v => Number(v) || 0;
-  return { usd: n(out.total_cost_usd), input: n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens), output: n(u.output_tokens), ms: n(out.duration_ms) };
+  return { usd: n(out.total_cost_usd), input: n(u.input_tokens) + n(u.cache_creation_input_tokens), output: n(u.output_tokens), cached: n(u.cache_read_input_tokens), ms: n(out.duration_ms) };
 };
 
 /** Adds a finished run's spend to the forge's running total. */
 export function addSpend(b, s) {
   if (!s?.spent) return;
-  const t = (b.spent ??= { usd: 0, input: 0, output: 0, ms: 0, runs: 0 });
-  for (const k of ['usd', 'input', 'output', 'ms']) t[k] += s.spent[k];
+  const t = (b.spent ??= { usd: 0, input: 0, output: 0, cached: 0, ms: 0, runs: 0 });
+  for (const k of ['usd', 'input', 'output', 'cached', 'ms']) t[k] = (t[k] ?? 0) + s.spent[k];
   t.runs += 1;
 }
 

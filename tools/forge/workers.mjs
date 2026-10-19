@@ -18,6 +18,8 @@ const win = process.platform === 'win32';
 /** Real process plumbing; tests pass fakes with the same shape. */
 export const system = {
   git: (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
+  /** A command the forge runs itself (npm, wrangler), waiting for it. Throws on a non-zero exit. */
+  run: (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: win, windowsHide: true, timeout: 20 * 60_000 }),
   /** Alive, and started in this boot: after a reboot a reused pid can't pass for our worker. */
   alive: (pid, started) => {
     const bootedAt = Date.now() - os.uptime() * 1000;
@@ -78,12 +80,34 @@ export function startRun({ prompt, cwd, tools, logDir, name, now, sys = system }
   return { pid: sys.spawnClaude(prompt, cwd, log, tools), log, started: now.toISOString() };
 }
 
-/** 'running', 'timeout', or the finished result { ok, text, usageLimit }. */
+/** What a run spent, from claude's JSON result. total_cost_usd is the API price; on a subscription nothing is billed. */
+const spentOf = out => {
+  const u = out.usage ?? {};
+  const n = v => Number(v) || 0;
+  return { usd: n(out.total_cost_usd), input: n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens), output: n(u.output_tokens), ms: n(out.duration_ms) };
+};
+
+/** Adds a finished run's spend to the forge's running total. */
+export function addSpend(b, s) {
+  if (!s?.spent) return;
+  const t = (b.spent ??= { usd: 0, input: 0, output: 0, ms: 0, runs: 0 });
+  for (const k of ['usd', 'input', 'output', 'ms']) t[k] += s.spent[k];
+  t.runs += 1;
+}
+
+/** The last fenced ```json block of a run's answer: { value } or { error }. */
+export function jsonBlock(text) {
+  const blocks = [...String(text).matchAll(/```json\s*\n([\s\S]*?)```/g)];
+  if (!blocks.length) return { error: 'no JSON report' };
+  try { return { value: JSON.parse(blocks.at(-1)[1]) }; } catch (e) { return { error: `the JSON report doesn't parse (${e.message})` }; }
+}
+
+/** 'running', 'timeout', or the finished result { ok, text, usageLimit, spent }. */
 export function workerStatus(run, { now, sys = system }) {
   if (sys.alive(run.pid, run.started)) return (now - new Date(run.started)) / 36e5 >= WORKER_TIMEOUT_H ? 'timeout' : 'running';
   const raw = fs.existsSync(run.log) ? fs.readFileSync(run.log, 'utf8').trim() : '';
   let out;
   try { out = JSON.parse(raw); } catch { out = { is_error: true, result: raw.slice(-300) || 'no output' }; }
   const text = String(out.result ?? '');
-  return { ok: !out.is_error, text, usageLimit: !!out.is_error && USAGE_LIMIT.test(text) };
+  return { ok: !out.is_error, text, usageLimit: !!out.is_error && USAGE_LIMIT.test(text), spent: spentOf(out) };
 }

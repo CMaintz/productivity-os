@@ -9,32 +9,10 @@ import { loadBuild } from '../build.mjs';
 import { parseReport, storyNumbers } from '../verify.mjs';
 import { runOnce } from '../../actions/executor.mjs';
 import { harness } from './build-fakes.mjs';
+import { verifyFakes } from './verify-fakes.mjs';
 
-const { at, building, pass, cardBy, press } = harness();
-const SPEC = '# Spec\n## Problem\nx\n## User stories\n1. As a user, I want a list.\nAcceptance criteria:\n- [ ] saves\n2. As a user, I want to share it.\nAcceptance criteria:\n- [ ] link\n## Non-goals\nx\n';
-const report = (checks, findings = []) => 'Done.\n```json\n' + JSON.stringify({ checks, findings }) + '\n```\n';
-const ok = name => ({ name, ok: true, details: 'fine' });
-const QA_CLEAN = report([ok('story 1'), ok('story 2'), ok('axe'), ok('lighthouse'), ok('npm audit'), ok('licenses')]);
-const forge = w => listForges(w.v)[0];
-
-/** A forge whose build just finished and whose "built" card you approved. */
-async function readyToVerify() {
-  const w = building({ spec: SPEC });
-  for (const n of [11, 12, 13]) w.gh.issues.get(n).state = 'CLOSED';
-  await pass(w, 1);
-  press(cardBy(w, 'forge_review'), 'done');
-  return w;
-}
-
-/** Finishes the three runs of the current round; qa leaves an E2E file tagged with the stories it covers. */
-function finishRound(w, { qa = QA_CLEAN, arch = report([]), spec = report([]), tests = "test('story 1: list', ...);\ntest('story 2: share', ...);\n" } = {}) {
-  const qaRun = [...w.sys.started].reverse().find(r => /^You are the qa/.test(r.prompt));
-  fs.mkdirSync(path.join(qaRun.cwd, 'e2e'), { recursive: true });
-  fs.writeFileSync(path.join(qaRun.cwd, 'e2e', 'stories.spec.ts'), tests);
-  w.sys.finish(qa, false, /^You are the qa/);
-  w.sys.finish(arch, false, /^You are the architecture/);
-  w.sys.finish(spec, false, /^You are the spec/);
-}
+const { at, pass, cardBy, press } = harness();
+const { SPEC, report, ok, forge, readyToVerify, finishRound } = verifyFakes(harness());
 
 test('reports: the last fenced JSON block, with checks and findings in the agreed shape', () => {
   assert.deepEqual(parseReport(report([ok('axe')], [{ title: 'x', severity: 'high', details: 'd' }])).report.findings[0].severity, 'high');
@@ -75,7 +53,7 @@ test('findings of medium and up go back into the build as tickets; low ones are 
   finishRound(w);
   assert.match((await pass(w, 5)).join(), /verified/);
   assert.equal(forge(w).stage, 'verified');
-  assert.match(cardBy(w, 'reminder').text, /Verified in 2 rounds/);
+  assert.match(cardBy(w, 'forge_demo').text, /Verified in 2 rounds/);
 });
 
 test('coverage is enforced: a story without an E2E check, or a run without a usable report, is a high finding', async () => {

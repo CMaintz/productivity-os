@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The Product Forge, stages 1-4: an outline becomes spec.md, a stack ADR, naming.md (with
 // availability checks) and plan.md, one stage per executor pass. Each stage is a `claude -p`
-// run whose output the runner checks before moving on. Stop-points wait on a forge_review card:
+// run whose output the runner checks before moving on. (Build, verify and the demo come after:
+// build.mjs, verify.mjs, demo.mjs.) Stop-points wait on a forge_review card:
 // approve continues, reject-with-reason reruns the stage with that feedback. The plan ends in a
 // forge_create_repo card (see repo.mjs).
 //
@@ -32,6 +33,7 @@ const FILE_TOOLS = 'Read,Write,Edit,Glob,Grep';
 const STAGE_TOOLS = { spec: FILE_TOOLS, stack: `${FILE_TOOLS},WebSearch,WebFetch`, naming: `${FILE_TOOLS},WebSearch`, plan: FILE_TOOLS };
 const MAX_ATTEMPTS = 2;
 const ACTIVE = ['running', 'waiting'];
+const SAME_PASS = ['verify', 'demo'];
 
 const q = v => JSON.stringify(v);
 const prompt = (name, vars) => Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), fs.readFileSync(path.join(PROMPTS, `${name}.md`), 'utf8'));
@@ -65,6 +67,11 @@ function resume(vault, f, ctx) {
   const status = card?.status ?? 'missing';
   if (['pending', 'snoozed', 'approved', 'running'].includes(status)) return null;
   if (f.stage === 'verify' && card?.action === 'forge_review' && ['done', 'rejected'].includes(status)) return verifyDecision(vault, f, ctx, status === 'rejected');
+  if (f.stage === 'verified' && card?.action === 'forge_demo') {
+    if (status === 'done') { save(f, { stage: 'demo', status: 'running' }, now, 'demo: making the preview'); return 'demoing'; }
+    save(f, { status: 'done' }, now, `demo: none (the card is ${status})`);
+    return 'no demo';
+  }
   if (status === 'rejected') { save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with your feedback`); return 'feedback'; }
   if (status === 'failed' && card.action === 'forge_create_repo') { save(f, { review_key: proposeRepo(vault, f, now) }, now, 'creating the repo failed (see the card); offering it again'); return 'repo-retry'; }
   if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`); return 'stopped'; }
@@ -121,12 +128,12 @@ export async function advance(vault, f, ctx) {
   const lines = [];
   if (f.status === 'waiting') {
     const r = resume(vault, f, ctx);
-    // Into verify (or back to it) goes on in the same pass; every other stage waits for the next one.
-    if (!r || f.stage !== 'verify' || f.status !== 'running') return r;
-    if (r !== 'verifying') lines.push(r);
+    // Into verify (or back to it) or the demo goes on in the same pass; every other stage waits for the next one.
+    if (!r || !SAME_PASS.includes(f.stage) || f.status !== 'running') return r;
+    if (r !== 'verifying' && r !== 'demoing') lines.push(r);
   }
   if (f.status !== 'running') return null;
-  if (f.stage === 'build' || f.stage === 'verify') {
+  if (['build', ...SAME_PASS].includes(f.stage)) {
     lines.push(...buildOrVerify(vault, f, ctx));
     return lines.length ? lines.join('; ') : null;
   }

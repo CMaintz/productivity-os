@@ -44,6 +44,17 @@ const MUTANTS = [
   ["verify: reviewer text unquoted", "tools/forge/verify.mjs", "${quoted(x.details || x.title)}", "${x.details || x.title}"],
   ["verify: E2E tests never merged", "tools/forge/verify.mjs", "return queueTestPr(b, ctx) ? startFixing(f, b, ctx, []) : verified(vault, f, b, ctx, low);", "return verified(vault, f, b, ctx, low);"],
   ["verify: usage stop filed as a bug", "tools/forge/verify.mjs", "if (s !== 'timeout' && s.usageLimit) {", "if (false) {"],
+  ["demo: production deploy", "tools/forge/demo.mjs", "const PREVIEW = ['wrangler', 'preview', '--name', 'demo'];", "const PREVIEW = ['wrangler', 'deploy'];"],
+  ["demo: deploys without asking", "tools/forge/verify.mjs", "save(f, { stage: 'verified', status: 'waiting', review_key: key }", "save(f, { stage: 'demo', status: 'running', review_key: key }"],
+  ["demo: No still deploys", "tools/forge/forge.mjs", "if (status === 'done') { save(f, { stage: 'demo'", "if (true) { save(f, { stage: 'demo'"],
+  ["demo: tour may run any npx", "tools/forge/demo.mjs", "Bash(npx playwright:*)';", "Bash(npx playwright:*),Bash(npx:*)';"],
+  ["demo: too-old wrangler used", "tools/forge/demo.mjs", "if (older([", "if (false && older(["],
+  ["demo: failed preview fails the demo", "tools/forge/demo.mjs", "} catch (e) { return { reason: `wrangler preview failed", "} catch (e) { throw e; return { reason: `wrangler preview failed"],
+  ["demo: shots from outside the checkout copied", "tools/forge/demo.mjs", "!src.startsWith(root + path.sep) || ", ""],
+  ["demo: unshot story not a gap", "tools/forge/demo.mjs", "...all.filter(s => !shots[s.n])", "...all.filter(() => false)"],
+  ["demo: usage stop ends the demo", "tools/forge/demo.mjs", "    if (s.usageLimit) {\n      d.retryAfter", "    if (false) {\n      d.retryAfter"],
+  ["demo: accepted findings not listed", "tools/forge/demo.mjs", "...(b.verify?.accepted ?? []).map(", "...[].map("],
+  ["cost: verify runs not counted", "tools/forge/verify.mjs", "    addSpend(b, s);\n    if (s === 'timeout') ctx.sys.kill(run.pid);", "    if (s === 'timeout') ctx.sys.kill(run.pid);"],
 ];
 
 const survivors = [];

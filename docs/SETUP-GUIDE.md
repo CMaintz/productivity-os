@@ -172,6 +172,8 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
      ```
    - **Test it:** GitHub → Actions → **dashboard** → **Run workflow** on `main`, and confirm the deploy job is green. 🤖 Claude can check: `gh run list --workflow dashboard.yml --limit 1`.
 
+4. 🤖 **Product Forge demos** use the wrangler login on this PC (step 6.2) to make a Cloudflare preview of each finished product, never a production deploy. Check it with `npx wrangler whoami`. Each demo asks first on a card.
+
 ## Daily use, once set up
 | When | What |
 |---|---|

@@ -189,7 +189,15 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
 - **Reviewer text:** it reaches workers only quoted and marked as untrusted.
 - **Findings:** medium and high findings become `verify` tickets, the build fixes them, and the next round runs on its own. Low findings are listed in the forge's log.
 - **Stopping:** after 3 rounds, or a round no better than the last, a card asks you. **Do it** fixes what's open and allows exactly one more round; **No** accepts the product as it is.
-- **Done:** a clean round marks the forge `verified`. The demo (slice 4) is next.
+- **Done:** a clean round marks the forge `verified` and offers the demo. Accepting on the stop card offers it too.
+
+**Demo** (#27). The "verified" card asks before anything goes to Cloudflare. Approving it:
+- **Preview:** the forge itself, not a model, builds a fresh checkout of `main` and runs `wrangler preview --name demo` with your wrangler login. That gives an isolated Cloudflare preview; the forge never runs `wrangler deploy`. It needs a wrangler config in the product repo and wrangler 4.135 or later. Without them, or if the upload fails, the tour runs against a local server and the summary says why.
+- **Tour:** an agent walks every user story in a browser and takes one screenshot per story. It has Playwright and `npm run preview` only: no wrangler, `gh` or `git`. The forge copies only screenshots that really are files inside the tour's checkout.
+- **Summary:** `Forge/<slug>/demo.md`, with what was built, a screenshot per story, known gaps (stories without a screenshot, open findings you accepted, verify's low findings, no preview and why) and the cost.
+- **Cost:** every agent run of the forge adds what it spent: the API-equivalent dollars from `claude -p` (on a subscription nothing is billed), tokens and minutes. With fresh usage records it also shows how many points of your weekly usage the run took.
+- **Usage limit:** a tour stopped by it is retried after an hour.
+- **Done:** the forge is `demoed`, and a card has the preview link. Delete the preview in the Cloudflare dashboard when you're done with it. Selling or handing over (slice 5) is next.
 
 **Guardrails:**
 - Workers get `gh` only for their ticket and PR: view, comment, label, PR create and checks. That means no merge, `api` or `repo` commands.

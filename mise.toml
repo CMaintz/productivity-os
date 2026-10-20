@@ -15,20 +15,27 @@ node = "22.14.0" # pin to whatever the repo actually uses
 # workflow's `habit_hooks_version` default (1.5.0).
 HABIT_HOOKS_VERSION = "1.5.0"
 HABIT_HOOKS_PLUGIN = "habit-hooks-typescript"
+# The Foundry gate scripts (foundry-verb-wrap, npm-audit-ratchet.mjs) are provisioned by
+# setup:foundry-scripts into a cache dir at this ref, not vendored into the repo (see that
+# task for why). Renovate tracks the pin via the comment above it.
+# renovate: datasource=github-tags depName=CMaintz/foundry
+FOUNDRY_SCRIPTS_REF = "v2.12.0"
 
 # Put local binaries on PATH so tasks call `eslint`, not `npx eslint`; the habit-hooks venv
-# bin (Linux `bin/`, Windows `Scripts/` - a missing one on PATH is harmless); and the repo's
-# scripts/ so the gate can call `foundry-verb-wrap` by name (foundry-init installs it).
+# bin (Linux `bin/`, Windows `Scripts/` - a missing one on PATH is harmless); the Foundry
+# gate scripts cached by setup:foundry-scripts (so the gate runs `foundry-verb-wrap` by
+# name); and the repo's own scripts/ last.
 _.path = [
     "./node_modules/.bin",
     "{{env.HOME}}/.local/opt/{{env.HABIT_HOOKS_PLUGIN}}-{{env.HABIT_HOOKS_VERSION}}/bin",
     "{{env.HOME}}/.local/opt/{{env.HABIT_HOOKS_PLUGIN}}-{{env.HABIT_HOOKS_VERSION}}/Scripts",
+    "{{env.HOME}}/.local/opt/foundry-scripts-{{env.FOUNDRY_SCRIPTS_REF}}",
     "{{config_root}}/scripts",
 ]
 
 # Loop telemetry: each gate verb appends one JSONL line here (see designs/loop-telemetry.md).
-# Gitignore `.foundry/`. Read it with `foundry-loop-report`. The gate calls
-# `foundry-verb-wrap` (installed by foundry-init, on PATH via scripts/ above).
+# Gitignore `.foundry/`. Read it with the `foundry:loop-report` skill. The gate calls
+# `foundry-verb-wrap` (cached by setup:foundry-scripts, on PATH above).
 FOUNDRY_TELEMETRY = "{{config_root}}/.foundry/telemetry.jsonl"
 
 # Deno code to type-check with `deno check` in `typecheck` (space-separated dirs/files,
@@ -65,8 +72,37 @@ FOUNDRY_TELEMETRY = "{{config_root}}/.foundry/telemetry.jsonl"
 # LEASH_ENABLED = "0"                 # 1 runs Leash turn checks (repos with the leash.sh hook)
 
 [hooks]
-# Provision the pinned habit-hooks on `mise install` (local and CI alike), like setup:pmd.
-postinstall = "mise run setup:habit-hooks"
+# Provision the pinned tools on `mise install` (local and CI alike). Array form runs them
+# in order; each no-ops on a warm install.
+postinstall = ["mise run setup:habit-hooks", "mise run setup:foundry-scripts"]
+
+# Fetch the pinned Foundry gate scripts into a cache dir, rather than vendoring copies into
+# the repo. Why: these are agent/CI plumbing, not the repo's own code; a vendored copy
+# drifts from Foundry and has to be re-synced on every bump. Pinned to FOUNDRY_SCRIPTS_REF
+# and provisioned once (postinstall / `mise install`), exactly like setup:habit-hooks and
+# setup:pmd. Offline-safe: when every script is already cached at this ref it makes no
+# network call, so the gate hot path never depends on the network. A ref bump needs the
+# network once (same contract as any pinned-tool bump).
+[tasks."setup:foundry-scripts"]
+description = "Fetch the pinned Foundry gate scripts into a cache dir (de-vendored)"
+run = '''
+set -eu
+dst="$HOME/.local/opt/foundry-scripts-$FOUNDRY_SCRIPTS_REF"
+scripts="foundry-verb-wrap npm-audit-ratchet.mjs"
+need=""
+for s in $scripts; do [ -f "$dst/$s" ] || need="$need $s"; done
+[ -z "$need" ] && exit 0
+mkdir -p "$dst"
+base="https://raw.githubusercontent.com/CMaintz/foundry/$FOUNDRY_SCRIPTS_REF/scripts"
+for s in $need; do
+  if ! curl -fsSL "$base/$s" -o "$dst/$s.part"; then
+    echo "setup:foundry-scripts: cannot fetch $s at $FOUNDRY_SCRIPTS_REF (network needed once per ref)" >&2
+    rm -f "$dst/$s.part"; exit 1
+  fi
+  mv "$dst/$s.part" "$dst/$s"
+  case "$s" in *.mjs) : ;; *) chmod +x "$dst/$s" 2>/dev/null || true ;; esac
+done
+'''
 
 [tasks.fix]
 description = "Auto-fix what is mechanically fixable; never opinionated"
@@ -149,10 +185,11 @@ description = "Dependency vulnerabilities. Local subset; CI security.yml adds gi
 # ignore, so this is how you accept ONE genuinely-unfixable critical with justification
 # without silencing the whole check. With no allowlist file it behaves like plain
 # `npm audit --audit-level=critical` (fails on any critical). Prefer fixing (npm audit
-# fix, or a targeted `overrides` entry) over accepting. Use a repo-relative script path,
-# not {{config_root}}: on Windows config_root has backslashes that bash strips, so the node
-# path would break. The pipe hands the script npm's JSON so `npm` resolves in the shell.
-run = "npm audit --json | node scripts/npm-audit-ratchet.mjs --level=critical --allowlist=.audit-allowlist.json"
+# fix, or a targeted `overrides` entry) over accepting. The ratchet script is cached by
+# setup:foundry-scripts; address it through $HOME in plain shell, NOT a mise `{{...}}`
+# template, because on Windows a templated path carries backslashes bash would strip.
+# The pipe hands the script npm's JSON so `npm` resolves in the shell.
+run = 'npm audit --json | node "$HOME/.local/opt/foundry-scripts-$FOUNDRY_SCRIPTS_REF/npm-audit-ratchet.mjs" --level=critical --allowlist=.audit-allowlist.json'
 
 # Architecture fitness (opt-in, tier-c auxiliary until you adopt it). Enforces YOUR
 # layer map + no cycles via dependency-cruiser (needs `dependency-cruiser` installed).
@@ -176,13 +213,16 @@ exec depcruise src --config "$cfg"
 
 [tasks.gate]
 description = "The authoritative composite - the oracle. Nothing merges without this green."
-# Array form runs sequentially. Do NOT use `depends`: mise runs dependencies in
-# parallel with no ordering guarantee, which makes gate output unreadable and
-# hides which check failed first.
+# The one setup:foundry-scripts dep provisions the cached gate scripts first (idempotent,
+# ordered-first, like smells' setup:habit-hooks dep) - a safety net for a ref bump not yet
+# followed by `mise install`. Do NOT add the VERBS as `depends`: mise runs dependencies in
+# parallel with no ordering guarantee, which makes gate output unreadable and hides which
+# check failed first. The verbs stay in the sequential array below.
+depends = ["setup:foundry-scripts"]
 # Each verb is wrapped by `foundry-verb-wrap`, which times it, appends one JSONL line
 # to FOUNDRY_TELEMETRY, then propagates the verb's exit code unchanged - telemetry
 # never changes the outcome, and a failing verb still stops the sequence. Read the log
-# with `foundry-loop-report`. The wrapper is required (foundry-init installs it, on
+# with the `foundry:loop-report` skill. The wrapper is required (foundry-init installs it, on
 # PATH via scripts/ - see [env]); it is NOT on the six-verb contract.
 run = [
     "foundry-verb-wrap lint      -- mise run lint",

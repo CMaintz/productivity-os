@@ -22,12 +22,14 @@ const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts
 const SALES = ['landing', 'one-pager', 'pitch', 'video-script', 'listing'];
 const HANDOVER = ['architecture', 'runbook'];
 const DRAFTS = [...SALES, ...HANDOVER];
-const PACK_TOOLS = 'Read,Glob,Grep,Write(forge-pack/**),Edit(forge-pack/**)';
+// Reads its own checkout only (not your clone, where the real .env lives); writes only forge-pack/.
+const PACK_TOOLS = 'Read(./**),Glob,Grep,Write(forge-pack/**),Edit(forge-pack/**)';
 const DRAFT_MARK = '> DRAFT: not published. Written by the Product Forge for you to review.\n\n';
 const PERMISSIVE = /^(MIT|Apache-2\.0|BSD(-[\w.-]+)?|ISC|0BSD|Unlicense)$/i;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.astro', '.wrangler', 'coverage', 'forge-pack', 'forge-demo']);
 const CODE = /\.([cm]?[jt]sx?|astro|svelte|vue)$/;
-const ENV_USES = [/process\.env\.([A-Z_][A-Z0-9_]*)/g, /process\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]/g, /import\.meta\.env\.([A-Z_][A-Z0-9_]*)/g];
+// process.env.X, process.env['X'], import.meta.env.X, and a Worker's env.X / c.env.X (wrangler secrets).
+const ENV_USES = [/process\.env\.([A-Z_][A-Z0-9_]*)/g, /process\.env\[['"]([A-Z_][A-Z0-9_]*)['"]\]/g, /\benv\.([A-Z_][A-Z0-9_]*)\b/g];
 const ENV_EXAMPLES = ['.env.example', '.dev.vars.example'];
 const ENV_FILES = ['.env', '.env.local', '.env.production', '.dev.vars'];
 // Shapes of common secrets; anything matching is redacted from the drafts.
@@ -37,6 +39,7 @@ const SECRET_SHAPES = [
   /\bAKIA[0-9A-Z]{16}\b/g, /\bxox[abposr]-[A-Za-z0-9-]{10,}/g, /\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}/g,
 ];
 const MAX_ATTEMPTS = 2;
+const MAX_ERRORS = 5;
 const HOUR = 36e5;
 
 const firstLine = e => String(e?.message || e).split('\n').map(l => l.trim()).find(Boolean)?.slice(0, 200) ?? 'unknown error';
@@ -51,16 +54,57 @@ function walk(dir, out = []) {
   return out;
 }
 
-function wranglerConfig(wt) {
-  const json = readIf(path.join(wt, 'wrangler.jsonc')) || readIf(path.join(wt, 'wrangler.json'));
-  if (json) { try { return JSON.parse(json.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')); } catch { return {}; } }
-  const toml = readIf(path.join(wt, 'wrangler.toml'));
-  const vars = (toml.split(/^\[vars\]\s*$/m)[1] ?? '').split(/^\[/m)[0];
-  return { name: toml.match(/^name\s*=\s*"([^"]+)"/m)?.[1], vars: Object.fromEntries([...vars.matchAll(/^([A-Za-z_][\w]*)\s*=/gm)].map(m => [m[1], ''])) };
+/** JSONC as JSON: comments outside strings dropped, trailing commas removed. */
+function parseJsonc(text) {
+  let out = '';
+  for (let i = 0, str = false; i < text.length; i++) {
+    const c = text[i];
+    if (str) { out += c; if (c === '\\') out += text[++i] ?? ''; else if (c === '"') str = false; continue; }
+    if (c === '"') { str = true; out += c; continue; }
+    if (c === '/' && text[i + 1] === '/') { while (i < text.length && text[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && text[i + 1] === '*') { i = text.indexOf('*/', i + 2); if (i < 0) break; i++; continue; }
+    out += c;
+  }
+  return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
 }
 
+/** The wrangler config's Worker name and var names (top-level and per environment). */
+function wranglerConfig(wt) {
+  const json = readIf(path.join(wt, 'wrangler.jsonc')) || readIf(path.join(wt, 'wrangler.json'));
+  if (json) {
+    try {
+      const c = parseJsonc(json);
+      return { name: c.name, vars: Object.assign({}, c.vars, ...Object.values(c.env ?? {}).map(e => e?.vars ?? {})) };
+    } catch { return {}; }
+  }
+  const toml = readIf(path.join(wt, 'wrangler.toml'));
+  const sections = toml.split(/^\[(?:env\.[\w-]+\.)?vars\]\s*$/m).slice(1).map(x => x.split(/^\[/m)[0]);
+  const vars = Object.fromEntries(sections.flatMap(v => [...v.matchAll(/^([A-Za-z_]\w*)\s*=/gm)].map(m => [m[1], ''])));
+  return { name: toml.match(/^name\s*=\s*"([^"]+)"/m)?.[1], vars };
+}
+
+/** NAME=value pairs from the env files in these folders: `export`, quotes and trailing comments understood. */
+function envEntries(dirs) {
+  const out = [];
+  for (const dir of dirs) {
+    for (const file of ENV_FILES) {
+      for (const line of readIf(path.join(dir, file)).split(/\r?\n/)) {
+        const m = line.match(/^\s*(?:export\s+)?([A-Za-z_]\w*)\s*=\s*(.*?)\s*$/);
+        if (!m) continue;
+        const raw = m[2];
+        const quoted = raw.match(/^(["'])(.*?)\1/);
+        out.push({ name: m[1], value: quoted ? quoted[2] : raw.replace(/\s+#.*$/, '').trim(), file });
+      }
+    }
+  }
+  return out;
+}
+
+/** Your real env files are git-ignored: they live in the clone, not the forge's fresh worktree. */
+const envDirs = (b, wt) => [...new Set([b.clone, wt].filter(Boolean))];
+
 /** Every environment variable and secret the product uses, by name: name -> where. Never values. */
-export function secretNames(wt) {
+export function secretNames(wt, dirs = [wt]) {
   const names = new Map();
   const add = (n, where) => (names.get(n) ?? names.set(n, new Set()).get(n)).add(where);
   for (const file of walk(wt).filter(f => CODE.test(f))) {
@@ -69,6 +113,7 @@ export function secretNames(wt) {
   }
   for (const ex of ENV_EXAMPLES) for (const m of readIf(path.join(wt, ex)).matchAll(/^([A-Z_][A-Z0-9_]*)=/gm)) add(m[1], ex);
   for (const n of Object.keys(wranglerConfig(wt).vars ?? {})) add(n, 'wrangler config (vars)');
+  for (const e of envEntries(dirs)) add(e.name, `your ${e.file} (name only)`);
   return names;
 }
 
@@ -84,7 +129,7 @@ export function licenses(wt) {
 }
 
 function facts(f, b, wt) {
-  const secrets = secretNames(wt);
+  const secrets = secretNames(wt, envDirs(b, wt));
   const deps = licenses(wt);
   const issues = [...(b.verify?.accepted ?? []).map(t => `Open finding you accepted: ${t}`), ...(b.verify?.low ?? []).map(t => `Low finding: ${t}`), ...(b.demo?.gaps ?? []).map(t => `Demo: ${t}`)];
   const names = candidates(readIf(path.join(f.dir, 'naming.md'))).slice(0, 3);
@@ -93,7 +138,7 @@ function facts(f, b, wt) {
   return {
     'secrets-inventory': `# ${b.name}: secrets inventory\nNames only: the values live wherever you keep them (Cloudflare, Supabase, your .env), never here.\n\n| Name | Used in |\n|---|---|\n${secretRows.join('\n') || '| (none found) | |'}\n`,
     'license-audit': `# ${b.name}: license audit\nProduction dependencies from package-lock.json. "check" means not plainly permissive: read its license before selling.\n\n${deps ? `| Package | License | |\n|---|---|---|\n${deps.map(d => `| ${d.name} | ${d.license} | ${d.ok ? 'fine' : 'check'} |`).join('\n')}` : 'No package-lock.json found.'}\n`,
-    'known-issues': `# ${b.name}: known issues\n${issues.length ? issues.map(i => `- ${i}`).join('\n') : '- None recorded by verify or the demo.'}\n`,
+    'known-issues': redact(`# ${b.name}: known issues\n${issues.length ? issues.map(i => `- ${i}`).join('\n') : '- None recorded by verify or the demo.'}\n`, envDirs(b, wt)).text,
     'transfer-checklist': `# ${b.name}: transfer checklist\nEach step is yours to do; the forge does none of them.\n\n- [ ] Transfer the repo https://github.com/${b.repo} (GitHub → Settings → Transfer ownership).\n- [ ] Domain: ${names.length ? `the name candidates were ${names.join(', ')}; transfer whichever one you registered` : 'transfer the domain, if you registered one'}.\n- [ ] Cloudflare: hand over or recreate the Worker${worker ? ` \`${worker}\`` : ''} in the buyer's account, and delete the demo preview.\n- [ ] Secrets: the buyer sets their own values for ${[...secrets.keys()].sort().join(', ') || 'none found'}; rotate every one you used.\n- [ ] Accounts: move or close any service accounts (Supabase project, email provider, payments).\n- [ ] Hand over this pack and the known issues.\n`,
   };
 }
@@ -113,18 +158,26 @@ function startDrafts(f, b, ctx, p) {
 /** A draft's text when it is a real .md file in forge-pack/ with a title, else null. */
 function draftOf(wt, name) {
   let root;
-  try { root = fs.realpathSync(path.join(wt, 'forge-pack')); } catch { return null; }
+  try {
+    // forge-pack must really be in the checkout, not a link to somewhere else.
+    root = fs.realpathSync(path.join(wt, 'forge-pack'));
+    if (!root.startsWith(fs.realpathSync(wt) + path.sep)) return null;
+  } catch { return null; }
   const real = insideFile(path.join(root, `${name}.md`), root);
   const text = real ? fs.readFileSync(real, 'utf8') : '';
   return /^# \S/m.test(text) ? text : null;
 }
 
-/** The text with secret-looking values and the repo's .env values replaced; and how many were. */
-export function redact(text, wt) {
-  const envValues = ENV_FILES.flatMap(e => [...readIf(path.join(wt, e)).matchAll(/^[A-Za-z_]\w*\s*=\s*["']?(.+?)["']?\s*$/gm)].map(m => m[1])).filter(v => v.length >= 6);
+// A value that reads like a word or a local address ("production", "us-east-1", localhost) isn't
+// redacted everywhere it appears; anything else from your env files is.
+const looksSecret = v => v.length >= 8 && !(v.length <= 16 && /^[a-z]+(-[a-z0-9]+)*$/.test(v)) && !/^(true|false|\d+)$/i.test(v) && !/^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(v);
+
+/** The text with your env files' values (longest first) and secret-shaped strings replaced; and how many were. */
+export function redact(text, dirs) {
+  const values = [...new Set(envEntries(dirs).map(e => e.value).filter(looksSecret))].sort((a, c) => c.length - a.length);
   let n = 0;
   let out = text;
-  for (const v of envValues) {
+  for (const v of values) {
     const parts = out.split(v);
     n += parts.length - 1;
     out = parts.join('[redacted]');
@@ -142,7 +195,7 @@ function pack(vault, f, b, ctx, p) {
   for (const name of DRAFTS) {
     const text = draftOf(p.wt, name);
     if (!text) { missing.push(name); continue; }
-    const r = redact(text, p.wt);
+    const r = redact(text, envDirs(b, p.wt));
     redacted += r.redacted;
     const to = path.join(HANDOVER.includes(name) ? 'handover' : '', `${name}.md`);
     fs.writeFileSync(path.join(out, to), DRAFT_MARK + r.text);
@@ -152,11 +205,13 @@ function pack(vault, f, b, ctx, p) {
     fs.writeFileSync(path.join(out, 'handover', `${name}.md`), DRAFT_MARK + text);
     written.push(`handover/${name}.md`);
   }
+  const failure = p.failure ? redact(p.failure, envDirs(b, p.wt)).text : null;
   createCard(vault, {
     action: 'reminder', key: `forge-packed:${b.slug}`, risk: 'low', title: `Forge ${b.name}: sell and handover pack ready`,
-    reason: `Drafts in [[Forge/${b.slug}/pack]]: ${written.join(', ')}.${missing.length ? ` missing: ${missing.join(', ')}.` : ''}${redacted ? ` Redacted ${redacted} secret-looking value${redacted === 1 ? '' : 's'}.` : ''}${p.failure ? ` The drafting run failed: ${p.failure}.` : ''} Nothing was published, listed or sent: those steps are yours.`,
+    reason: `Drafts in [[Forge/${b.slug}/pack]]: ${written.join(', ')}.${missing.length ? ` missing: ${missing.join(', ')}.` : ''}${redacted ? ` Redacted ${redacted} secret-looking value${redacted === 1 ? '' : 's'}.` : ''}${failure ? ` The drafting run failed: ${failure}.` : ''} Nothing was published, listed or sent: those steps are yours.`,
     context: `https://github.com/${b.repo}`, explain: 'nothing runs; this is the last Forge stage.', params: {},
   }, ctx.now.toISOString());
+  try { ctx.sys.git(['worktree', 'remove', '--force', p.wt], b.clone); } catch { /* git prunes it later */ }
   save(f, { stage: 'packed', status: 'done' }, ctx.now, `sell: pack ready (${written.length} files${missing.length ? `, missing ${missing.join(', ')}` : ''})`);
   return `sell: pack ready (${written.length} files)`;
 }
@@ -192,7 +247,9 @@ export function sellStep(vault, f, b, ctx) {
     }
     if (p.ready) log.push(pack(vault, f, b, ctx, p));
   } catch (e) {
-    log.push(`sell: error, trying again next pass: ${firstLine(e)}`);
+    p.errors = (p.errors ?? 0) + 1;
+    if (p.errors >= MAX_ERRORS) { save(f, { status: 'failed' }, ctx.now, `sell: failed after ${p.errors} errors: ${firstLine(e)}`); log.push('sell: failed'); }
+    else log.push(`sell: error, trying again next pass: ${firstLine(e)}`);
   }
   return log;
 }

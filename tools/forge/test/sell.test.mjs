@@ -24,8 +24,14 @@ function productRepo(w) {
   fs.mkdirSync(path.join(r, 'src'), { recursive: true });
   fs.writeFileSync(path.join(r, 'src', 'db.ts'), "const url = process.env.SUPABASE_URL;\nconst key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;\nconst s = process.env['STRIPE_SECRET_KEY'];\n");
   fs.writeFileSync(path.join(r, '.env.example'), 'SUPABASE_URL=\nRESEND_API_KEY=\n');
-  fs.writeFileSync(path.join(r, '.env'), `STRIPE_SECRET_KEY=${STRIPE}\nRESEND_API_KEY=re_supersecretvalue123\n`);
-  fs.writeFileSync(path.join(r, 'wrangler.jsonc'), '{\n  // the worker\n  "name": "tidewell",\n  "vars": { "APP_ENV": "preview" }\n}\n');
+  // Your real env files are git-ignored: they live in the clone, never in the forge's fresh worktree.
+  const clone = path.join(w.v, 'Projects', 'tidewell');
+  fs.mkdirSync(clone, { recursive: true });
+  fs.writeFileSync(path.join(clone, '.env'), `STRIPE_SECRET_KEY=${STRIPE}\nRESEND_API_KEY=re_supersecretvalue123\nexport EXPORTED_KEY=Exp0rtedS3cret!\nINLINE_KEY=InlineS3cret99 # dev only\nNODE_ENV=production\nSHORT_PRE=Abcdef12\nLONG_PRE=Abcdef12XYZ999\n`);
+  fs.writeFileSync(path.join(clone, '.dev.vars'), 'WORKER_SECRET=W0rkerS3cretValue\n');
+  fs.mkdirSync(path.join(r, 'worker'), { recursive: true });
+  fs.writeFileSync(path.join(r, 'worker', 'index.ts'), 'export default { fetch(req, env) { return fetch(env.API_SECRET); } };\n');
+  fs.writeFileSync(path.join(r, 'wrangler.jsonc'), '{\n  // the worker\n  "name": "tidewell", // its name\n  "routes": ["example.com/*"],\n  "vars": { "APP_ENV": "preview", },\n}\n');
   fs.writeFileSync(path.join(r, 'package-lock.json'), JSON.stringify({ packages: {
     '': { name: 'tidewell' },
     'node_modules/astro': { license: 'MIT' },
@@ -75,7 +81,7 @@ test('a demoed product asks first; approving starts a drafting run that can writ
   const run = w.sys.started.at(-1);
   assert.match(run.prompt, /^You are the sell/);
   assert.equal(run.cwd, packWt(w));
-  assert.deepEqual(run.tools.split(',').sort(), ['Edit(forge-pack/**)', 'Glob', 'Grep', 'Read', 'Write(forge-pack/**)']);
+  assert.deepEqual(run.tools.split(',').sort(), ['Edit(forge-pack/**)', 'Glob', 'Grep', 'Read(./**)', 'Write(forge-pack/**)'], 'it reads its checkout, not your clone and its .env');
   assert.ok(run.env && run.env.GIT_CONFIG_NOSYSTEM === '1', 'without your credentials');
   assert.match(run.prompt, /SUPABASE_URL/, 'it gets the facts code found');
 });
@@ -95,7 +101,9 @@ test('the secrets inventory lists names and where they are used, never values', 
   finishDrafts(w);
   await pass(w, 2);
   const inv = read(w, 'handover/secrets-inventory.md');
-  for (const n of ['SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'APP_ENV']) assert.match(inv, new RegExp(`\\b${n}\\b`), n);
+  for (const n of ['SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'APP_ENV', 'API_SECRET', 'WORKER_SECRET', 'EXPORTED_KEY']) assert.match(inv, new RegExp(`\\b${n}\\b`), n);
+  assert.match(inv, /API_SECRET \| worker\/index\.ts/, 'a Worker secret, read as env.NAME');
+  assert.doesNotMatch(inv, /W0rker|Exp0rted|InlineS3cret/, 'names from your env files, never their values');
   assert.match(inv, /src\/db\.ts/);
   assert.doesNotMatch(inv, /NOT_OURS/, 'dependencies are not the product');
   assert.doesNotMatch(inv, /sk_live|supersecret/);
@@ -135,6 +143,57 @@ test('secret-looking values and your .env values are redacted from the drafts be
   for (const leak of ['sk_live', 'supersecret', 'ghp_', 'MIIEvQ']) assert.ok(!runbook.includes(leak), leak);
   assert.match(runbook, /\[redacted\]/);
   assert.match(cardBy(w, 'reminder').text, /redacted 4/i);
+});
+
+test('every way your .env writes a value is redacted, longest first; ordinary words are left alone', async () => {
+  const w = demoed();
+  await approve(w);
+  finishDrafts(w, DRAFTS, n => (n === 'runbook' ? '# Runbook\nKeys: Exp0rtedS3cret! InlineS3cret99 W0rkerS3cretValue Abcdef12XYZ999 Abcdef12.\nRun it in production mode.\n' : `# ${n}\nfine\n`));
+  await pass(w, 2);
+  const runbook = read(w, 'handover/runbook.md');
+  for (const leak of ['Exp0rted', 'InlineS3cret', 'W0rker', 'XYZ999', 'Abcdef12']) assert.ok(!runbook.includes(leak), leak);
+  assert.match(runbook, /in production mode/, '"production" is not a secret');
+});
+
+test('a forge-pack folder that links out of the checkout is not read', async () => {
+  const w = demoed();
+  await approve(w);
+  const run = w.sys.started.at(-1);
+  const elsewhere = path.join(w.v, 'elsewhere');
+  fs.mkdirSync(elsewhere);
+  for (const n of DRAFTS) fs.writeFileSync(path.join(elsewhere, `${n}.md`), `# ${n}\nfrom outside\n`);
+  fs.symlinkSync(elsewhere, path.join(run.cwd, 'forge-pack'));
+  w.sys.finish('done', false, /^You are the sell/);
+  await pass(w, 2);
+  w.sys.finish('done', false, /^You are the sell/);
+  await pass(w, 3);
+  assert.ok(!fs.existsSync(path.join(packed(w), 'landing.md')));
+  assert.match(cardBy(w, 'reminder').text, /missing: landing/);
+});
+
+test('the run\'s own words on the card and in the known issues are redacted too; the checkout is removed after', async () => {
+  const w = demoed();
+  const b = path.join(w.v, '_system', 'forge-builds', 'tidy-flat.json');
+  const state = JSON.parse(fs.readFileSync(b, 'utf8'));
+  state.verify.low.push(`Key ${STRIPE} is hard-coded`);
+  fs.writeFileSync(b, JSON.stringify(state));
+  const calls = [];
+  const git = w.sys.git;
+  w.sys.git = (args, cwd) => { calls.push(args); return git(args, cwd); };
+  await approve(w);
+  finishDrafts(w);
+  await pass(w, 2);
+  assert.ok(!read(w, 'handover/known-issues.md').includes('sk_live'));
+  assert.ok(calls.some(a => a[0] === 'worktree' && a[1] === 'remove' && a.at(-1) === packWt(w)), 'the pack checkout is cleaned up');
+});
+
+test('a sell stage that keeps erroring stops as failed instead of retrying forever', async () => {
+  const w = demoed();
+  w.sys.git = () => { throw new Error('fatal: not a git repository'); };
+  press(cardBy(w, 'forge_sell'), 'done');
+  for (let m = 1; m <= 6; m++) await pass(w, m);
+  assert.equal(forge(w).status, 'failed');
+  assert.match(forge(w).text, /not a git repository/);
 });
 
 test('the pack: every draft marked DRAFT, handover files apart, nothing published, and only real files from its folder', async () => {

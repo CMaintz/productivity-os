@@ -26,6 +26,8 @@ export const DEFAULTS = {
   forge_question: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   // A preview under your Cloudflare login, never production: asked until you promote it.
   forge_demo: { level: 'suggest', max: 'auto-notice', promoteAfter: 5 },
+  // Drafts only, but about selling your product: always asked.
+  forge_sell: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   reminder: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   claude_task: { level: 'suggest', max: 'suggest', promoteAfter: 0 },
   promote_policy: { level: 'suggest', max: 'suggest', promoteAfter: 0 },

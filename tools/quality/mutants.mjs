@@ -66,6 +66,19 @@ const MUTANTS = [
   ["demo: usage stop ends the demo", "tools/forge/demo.mjs", "      if (s.usageLimit) {\n        d.retryAfter", "      if (false) {\n        d.retryAfter"],
   ["demo: accepted findings not listed", "tools/forge/demo.mjs", "...(b.verify?.accepted ?? []).map(", "...[].map("],
   ["cost: verify runs not counted", "tools/forge/verify.mjs", "    addSpend(b, s);\n    if (s === 'timeout') ctx.sys.kill(run.pid);", "    if (s === 'timeout') ctx.sys.kill(run.pid);"],
+  ["sell: drafter gets the web", "tools/forge/sell.mjs", "const PACK_TOOLS = 'Read,Glob,Grep,Write(forge-pack/**),Edit(forge-pack/**)';", "const PACK_TOOLS = 'Read,Glob,Grep,Write(forge-pack/**),Edit(forge-pack/**),WebFetch';"],
+  ["sell: drafter keeps your credentials", "tools/forge/sell.mjs", "const env = sandboxEnv(path.join(ctx.logDir, 'sell-sandbox'));", "const env = undefined;"],
+  ["sell: No still drafts", "tools/forge/forge.mjs", "if (status === 'done') { save(f, { stage: 'sell'", "if (true) { save(f, { stage: 'sell'"],
+  ["sell: dependencies' env counted", "tools/forge/sell.mjs", "new Set(['node_modules', ", "new Set(["],
+  ["sell: dev dependencies audited", "tools/forge/sell.mjs", "filter(([k, v]) => k && !v.dev)", "filter(([k]) => k)"],
+  ["sell: MIT OR GPL flagged", "tools/forge/sell.mjs", "split(/\\s+OR\\s+/i).some(alt =>", "split(/\\s+OR\\s+/i).every(alt =>"],
+  ["sell: .env values not redacted", "tools/forge/sell.mjs", "for (const v of envValues) {", "for (const v of []) {"],
+  ["sell: secret shapes not redacted", "tools/forge/sell.mjs", "for (const re of SECRET_SHAPES)", "for (const re of [])"],
+  ["sell: symlinked draft copied", "tools/forge/sell.mjs", "const real = insideFile(path.join(root, `${name}.md`), root);", "const real = path.join(root, `${name}.md`);"],
+  ["sell: drafts not marked", "tools/forge/sell.mjs", "fs.writeFileSync(path.join(out, to), DRAFT_MARK + r.text);", "fs.writeFileSync(path.join(out, to), r.text);"],
+  ["sell: usage stop ends the pack", "tools/forge/sell.mjs", "      if (s.usageLimit) {\n        p.retryAfter", "      if (false) {\n        p.retryAfter"],
+  ["sell: missing draft not retried", "tools/forge/sell.mjs", "if (missing.length && ++p.attempts < MAX_ATTEMPTS)", "if (false)"],
+  ["sell: demo gaps not known issues", "tools/forge/sell.mjs", "...(b.demo?.gaps ?? []).map(", "...[].map("],
 ];
 
 const survivors = [];

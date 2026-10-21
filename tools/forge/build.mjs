@@ -23,6 +23,7 @@ import { parsePlan } from './stages.mjs';
 import { ownerOf } from './repo.mjs';
 import { resumeVerify, verifyStep } from './verify.mjs';
 import { demoStep } from './demo.mjs';
+import { sellStep } from './sell.mjs';
 
 const BUILD_DIR = path.join('_system', 'forge-builds');
 const MAX_ATTEMPTS = 2;
@@ -233,9 +234,9 @@ function open(vault, f, { now, gh, sys = system }) {
   return { b, ctx };
 }
 
-const STEPS = { verify: verifyStep, demo: demoStep };
+const STEPS = { verify: verifyStep, demo: demoStep, sell: sellStep };
 
-/** One pass of the build, verify or demo stage (a finished build can hand over to verify in the same pass). */
+/** One pass of the build, verify, demo or sell stage (a finished build can hand over to verify in the same pass). */
 export function buildOrVerify(vault, f, opts) {
   const lines = f.stage === 'build' ? buildStep(vault, f, opts).map(l => `build: ${l}`) : [];
   const step = STEPS[f.stage];

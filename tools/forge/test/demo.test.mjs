@@ -159,9 +159,10 @@ test('every story needs a screenshot that exists; a missing one is a known gap, 
   assert.match(s, /## What was built\n[\s\S]*A shared shopping list/);
   assert.match(s, /!\[\[demo\/story-1\.png\]\]/);
   assert.match(s, /## Known gaps[\s\S]*story 2 has no screenshot/);
-  const card = cardBy(w, 'reminder');
-  assert.ok(card.text.includes(URL));
+  const card = cardBy(w, 'forge_sell');
+  assert.ok(card.text.includes(URL), 'the demo card offers the sell/handover pack, with the preview link');
   assert.match(card.text, /demo\.md/);
+  assert.equal(forge(w).status, 'waiting');
 });
 
 test('a screenshot path outside the tour checkout is never copied', async () => {

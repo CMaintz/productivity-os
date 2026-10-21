@@ -9,6 +9,7 @@
 //               inside its checkout (no symlinks out) to the vault.
 //   3. summary  Forge/<slug>/demo.md: what was built, a shot per story, known gaps (unshot
 //               stories, verify's low and accepted findings, why there is no preview) and the cost.
+//               A card then offers the sell/handover pack (sell.mjs).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { createCard } from '../actions/cards.mjs';
 import { save } from './state.mjs';
 import { stories } from './verify.mjs';
-import { addSpend, jsonBlock, prepareWorktree, sandboxEnv, startRun, system, workerStatus } from './workers.mjs';
+import { addSpend, insideFile, jsonBlock, prepareWorktree, sandboxEnv, startRun, system, workerStatus } from './workers.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const PROMPTS = path.join(path.dirname(SELF), 'prompts');
@@ -84,8 +85,8 @@ function previewResult(ctx, run) {
 /** A regular PNG file whose real path is inside root. */
 function isShot(src, root) {
   try {
-    const real = fs.realpathSync(src);
-    if (!real.startsWith(root + path.sep) || !fs.lstatSync(src).isFile()) return false;
+    const real = insideFile(src, root);
+    if (!real) return false;
     const head = Buffer.alloc(PNG.length);
     const fd = fs.openSync(real, 'r');
     try { fs.readSync(fd, head, 0, PNG.length, 0); } finally { fs.closeSync(fd); }
@@ -151,18 +152,22 @@ ${gaps.length ? gaps.map(g => `- ${g}`).join('\n') : '- None found.'}
 ${costLines(b, ctx).join('\n')}
 `;
   fs.writeFileSync(path.join(f.dir, 'demo.md'), md);
+  d.gaps = gaps;
   return gaps.length;
 }
 
 function done(vault, f, b, ctx, d, report, failure) {
   const gaps = writeSummary(f, b, ctx, d, report, failure);
   const where = d.preview.url ?? 'local only';
+  const key = `forge-sell:${b.slug}`;
   createCard(vault, {
-    action: 'reminder', key: `forge-demoed:${b.slug}`, risk: 'low', title: `Forge ${b.name}: demo ready`,
+    action: 'forge_sell', key, risk: 'low', title: `Forge ${b.name}: demo ready; draft a sell/handover pack?`,
     reason: `Preview: ${where}. Summary, screenshots and cost in [[Forge/${b.slug}/demo.md]] (${gaps} known gap${gaps === 1 ? '' : 's'}).`,
-    context: d.preview.url ?? `https://github.com/${b.repo}`, explain: 'nothing runs; selling or handing over (slice 5) comes next.', params: {},
+    context: d.preview.url ?? `https://github.com/${b.repo}`,
+    explain: 'an agent drafts a landing page, one-pager, pitch outline, demo video script, marketplace listing, architecture notes and a runbook, and the forge adds a secrets inventory (names only), a license audit, known issues and a transfer checklist. Drafts only: nothing is published, listed or sent. No leaves the product as it is.',
+    undo: 'delete Forge/<slug>/pack/.', params: { slug: b.slug, stage: 'demoed' }, expiresDays: 30,
   }, ctx.now.toISOString());
-  save(f, { stage: 'demoed', status: 'done' }, ctx.now, `demo: ready (${where})`);
+  save(f, { stage: 'demoed', status: 'waiting', review_key: key }, ctx.now, `demo: ready (${where})`);
   return `demo ready (${where})`;
 }
 

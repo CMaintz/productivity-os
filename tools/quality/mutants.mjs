@@ -66,6 +66,13 @@ const MUTANTS = [
   ["demo: usage stop ends the demo", "tools/forge/demo.mjs", "      if (s.usageLimit) {\n        d.retryAfter", "      if (false) {\n        d.retryAfter"],
   ["demo: accepted findings not listed", "tools/forge/demo.mjs", "...(b.verify?.accepted ?? []).map(", "...[].map("],
   ["cost: verify runs not counted", "tools/forge/verify.mjs", "    addSpend(b, s);\n    if (s === 'timeout') ctx.sys.kill(run.pid);", "    if (s === 'timeout') ctx.sys.kill(run.pid);"],
+  ["sessions: headless runs get notes", "tools/sessions/transcripts.mjs", "if (String(e.entrypoint ?? '').startsWith('sdk')) s.headless = true;", ""],
+  ["sessions: sub-agents get notes", "tools/sessions/transcripts.mjs", "if (!e?.sessionId || e.isSidechain || !e.timestamp) continue;", "if (!e?.sessionId || !e.timestamp) continue;"],
+  ["sessions: transcripts re-read from the start", "tools/sessions/transcripts.mjs", "const { lines, offset } = readNew(file, f.offset, st.size);", "const { lines, offset } = readNew(file, 0, st.size);"],
+  ["sessions: a tool result is not activity", "tools/sessions/transcripts.mjs", "if (Array.isArray(c) && c.some(x => x?.type === 'tool_result')) return { kind: 'result' };", ""],
+  ["sessions: old history imported", "tools/sessions/transcripts.mjs", "offset: st.mtimeMs < firstSight ? st.size : 0", "offset: 0"],
+  ["sessions: hook still installed", "tools/hooks/install.mjs", ": withStatusLine(withoutHook(current));", ": withStatusLine(withHook(current));"],
+  ["sessions: executor never syncs", "tools/actions/executor.mjs", "try { syncSessions(vault); }", "try { void syncSessions; }"],
 ];
 
 const survivors = [];

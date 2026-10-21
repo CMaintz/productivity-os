@@ -27,10 +27,10 @@ claude
 Then try `/today`, `/capture buy a domain for the blog redesign`, and `/shutdown`. The rules Claude follows are in `CLAUDE.md` and `_system/policy.md`, and every change it makes is logged in `_system/changelog.md`.
 
 ## 4. Track your Claude Code sessions
-Every executor pass (section 4b, once a minute) reads Claude Code's own transcripts in `~/.claude/projects/` and keeps a note per session in `Sessions/`. Nothing runs inside your sessions: no hook, nothing in their context. It reads only what was added since the last pass, and skips headless runs (`claude -p`, the Product Forge's workers) and sub-agents. Transcripts untouched for two weeks before the first sync are left alone. The note's status is:
+Every executor pass (section 4b, once a minute) reads Claude Code's own transcripts in `~/.claude/projects/` and keeps a note per session in `Sessions/`. Nothing runs inside your sessions: no hook, nothing in their context. It reads only what was added since the last pass, and skips headless runs (`claude -p`, the Product Forge's workers) and sub-agents. A session resumed in another folder stays one note. Transcripts untouched for two weeks before the first sync are left alone. Its bookkeeping lives in `~/.productivity-os/sessions-sync.json`, outside the vault, so it never syncs to your phone. The note's status is:
 - `running`: working on a prompt.
 - `waiting`: a tool call has had no result for over a minute, which usually means it needs your permission.
-- `idle`: finished its turn, or silent for 30 minutes.
+- `idle`: finished its turn, was interrupted, or silent for 30 minutes.
 
 Home shows active sessions, and `/today` lists the ones waiting on you. Note previews are shortened. The full prompt text only goes to `_system/activity.jsonl`, which is git-ignored and excluded from Syncthing, so it stays on this PC.
 

@@ -124,6 +124,7 @@ test('a note the old hook made for the session is reused, and new prompts go who
   const w = setup();
   fs.writeFileSync(path.join(w.vault, 'Sessions', '2026-10-20-site-abcdef12.md'), '---\ntype: session\nprompts: 0\n---\n# site\n');
   const long = 'x'.repeat(500);
+  sync(w, -10);
   write(w, [prompt(w, 0, long)]);
   sync(w, 10);
   assert.deepEqual(notes(w), ['2026-10-20-site-abcdef12.md']);
@@ -175,17 +176,92 @@ test('the executor syncs sessions on every pass', () => {
   assert.equal(notes(w).length, 1);
 });
 
-test('a session continued from another folder stays one note with all its prompts', () => {
+test('a session resumed in another folder stays one note: copied entries count once, its project stays', () => {
   const w = setup();
-  write(w, [prompt(w, 0, 'started here'), reply(w, 5)]);
+  const first = [prompt(w, 0, 'started here'), reply(w, 5)];
+  write(w, first);
+  sync(w, 10);
   const other = path.join(w.home, '.claude', 'projects', 'C--Users-me');
   fs.mkdirSync(other, { recursive: true });
-  fs.writeFileSync(path.join(other, `${ID}.jsonl`), JSON.stringify(prompt(w, 100, 'carried on here')) + '\n');
-  fs.writeFileSync(path.join(other, 'zzzz.jsonl'), '');
+  // Claude Code copies the earlier entries into the new folder's transcript, same uuids.
+  const later = { ...prompt(w, 100, 'carried on here'), cwd: w.home };
+  fs.writeFileSync(path.join(other, `${ID}.jsonl`), [...first, later].map(e => JSON.stringify(e) + '\n').join(''));
   sync(w, 110);
   assert.equal(notes(w).length, 1);
-  const { fields } = note(w);
+  const { fields, body } = note(w);
   assert.equal(fields.prompts, '2');
+  assert.equal((body.match(/started here/g) ?? []).length, 1);
   assert.equal(fields.last_prompt, '"carried on here"');
-  assert.equal(fields.status, 'running');
+  assert.equal(fields.project, '"[[Projects/site]]"', 'where the session started, not wherever it went');
+  const logged = fs.readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8').match(/started here/g) ?? [];
+  assert.ok(logged.length <= 1, 'not logged twice');
+});
+
+test('compaction summaries are not prompts, and an interrupt or a local command leaves the session idle', () => {
+  const w = setup();
+  write(w, [
+    prompt(w, 0, 'go'),
+    entry(w, 'user', 5, { role: 'user', content: 'This session is being continued from a previous conversation that ran out of context. Summary: ...' }, { isCompactSummary: true, isVisibleInTranscriptOnly: true }),
+    toolCall(w, 10), toolResult(w, 12),
+    entry(w, 'user', 13, { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] }),
+  ]);
+  sync(w, 20);
+  assert.equal(note(w).fields.prompts, '1');
+  assert.equal(note(w).fields.last_prompt, '"go"');
+  assert.equal(note(w).fields.status, 'idle', 'interrupted: the ball is with you');
+  write(w, [
+    entry(w, 'user', 30, { role: 'user', content: '<command-name>/model</command-name>' }),
+    entry(w, 'user', 31, { role: 'user', content: '<local-command-stdout>Set model to opus</local-command-stdout>' }),
+  ], { append: true });
+  sync(w, 40);
+  assert.equal(note(w).fields.status, 'idle', 'a local command has no reply to wait for');
+});
+
+test('the sync state lives outside the vault, keeps nothing of headless runs, and is only written when something changed', () => {
+  const w = setup();
+  write(w, [{ ...prompt(w, 0, 'secret worker prompt'), entrypoint: 'sdk-cli', sessionId: 'headless-0000' }], { id: 'headless-0000' });
+  write(w, [prompt(w, 0, 'hello')]);
+  sync(w, 10);
+  const stateFile = path.join(w.home, '.productivity-os', 'sessions-sync.json');
+  assert.ok(fs.existsSync(stateFile));
+  assert.ok(!fs.readdirSync(path.join(w.vault, '_system')).some(f => f.startsWith('sessions-sync')), 'nothing in the vault, which syncs to your phone');
+  assert.doesNotMatch(fs.readFileSync(stateFile, 'utf8'), /secret worker prompt/);
+  sync(w, 20);
+  const earlier = new Date(Math.floor(fs.statSync(stateFile).mtimeMs / 1000) * 1000 - 60_000);
+  fs.utimesSync(stateFile, earlier, earlier);
+  sync(w, 25);
+  assert.equal(fs.statSync(stateFile).mtimeMs, earlier.valueOf(), 'unchanged state is not rewritten');
+});
+
+test('transcripts Claude Code deleted are dropped from the state', () => {
+  const w = setup();
+  const file = write(w, [prompt(w, 0, 'hello')]);
+  sync(w, 10);
+  fs.rmSync(file);
+  sync(w, 20);
+  const state = JSON.parse(fs.readFileSync(path.join(w.home, '.productivity-os', 'sessions-sync.json'), 'utf8'));
+  assert.deepEqual(Object.keys(state.files), []);
+});
+
+test('the first sync does not re-log prompts the old hook already logged', () => {
+  const w = setup();
+  write(w, [prompt(w, 0, 'from yesterday')]);
+  sync(w, 3600);
+  assert.equal(note(w).fields.prompts, '1', 'the note still has it');
+  assert.ok(!fs.existsSync(path.join(w.vault, '_system', 'activity.jsonl')) || !/from yesterday/.test(fs.readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8')));
+});
+
+test('a big transcript is read a slice per pass, and one unreadable file does not stop the rest', () => {
+  const w = setup();
+  write(w, Array.from({ length: 40 }, (_, i) => prompt(w, i, `prompt number ${i}`)));
+  const opts = { home: w.home, maxRead: 2000 };
+  syncSessions(w.vault, { ...opts, now: at(100) });
+  assert.ok(Number(note(w).fields.prompts) < 40, 'not all at once');
+  for (let i = 0; i < 40; i++) syncSessions(w.vault, { ...opts, now: at(101 + i) });
+  assert.equal(note(w).fields.prompts, '40');
+  fs.mkdirSync(path.join(w.dir, 'broken.jsonl'));
+  fs.symlinkSync(path.join(w.dir, 'gone'), path.join(w.dir, 'aaa-dangling.jsonl'));
+  write(w, [prompt(w, 200, 'after the broken one')], { append: true });
+  syncSessions(w.vault, { ...opts, now: at(210) });
+  assert.equal(note(w).fields.last_prompt, '"after the broken one"');
 });

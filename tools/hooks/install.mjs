@@ -11,15 +11,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-export const EVENTS = ['SessionStart', 'UserPromptSubmit', 'Notification', 'Stop', 'SessionEnd'];
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const HOOK = path.join(HERE, 'session-hook.mjs');
+// The session hook this used to install; npm run hooks removes it from your settings.
 const MARKER = 'session-hook.mjs';
 const STATUS_MARKER = 'statusline.mjs';
 const CHAIN = / --chain (\S+)$/;
 
 // Forward slashes work in both cmd and Git Bash, which Claude Code uses on Windows.
-export const hookCommand = (file = HOOK) => `node "${file.replace(/\\/g, '/')}"`;
+const hookCommand = file => `node "${file.replace(/\\/g, '/')}"`;
 
 /** Our usage-recording status line; an existing one keeps running behind it (--chain). */
 export function withStatusLine(settings, command = hookCommand(path.join(HERE, 'statusline.mjs'))) {
@@ -45,7 +44,7 @@ export function withoutStatusLine(settings) {
 
 const isOurs = group => (group.hooks || []).some(h => String(h.command || '').includes(MARKER));
 
-/** Removes our hook groups from every event, dropping events left empty. */
+/** Removes the old session hook's groups from every event, dropping events left empty. */
 export function withoutHook(settings) {
   const hooks = { ...(settings.hooks || {}) };
   for (const ev of Object.keys(hooks)) {
@@ -53,14 +52,6 @@ export function withoutHook(settings) {
     if (!hooks[ev].length) delete hooks[ev];
   }
   return { ...settings, hooks };
-}
-
-/** Adds our hook to each event; idempotent (replaces an older copy, e.g. after a move). */
-export function withHook(settings, command = hookCommand()) {
-  const base = withoutHook(settings);
-  const hooks = { ...base.hooks };
-  for (const ev of EVENTS) hooks[ev] = [...(hooks[ev] || []), { hooks: [{ type: 'command', command, timeout: 10 }] }];
-  return { ...base, hooks };
 }
 
 function main() {

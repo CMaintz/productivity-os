@@ -77,7 +77,7 @@ const MUTANTS = [
   ["sessions: state in the vault", "tools/sessions/transcripts.mjs", "path.join(home, '.productivity-os', 'sessions-sync.json')", "path.join(home, '..', 'Vault', '_system', 'sessions-sync.json')"],
   ["sessions: old prompts re-logged", "tools/sessions/transcripts.mjs", "added.filter(a => a.ts >= state.since && ", "added.filter(a => "],
   ["sessions: one bad file stops the pass", "tools/sessions/transcripts.mjs", "} catch { /* deleted meanwhile", "} finally { /* deleted meanwhile"],
-  ["sessions: hook still installed", "tools/hooks/install.mjs", ": withStatusLine(withoutHook(current));", ": withStatusLine(withHook(current));"],
+  ["sessions: old hook left in place", "tools/hooks/install.mjs", ": withStatusLine(withoutHook(current));", ": withStatusLine(current);"],
   ["sessions: executor never syncs", "tools/actions/executor.mjs", "try { syncSessions(vault); }", "try { void syncSessions; }"],
 ];
 

@@ -61,8 +61,8 @@ Rules the local Claude follows:
 6. 🧑 Set each project's `status` (active, paused, idea…) and `priority` in the Projects base. The inventory guessed status from commit dates. 🤖 Claude can do a first pass if you tell it which projects matter.
 
 ## 4. Claude Code session tracking
-1. 🤖 `npm run hooks`. Adds the session hook, and a status line that records your 5-hour and weekly usage to `_system/usage.json` (the Product Forge pauses builds near your limit), to `%USERPROFILE%\.claude\settings.json`, after making a backup. A status line you already have keeps running and showing; `npm run hooks -- --uninstall` restores it.
-2. 🧑 Restart any open Claude Code sessions. 🤖 Check that a new session creates a note in `Vault\Sessions\`.
+1. 🤖 `npm run hooks`. Adds a status line that records your 5-hour and weekly usage to `_system/usage.json` (the Product Forge pauses builds near your limit) to `%USERPROFILE%\.claude\settings.json`, after making a backup, and removes the old session hook if it's there. A status line you already have keeps running and showing; `npm run hooks -- --uninstall` restores it. No hook runs inside your sessions: the executor (4b) builds the session notes from Claude Code's own transcripts.
+2. 🧑 Restart any open Claude Code sessions. 🤖 Once the executor runs (4b), check that a session you've used gets a note in `Vault\Sessions\` within a minute.
 3. 🧑 In a Claude Code session inside the vault (`cd $env:USERPROFILE\Vault; claude`): `/plugin marketplace add kepano/obsidian-skills`, then install the skills it lists. This command is interactive, so it has to be you.
 
 ## 4b. Action cards and the executor

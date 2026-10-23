@@ -10,7 +10,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 | `Projects/` | One note per project (`<name>.md`) | update the `## Log`, `## Tasks` and `next` sections; create from template |
 | `Writing/` | Post ideas and drafts | create ideas; edit drafts **only when asked** |
 | `Specs/` | Product/feature specs | create/update when asked |
-| `Sessions/` | One note per Claude Code session, written by the session hook (`tools/hooks/` in productivity-os) | read; you may set `status: ended` on stale ones |
+| `Sessions/` | One note per Claude Code session, written by the executor from Claude Code's transcripts (`tools/sessions/` in productivity-os) | read; you may set `status: ended` on stale ones |
 | `Raw/` | Imported sources (PDFs, old md) | **read-only, never edit or delete** |
 | `Archive/` | Finished or dead material | move in **only via an approved action card** |
 | `Templates/`, `Bases/` | Note templates and dashboard views | change only when asked |

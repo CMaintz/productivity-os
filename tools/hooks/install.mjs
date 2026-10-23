@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Adds (or removes) the session hook in Claude Code's user settings, so every Claude
-// Code session on this PC shows up in the vault's Sessions/ folder, and the status line that
-// records subscription usage for the Product Forge (statusline.mjs), chaining any you had.
+// Sets (or removes) the status line that records subscription usage for the Product Forge
+// (statusline.mjs) in Claude Code's user settings, chaining any you had. It also removes the old
+// session hook: session notes now come from Claude Code's transcripts (tools/sessions/).
 //
 // Usage: node tools/hooks/install.mjs [--uninstall] [--settings <path>]
 // Default settings file: ~/.claude/settings.json (a timestamped backup is written first).
@@ -68,12 +68,12 @@ function main() {
   const i = args.indexOf('--settings');
   const file = i >= 0 ? args[i + 1] : path.join(os.homedir(), '.claude', 'settings.json');
   const current = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-  const next = args.includes('--uninstall') ? withoutStatusLine(withoutHook(current)) : withStatusLine(withHook(current));
+  const next = args.includes('--uninstall') ? withoutStatusLine(withoutHook(current)) : withStatusLine(withoutHook(current));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-${Date.now()}`);
   fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
-  console.log(`${args.includes('--uninstall') ? 'Removed' : 'Installed'} the session hook and the usage status line in ${file}`);
-  if (!args.includes('--uninstall')) console.log(`Command: ${hookCommand()}\nRestart running Claude Code sessions to pick it up.`);
+  console.log(`${args.includes('--uninstall') ? 'Removed' : 'Installed'} the usage status line in ${file} (and removed the old session hook, if it was there).`);
+  if (!args.includes('--uninstall')) console.log('Restart running Claude Code sessions to pick it up. Session notes come from the executor now.');
 }
 
 if (process.argv[1] && path.basename(process.argv[1]) === 'install.mjs') main();

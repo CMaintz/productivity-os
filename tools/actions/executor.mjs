@@ -24,6 +24,7 @@ import { readToolsConfig } from '../lib/tools-config.mjs';
 import { installMerged } from '../widgets/code-widgets.mjs';
 import { gh } from '../lib/gh.mjs';
 import { advanceForges } from '../forge/forge.mjs';
+import { syncSessions } from '../sessions/transcripts.mjs';
 
 const SNOOZE_HOURS = 24;
 const LOCK_STALE_MIN = 45;
@@ -144,8 +145,8 @@ export async function withLock(vault, fn, now = new Date()) {
 }
 
 /**
- * One pass, all under the lock: dashboard presses become card decisions, the cards run,
- * then the snapshot goes up. Dashboard errors are logged, never fatal.
+ * One pass, all under the lock: dashboard presses become card decisions, session notes are
+ * synced from the transcripts, the cards run, then the snapshot goes up. Dashboard errors are logged, never fatal.
  */
 async function lockedPass(vault, dash) {
   const call = dash ? rest(dash) : null;
@@ -153,6 +154,8 @@ async function lockedPass(vault, dash) {
   return withLock(vault, async () => {
     if (call) await pull(vault, dash, call).then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`)).catch(e => report(e.message));
     if (call) await pullWidgetErrors(vault, dash, call).then(off => off.length && console.log(`dashboard: switched off ${off.join(', ')}`)).catch(e => report(e.message));
+    // Session notes from Claude Code's transcripts; a problem here never stops the cards.
+    try { syncSessions(vault); } catch (e) { console.error(`sessions: ${e.message}`); }
     const log = runOnce(vault);
     log.push(...await advanceForges(vault, { runClaude }).catch(e => [`forge: ${e.message}`]));
     if (call) await push(vault, dash, call).catch(e => report(e.message));

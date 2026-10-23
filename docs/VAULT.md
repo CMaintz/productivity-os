@@ -27,18 +27,17 @@ claude
 Then try `/today`, `/capture buy a domain for the blog redesign`, and `/shutdown`. The rules Claude follows are in `CLAUDE.md` and `_system/policy.md`, and every change it makes is logged in `_system/changelog.md`.
 
 ## 4. Track your Claude Code sessions
-```powershell
-npm run hooks      # adds the session hook to ~/.claude/settings.json (backs it up first)
-```
-From then on, every Claude Code session on this PC gets a note in `Sessions/`. The note's status is:
+Every executor pass (section 4b, once a minute) reads Claude Code's own transcripts in `~/.claude/projects/` and keeps a note per session in `Sessions/`. Nothing runs inside your sessions: no hook, nothing in their context. It reads only what was added since the last pass, and skips headless runs (`claude -p`, the Product Forge's workers) and sub-agents. A session resumed in another folder stays one note. Transcripts untouched for two weeks before the first sync are left alone. Its bookkeeping lives in `~/.productivity-os/sessions-sync.json`, outside the vault, so it never syncs to your phone. The note's status is:
 - `running`: working on a prompt.
-- `waiting`: needs your permission or input, and says why.
-- `idle`: finished its turn.
-- `ended`: closed.
+- `waiting`: a tool call has had no result for over a minute, which usually means it needs your permission.
+- `idle`: finished its turn, was interrupted, or silent for 30 minutes.
 
 Home shows active sessions, and `/today` lists the ones waiting on you. Note previews are shortened. The full prompt text only goes to `_system/activity.jsonl`, which is git-ignored and excluded from Syncthing, so it stays on this PC.
 
-The vault location defaults to `~/Vault`. Set `PRODUCTIVITY_VAULT` to use another path. To remove the hook: `node tools/hooks/install.mjs --uninstall`.
+```powershell
+npm run hooks      # the usage status line; also removes the old session hook (backs settings up first)
+```
+The vault location defaults to `~/Vault`. Set `PRODUCTIVITY_VAULT` to use another path.
 
 ## 5. Keeping the vault up to date
 - **After moving project folders** (or now and then): `npm run inventory` then `npm run vault`. New projects get notes. Existing notes get their `path`/`repo` updated and their **Docs** section rebuilt (Repo vs Local only). Your tasks, log and status are left alone.

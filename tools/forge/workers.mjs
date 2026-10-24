@@ -88,6 +88,14 @@ export function startRun({ prompt, cwd, tools, logDir, name, now, env, sys = sys
   return { pid: sys.spawnClaude(prompt, cwd, log, tools, env), log, started: now.toISOString() };
 }
 
+/** src's real path when it is a regular file inside root (a real path), else null: no ../, absolute paths or symlinks out. */
+export function insideFile(src, root) {
+  try {
+    const real = fs.realpathSync(src);
+    return real.startsWith(root + path.sep) && fs.lstatSync(src).isFile() ? real : null;
+  } catch { return null; }
+}
+
 const SECRETS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN'];
 
 /**

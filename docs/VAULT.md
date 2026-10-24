@@ -196,7 +196,17 @@ Preview any code widget from its fixture: `npm --workspace dashboard run dev`, t
 - **Summary:** `Forge/<slug>/demo.md`, with what was built, a screenshot per story, known gaps (stories without a screenshot, open findings you accepted, verify's low findings, no preview and why) and the cost.
 - **Cost:** every agent run of the forge (workers, lead, verify checks, tour) adds what it spent: the API-equivalent dollars from `claude -p` (on a subscription nothing is billed), tokens (prompt-cache re-reads shown separately) and minutes. With fresh usage records it also shows how many points of your weekly usage the run took.
 - **Usage limit:** a tour stopped by it is retried after an hour.
-- **Done:** the forge is `demoed`, and a card has the preview link. Delete the preview in the Cloudflare dashboard when you're done with it. Selling or handing over (slice 5) is next.
+- **Done:** the forge is `demoed`, and a card has the preview link and offers the sell/handover pack. Delete the preview in the Cloudflare dashboard when you're done with it.
+
+**Sell or hand over** (#32). Approving that card drafts everything you'd need, in `Forge/<slug>/pack/`. Drafts only: nothing is published, listed or sent, and that stays yours.
+- **Facts, by code:** in `pack/handover/`:
+  - a secrets inventory: the names of every environment variable and secret the product uses and where, never values
+  - a license audit of production dependencies, flagging anything not plainly permissive
+  - known issues, from verify and the demo
+  - a transfer checklist of the steps you'd take
+- **Drafts, by an agent:** a landing page, one-pager, pitch outline, demo video script and marketplace listing, plus architecture notes and a runbook for a new owner. It reads the repo with no web, `gh`, `git` or wrangler, without your credentials, and writes only `forge-pack/`. A missing draft is retried once.
+- **Safety:** only real `.md` files from that folder are copied (no symlinks out). Secret-looking values and your `.env` values are redacted, and the card says how many. Every file starts with "DRAFT: not published".
+- **Done:** the forge is `packed`. That's the last stage.
 
 **Guardrails:**
 - Workers get `gh` only for their ticket and PR: view, comment, label, PR create and checks. That means no merge, `api` or `repo` commands.

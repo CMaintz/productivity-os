@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { createCard } from '../actions/cards.mjs';
 import { save } from './state.mjs';
 import { stories } from './verify.mjs';
-import { addSpend, insideFile, jsonBlock, prepareWorktree, sandboxEnv, startRun, system, workerStatus } from './workers.mjs';
+import { insideFile, jsonBlock, prepareWorktree, sandboxEnv, startRun, system, workerStatus } from './workers.mjs';
+import { addSpend } from '../lib/spend.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const PROMPTS = path.join(path.dirname(SELF), 'prompts');
@@ -117,6 +118,7 @@ function costLines(b, ctx) {
   const s = b.spent ?? { usd: 0, input: 0, output: 0, ms: 0, runs: 0 };
   const cached = s.cached ? ` (plus ${count(s.cached)} re-read from the prompt cache)` : '';
   const lines = [`- $${s.usd.toFixed(2)} API-equivalent over ${s.runs} agent runs (${count(s.ms / 6e4)} min). It ran on your subscription, so nothing was billed.`, `- ${count(s.input)} tokens in${cached}, ${count(s.output)} out.`];
+  for (const [n, t] of Object.entries(b.tickets ?? {}).filter(([, x]) => x.spent)) lines.push(`  - T${n}: ${count(t.spent.input)} tokens in, ${count(t.spent.output)} out (${t.spent.runs} runs)`);
   if (b.weekly_start != null && ctx.weekly != null) {
     const d = ctx.weekly - b.weekly_start;
     lines.push(d >= 0 ? `- ${count(d)} points of your weekly usage (${b.weekly_start}% → ${ctx.weekly}%).` : '- The weekly usage window reset during the run, so there is no weekly figure.');

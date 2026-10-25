@@ -115,6 +115,16 @@ test('autonomous forge without stops runs straight to the repo card; bad output 
   assert.match(forge(w).text, /giving up/);
 });
 
+test('what the planning stages spend adds up on the forge note', async () => {
+  const v = vault();
+  newForge(v, 'Plant tracker', { mode: 'autonomous', stopAfter: [], now: NOW });
+  const spent = { usd: 0.5, input: 10, output: 2, cached: 4, ms: 1000 };
+  const paid = (p, cwd) => ({ ...fakeClaude([])(p, cwd), spent });
+  for (let i = 1; i <= 4; i++) await advanceForges(v, { now: at(i), runClaude: paid, run: fakeGh([]), fetchImpl: fetch404 });
+  assert.equal(cardFor(v).action, 'forge_create_repo');
+  assert.deepEqual(forge(v).spent, { usd: 2, input: 40, output: 8, cached: 16, ms: 4000, runs: 4 });
+});
+
 test('snapshot rows carry headline fields only, never the outline', () => {
   const v = vault();
   newForge(v, 'Secret idea\nwith private details', { now: NOW });
@@ -167,9 +177,12 @@ test('rejecting the naming stop picks a new name, but your own rename sticks', a
 
 test('stopping during a long stage sticks; an output not rewritten this run is not accepted', async () => {
   const v = forgeAt('stack');
-  const stopMidRun = (p, cwd) => { const f = forge(v); fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped')); return fakeClaude([])(p, cwd); };
+  const spent = { usd: 0.5, input: 10, output: 2, cached: 0, ms: 1000 };
+  const stopMidRun = (p, cwd) => { const f = forge(v); fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped')); return { ...fakeClaude([])(p, cwd), spent }; };
   await go(v, 1, stopMidRun);
   assert.equal(forge(v).status, 'stopped');
+  assert.equal(forge(v).stage, 'stack', 'recording the spend does not hide your stop from the next save');
+  assert.equal(forge(v).spent.runs, 1, 'the stopped run still counts');
   assert.match(forge(v).text, /you stopped the forge meanwhile/);
   const w = forgeAt('stack', { files: { 'decisions/0001-stack.md': ADR } });
   assert.deepEqual(await go(w, 1, () => ({ ok: true, text: 'did nothing' })), ['forge tidy-flat: retry']);

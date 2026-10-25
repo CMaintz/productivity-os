@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { createCard } from '../actions/cards.mjs';
 import { createIssue } from '../lib/gh.mjs';
 import { save } from './state.mjs';
-import { addSpend, jsonBlock, prepareWorktree, startRun, WORKER_TOOLS, workerStatus } from './workers.mjs';
+import { jsonBlock, prepareWorktree, startRun, WORKER_TOOLS, workerStatus } from './workers.mjs';
+import { addSpend } from '../lib/spend.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 const MAX_ROUNDS = 3;

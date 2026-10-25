@@ -200,11 +200,17 @@ test('the summary shows what the whole run cost, from every agent run and the us
   cloudflareReady(w);
   await approve(w);
   fs.writeFileSync(path.join(w.v, '_system', 'usage.json'), JSON.stringify({ fiveHourPct: 40, weeklyPct: 25, recordedAt: at(6).toISOString() }));
+  const file = path.join(w.v, '_system', 'forge-builds', 'tidy-flat.json');
+  const b = JSON.parse(fs.readFileSync(file, 'utf8'));
+  b.tickets[2].spent = { usd: 1.5, input: 3000, output: 600, cached: 0, ms: 3000, runs: 3 };
+  fs.writeFileSync(file, JSON.stringify(b));
   finishTour(w);
   await pass(w, 6);
   const s = summary(w);
   assert.match(s, /\$5\.00 API-equivalent/, 'three checks and the tour at $1.25 each');
   assert.match(s, /4,000 tokens in, 800 out/);
+  assert.match(s, /^ {2}- T2: 3,000 tokens in, 600 out \(3 runs\)$/m, 'each ticket shows its share');
+  assert.doesNotMatch(s, /- T1:/, 'a ticket with no recorded spend gets no line');
   assert.match(s, /15 points of your weekly usage/);
 });
 

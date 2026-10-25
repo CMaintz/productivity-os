@@ -3,8 +3,12 @@
 // - Each file is read on from where the last pass stopped, a slice at a time; a half-written line waits.
 // - A session can span files (resumed in another folder copies its earlier entries): prompts are
 //   counted once by uuid, and the project is where the session started.
-// - Headless runs (`claude -p`, the forge's workers) and sub-agents are skipped, and nothing of
-//   them is kept.
+// - Headless runs (`claude -p`, the forge's workers) are skipped, and nothing of them is kept. A
+//   sub-agent (<session>/subagents/*.jsonl) adds its tokens to its session, and nothing else.
+// - Tokens are counted per API call (by message id), at the largest usage any of its lines shows:
+//   Claude Code writes a line per content block with the output so far, and a resumed session
+//   copies its earlier calls into the new transcript. Sub-agent transcripts that were already
+//   there when this sync first read them are history and not counted.
 // - New prompts also go whole into the vault's local _system/activity.jsonl for /suggest.
 // The sync state lives in ~/.productivity-os/, outside the vault, so it never syncs or gets committed.
 
@@ -47,6 +51,25 @@ function kindOf(e) {
   return { kind: 'prompt', text };
 }
 
+/** Adds what an API call's line shows beyond what was counted for that call already. */
+function count(s, e) {
+  const u = e.type === 'assistant' && e.message?.usage;
+  const id = e.message?.id;
+  if (!u || !id) return false;
+  const n = v => Number(v) || 0;
+  const seen = [n(u.input_tokens) + n(u.cache_creation_input_tokens), n(u.output_tokens), n(u.cache_read_input_tokens)];
+  const was = (s.calls ??= {})[id] ?? [0, 0, 0];
+  const add = seen.map((v, i) => Math.max(0, v - was[i]));
+  if (!add.some(Boolean)) return false;
+  s.calls[id] = seen.map((v, i) => Math.max(v, was[i]));
+  const t = (s.tokens ??= { input: 0, output: 0, cached: 0 });
+  t.input += add[0];
+  t.output += add[1];
+  t.cached += add[2];
+  if (!s.usedAt || e.timestamp > s.usedAt) s.usedAt = e.timestamp;
+  return true;
+}
+
 function statusOf(s, now) {
   const age = (now - new Date(s.lastAt)) / 1000;
   if (age > IDLE_MIN * 60 || s.last === 'reply' || s.last === 'stop') return 'idle';
@@ -79,6 +102,7 @@ function render(s, project, status) {
     type: 'session', status, project: project.note ? `"[[${project.note}]]"` : q(project.slug), cwd: q(s.cwd), session_id: q(s.id),
     started: q(s.started), updated: q(s.lastAt), prompts: s.promptIds.length, last_prompt: q(s.previews.at(-1)?.text ?? ''),
     waiting_for: q(status === 'waiting' ? `permission for ${s.tool ?? 'a tool'}` : ''),
+    tokens_in: s.tokens?.input ?? 0, tokens_out: s.tokens?.output ?? 0, tokens_cached: s.tokens?.cached ?? 0,
   };
   const lines = s.previews.map(p => `- ${p.ts.slice(11, 16)} ${p.text}`).join('\n');
   return `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n# ${project.slug} · ${s.id.slice(0, 8)}\n\n## Prompts\n${lines}${lines ? '\n' : ''}`;
@@ -90,10 +114,12 @@ function apply(sessions, lines, touched) {
   for (const line of lines) {
     let e;
     try { e = JSON.parse(line); } catch { continue; }
-    if (!e?.sessionId || e.isSidechain || !e.timestamp) continue;
+    if (!e?.sessionId || !e.timestamp) continue;
     const s = (sessions[e.sessionId] ??= { id: e.sessionId, promptIds: [], previews: [] });
     if (String(e.entrypoint ?? '').startsWith('sdk')) s.headless = true;
     if (s.headless) continue;
+    if (count(s, e)) touched.add(s.id);
+    if (e.isSidechain) continue;
     touched.add(s.id);
     if (!s.started || e.timestamp < s.started) Object.assign(s, { started: e.timestamp, cwd: e.cwd ?? s.cwd });
     s.cwd ??= e.cwd;
@@ -116,7 +142,20 @@ function loadState(file, now) {
   try {
     const text = fs.readFileSync(file, 'utf8');
     return { state: { files: {}, sessions: {}, ...JSON.parse(text) }, saved: text.trim() };
-  } catch { return { state: { files: {}, sessions: {}, since: now.toISOString() }, saved: '' }; }
+  } catch { return { state: { files: {}, sessions: {}, since: now.toISOString(), agentsSince: now.toISOString() }, saved: '' }; }
+}
+
+/** A folder's transcripts and its sessions' sub-agent transcripts (<session>/subagents/*.jsonl); a folder that can't be listed is skipped. */
+function transcriptsIn(dir) {
+  const files = [];
+  for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (d.name.endsWith('.jsonl')) files.push({ file: path.join(dir, d.name) });
+    const agents = path.join(dir, d.name, 'subagents');
+    try {
+      if (d.isDirectory() && fs.existsSync(agents)) files.push(...fs.readdirSync(agents).filter(n => n.endsWith('.jsonl')).map(n => ({ file: path.join(agents, n), agent: true })));
+    } catch { /* not a folder, or gone meanwhile: try again next pass */ }
+  }
+  return files;
 }
 
 /** Reads what's new in every transcript into the state; a file that can't be read is skipped this pass. */
@@ -126,13 +165,12 @@ function readAll(root, state, now, maxRead) {
   const touched = new Set();
   const present = new Set();
   for (const dir of fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory())) {
-    for (const name of fs.readdirSync(path.join(root, dir.name)).filter(n => n.endsWith('.jsonl'))) {
-      const file = path.join(root, dir.name, name);
+    for (const { file, agent } of transcriptsIn(path.join(root, dir.name))) {
       try {
         const st = fs.statSync(file);
         if (!st.isFile()) continue;
         present.add(file);
-        const f = (state.files[file] ??= { offset: st.mtimeMs < firstSight ? st.size : 0 });
+        const f = (state.files[file] ??= { offset: st.mtimeMs < firstSight || (agent && !state.agentsSince) ? st.size : 0 });
         if (st.size < f.offset) f.offset = 0;
         if (st.size === f.offset) continue;
         const { lines, offset } = readNew(file, f.offset, st.size, maxRead);
@@ -142,6 +180,7 @@ function readAll(root, state, now, maxRead) {
     }
   }
   for (const file of Object.keys(state.files)) if (!present.has(file)) delete state.files[file];
+  state.agentsSince ??= now.toISOString();
   return { added, touched };
 }
 
@@ -154,8 +193,8 @@ export function syncSessions(vault, { home = os.homedir(), now = new Date(), max
   const { added, touched } = readAll(root, state, now, maxRead);
   const written = [];
   for (const s of Object.values(state.sessions)) {
+    if (!s.headless && (now - new Date(s.lastAt ?? s.usedAt)) / 864e5 > FORGET_DAYS) { delete state.sessions[s.id]; continue; }
     if (s.headless || !s.lastAt) continue;
-    if ((now - new Date(s.lastAt)) / 864e5 > FORGET_DAYS) { delete state.sessions[s.id]; continue; }
     const status = statusOf(s, now);
     if (!touched.has(s.id) && s.status === status) continue;
     const project = projectFor(s.cwd, vault);

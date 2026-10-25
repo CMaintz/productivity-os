@@ -24,7 +24,7 @@ This is the user's personal productivity vault (Obsidian). These are your standi
 - **spec:** `type: spec`, `status: outline|drafting|ready|building|done`, `project`, `mode: interview|autonomous`
 - **action** (cards in `_system/actions/`, created by `tools/actions/cards.mjs`, never by hand): `type: action`, `action`, `key`, `params` (JSON), `reason`, `risk: low|medium|high`, `status: pending|approved|rejected|snoozed|running|done|failed|undone|expired`, `level`, `decided_by: you|policy`, `context`, `expires`
 - **daily:** `type: daily`, `date: YYYY-MM-DD`
-- **session** (written by the hook, don't hand-edit): `type: session`, `status: idle|running|waiting|ended`, `project`, `cwd`, `session_id`, `started`, `updated`, `prompts`, `last_prompt`, `waiting_for`
+- **session** (written by the executor from the transcripts, don't hand-edit): `type: session`, `status: idle|running|waiting|ended`, `project`, `cwd`, `session_id`, `started`, `updated`, `prompts`, `last_prompt`, `waiting_for`, `tokens_in` (input incl. cache writes), `tokens_out`, `tokens_cached` (prompt-cache reads)
 - **source:** `type: source`, `origin` (original path or URL), `imported: YYYY-MM-DD`
 
 Tasks are checklist items written in Tasks-plugin format: `- [ ] text 📅 YYYY-MM-DD ⏫`. They live in project notes under `## Tasks` and in daily notes.

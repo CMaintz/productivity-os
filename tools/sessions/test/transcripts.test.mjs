@@ -197,6 +197,55 @@ test('a session resumed in another folder stays one note: copied entries count o
   assert.ok(logged.length <= 1, 'not logged twice');
 });
 
+test('token use per session: each API call counted once, sub-agents included, across files and passes', () => {
+  const w = setup();
+  const usage = (input, output, cached = 0, written = 0) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: cached, cache_creation_input_tokens: written });
+  const call = (s, id, u, extra) => entry(w, 'assistant', s, { id, role: 'assistant', content: [{ type: 'text', text: 'x' }], usage: u }, { uuid: `u${s}-${id}`, ...extra });
+  // One API call is written as a line per content block; output grows until the last one.
+  const first = [prompt(w, 0, 'go'), call(1, 'm1', usage(10, 1, 100, 20)), call(2, 'm1', usage(10, 5, 100, 20)), call(3, 'm2', usage(1, 2))];
+  write(w, first);
+  sync(w, 5);
+  first.push(call(4, 'm2', usage(1, 7)));
+  write(w, [first.at(-1)], { append: true });
+  const agents = path.join(w.dir, ID, 'subagents');
+  fs.mkdirSync(agents, { recursive: true });
+  fs.writeFileSync(path.join(agents, 'agent-a1.jsonl'), JSON.stringify(call(6, 's1', usage(3, 2, 50), { isSidechain: true, cwd: path.join(w.repo, 'wt') })) + '\n');
+  sync(w, 10);
+  let f = note(w).fields;
+  assert.deepEqual([f.tokens_in, f.tokens_out, f.tokens_cached], ['34', '14', '150'], 'a call counts at its final size, cache writes as input, sub-agents included');
+  assert.equal(f.prompts, '1', 'a sub-agent call is not a prompt');
+
+  const other = path.join(w.home, '.claude', 'projects', 'C--Users-me');
+  fs.mkdirSync(other, { recursive: true });
+  fs.writeFileSync(path.join(other, `${ID}.jsonl`), [...first, call(20, 'm3', usage(2, 1))].map(e => JSON.stringify(e) + '\n').join(''));
+  sync(w, 30);
+  f = note(w).fields;
+  assert.deepEqual([f.tokens_in, f.tokens_out, f.tokens_cached], ['36', '15', '150'], 'calls copied into a resumed transcript count once');
+});
+
+test('sub-agent transcripts: a broken subagents folder skips only itself; on the first pass with them, old ones are not counted in full', () => {
+  const w = setup();
+  const call = (s, id, out, extra) => entry(w, 'assistant', s, { id, role: 'assistant', content: [], usage: { input_tokens: 1, output_tokens: out } }, { uuid: `u${s}-${id}`, ...extra });
+  write(w, [prompt(w, 0, 'go'), call(1, 'm1', 1)]);
+  const state = path.join(w.home, '.productivity-os', 'sessions-sync.json');
+  sync(w, 5);
+  // An older sync never read sub-agent files; one already on disk then is history, not new spend.
+  const saved = JSON.parse(fs.readFileSync(state, 'utf8'));
+  delete saved.agentsSince;
+  fs.writeFileSync(state, JSON.stringify(saved));
+  fs.mkdirSync(path.join(w.dir, ID, 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(w.dir, ID, 'subagents', 'agent-old.jsonl'), JSON.stringify(call(2, 'old', 500, { isSidechain: true })) + '\n');
+  fs.mkdirSync(path.join(w.dir, 'other-session'));
+  fs.writeFileSync(path.join(w.dir, 'other-session', 'subagents'), 'not a folder');
+  write(w, [call(10, 'm2', 2)], { append: true });
+  sync(w, 15);
+  assert.equal(note(w).fields.tokens_out, '3', 'the pass went on, and the old sub-agent file was skipped');
+  fs.appendFileSync(path.join(w.dir, ID, 'subagents', 'agent-old.jsonl'), JSON.stringify(call(20, 'later', 4, { isSidechain: true })) + '\n');
+  fs.writeFileSync(path.join(w.dir, ID, 'subagents', 'agent-new.jsonl'), JSON.stringify(call(21, 'new', 8, { isSidechain: true })) + '\n');
+  sync(w, 30);
+  assert.equal(note(w).fields.tokens_out, '15', 'what sub-agents add afterwards counts');
+});
+
 test('compaction summaries are not prompts, and an interrupt or a local command leaves the session idle', () => {
   const w = setup();
   write(w, [

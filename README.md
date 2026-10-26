@@ -50,4 +50,25 @@ The mover's safety rules:
 
 Next: set up the vault with [docs/VAULT.md](docs/VAULT.md).
 
+## MCP server (Claude Desktop)
+
+`npm run mcp` starts a local stdio MCP server over the vault (`--vault <dir>`, else `$PRODUCTIVITY_VAULT`, else `~/Vault`). It lets Claude Desktop answer "what's on my plate?" and propose action cards:
+- `today`, `list_projects`, `list_cards`, `get_card` and `recent_sessions` return the same headlines, statuses and counts the dashboard publishes. There is no tool that reads a note, and a finished card shows only its status, never its result.
+- `propose_card` adds a `pending` card (`reminder` or `claude_task`) through `tools/actions/cards.mjs`. It refuses anything on the policy's Never suggest list. You approve the card in Obsidian, on the phone or on the dashboard, and the executor runs it; there are no approve, run or undo tools.
+
+`npm run mcp:install` adds it to Claude Desktop's config (`%APPDATA%\Claude\claude_desktop_config.json`), keeping your other servers and writing a backup first. Run it from your main clone, since the entry points at this checkout. The entry looks like this:
+
+```json
+{
+  "mcpServers": {
+    "productivity-os": {
+      "command": "<absolute path to mise's node.exe>",
+      "args": ["C:/Users/akash/Projects/productivity-os/tools/mcp/server.mjs", "--vault", "C:/Users/akash/Vault"]
+    }
+  }
+}
+```
+
+`command` is the absolute Node path because Claude Desktop starts servers without mise on its PATH. Call `node` directly rather than `npm run mcp`: npm prints a banner to stdout, which is the protocol channel. Restart Claude Desktop after a change.
+
 Tests: `npm test`.

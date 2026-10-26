@@ -18,7 +18,8 @@ import { fieldsOf } from '../lib/frontmatter.mjs';
 import { save } from './state.mjs';
 import { slugOf } from './naming.mjs';
 import { collectAnswer, finishLead, startLead } from './lead.mjs';
-import { addSpend, startWorker, system, workerStatus } from './workers.mjs';
+import { startWorker, system, workerStatus } from './workers.mjs';
+import { addSpend } from '../lib/spend.mjs';
 import { parsePlan } from './stages.mjs';
 import { ownerOf } from './repo.mjs';
 import { resumeVerify, verifyStep } from './verify.mjs';
@@ -62,7 +63,7 @@ export function enterBuild(vault, f, ctx) {
   const { tickets } = parsePlan(fs.readFileSync(path.join(f.dir, 'plan.md'), 'utf8'));
   const issues = fieldsOf(fs.readFileSync(f.file, 'utf8')).issues || {};
   const b = {
-    slug: f.slug, name: f.name || f.slug, repo, clone, owner: ownerOf(vault), concurrency: DEFAULT_CONCURRENCY, started: ctx.now.toISOString(),
+    slug: f.slug, name: f.name || f.slug, repo, clone, spent: f.spent || undefined, owner: ownerOf(vault), concurrency: DEFAULT_CONCURRENCY, started: ctx.now.toISOString(),
     tickets: Object.fromEntries(tickets.map(t => [t.n, { issue: issues[t.n], deps: t.dependsOn, state: t.dependsOn.length ? 'waiting' : 'ready', attempts: 0, blocks: 0 }])),
   };
   saveBuild(vault, b);
@@ -74,6 +75,11 @@ const isDone = (b, n) => {
   return !!t && (t.state === 'done' || (t.state === 'replaced' && t.replacedBy.every(r => isDone(b, r))));
 };
 const relabel = (ctx, b, t, add, remove) => ctx.gh(['issue', 'edit', String(t.issue), '--repo', b.repo, ...add.flatMap(l => ['--add-label', l]), ...remove.flatMap(l => ['--remove-label', l])]);
+/** A ticket's own share: its total, and each run's spend under its Claude session id. */
+function charge(t, s) {
+  addSpend(t, s);
+  if (s?.spent) (t.sessions ??= []).push({ id: s.session ?? null, ...s.spent });
+}
 const markBlocked = (t, why) => Object.assign(t, { state: 'blocked', blocked: String(why).slice(0, 1500), blocks: (t.blocks ?? 0) + 1 });
 
 /** Closed issues, merged PRs and blocked labels from GitHub. Only a finished worker moves a ticket to `pr`. */
@@ -116,6 +122,7 @@ function collectLead(vault, b, ctx, n, log) {
   const t = b.tickets[n];
   const s = workerStatus(t.leadRun, { now: ctx.now, sys: ctx.sys });
   if (s === 'running') return;
+  charge(t, s);
   addSpend(b, s);
   if (s === 'timeout') ctx.sys.kill(t.leadRun.pid);
   log.push(finishLead(vault, ctx, b, n, s === 'timeout' ? { ok: false, text: 'timed out' } : s));
@@ -128,6 +135,7 @@ function collect(vault, b, ctx, log) {
     if (!t.run) continue;
     let s = workerStatus(t.run, { now: ctx.now, sys: ctx.sys });
     if (s === 'running') continue;
+    charge(t, s);
     addSpend(b, s);
     if (s === 'timeout') { ctx.sys.kill(t.run.pid); s = { ok: false, text: 'no result after the time limit', usageLimit: false }; }
     if (s.usageLimit) { Object.assign(t, { state: 'ready', run: null }); b.paused_until = pauseUntil(ctx.usage, ctx.now); log.push(`T${n}: hit the usage limit; paused until ${b.paused_until}`); continue; }

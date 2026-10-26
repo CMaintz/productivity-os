@@ -16,7 +16,8 @@ import { fileURLToPath } from 'node:url';
 import { createCard } from '../actions/cards.mjs';
 import { save } from './state.mjs';
 import { candidates } from './stages.mjs';
-import { addSpend, insideFile, prepareWorktree, sandboxEnv, startRun, workerStatus } from './workers.mjs';
+import { insideFile, prepareWorktree, sandboxEnv, startRun, workerStatus } from './workers.mjs';
+import { addSpend } from '../lib/spend.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 const SALES = ['landing', 'one-pager', 'pitch', 'video-script', 'listing'];

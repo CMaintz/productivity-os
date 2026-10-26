@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFrontmatter } from '../lib/frontmatter.mjs';
+import { readFrontmatter, setFrontmatter } from '../lib/frontmatter.mjs';
 import { createCard, listCards } from '../actions/cards.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
 import { gh } from '../lib/gh.mjs';
@@ -26,6 +26,7 @@ export { listForges };
 import { addAvailability, slugOf } from './naming.mjs';
 import { ownerOf, proposeRepo } from './repo.mjs';
 import { buildOrVerify, progressOf, verifyDecision } from './build.mjs';
+import { addSpend } from '../lib/spend.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 // No web access while the outline and spec are the input; research only where it helps.
@@ -98,6 +99,11 @@ function runStage(f, ctx) {
   fs.mkdirSync(path.dirname(output), { recursive: true });
   const before = mtime(output);
   const result = ctx.runClaude(prompt(base, vars) + feedback, f.dir, STAGE_TOOLS[f.stage]);
+  // Kept on the note until the build starts, which takes it over as the product's running total.
+  // Written directly, not with save(): that reloads f, and the save after this one would then miss a stop you made during the run.
+  const total = { spent: f.spent || undefined };
+  addSpend(total, result);
+  if (total.spent) fs.writeFileSync(f.file, setFrontmatter(fs.readFileSync(f.file, 'utf8'), 'spent', JSON.stringify(total.spent)));
   return { asking, output, result, rewritten: mtime(output) > before };
 }
 

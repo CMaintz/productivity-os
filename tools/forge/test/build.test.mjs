@@ -167,15 +167,20 @@ test('build: a stuck worker is stopped after the time limit and counts as a fail
   assert.deepEqual(w.sys.killed, [pid]);
 });
 
-test('build: what workers and the lead spend counts toward the forge cost', async () => {
+test('build: what workers and the lead spend counts toward the forge cost and the ticket', async () => {
   const w = building();
-  const cost = { total_cost_usd: 0.5, duration_ms: 1000, usage: { input_tokens: 10, output_tokens: 2 } };
+  const f = listForges(w.v)[0];
+  fs.writeFileSync(f.file, f.text.replace('---\n#', `spent: ${JSON.stringify({ usd: 1, input: 100, output: 20, cached: 5, ms: 9000, runs: 4 })}\n---\n#`));
+  const cost = session => ({ session_id: session, total_cost_usd: 0.5, duration_ms: 1000, usage: { input_tokens: 10, output_tokens: 2 } });
   await pass(w, 1);
-  w.sys.finish('nope', true, undefined, cost);
+  w.sys.finish('nope', true, undefined, cost('s1'));
   await pass(w, 2);
-  w.sys.finish('still nope', true, undefined, cost);
+  w.sys.finish('still nope', true, undefined, cost('s2'));
   await pass(w, 3);
-  w.sys.finish('UNBLOCK: try the list component.', false, /lead agent/, cost);
+  w.sys.finish('UNBLOCK: try the list component.', false, /lead agent/, cost('s3'));
   await pass(w, 4);
-  assert.deepEqual(loadBuild(w.v, 'tidy-flat').spent, { usd: 1.5, input: 30, output: 6, cached: 0, ms: 3000, runs: 3 });
+  assert.deepEqual(loadBuild(w.v, 'tidy-flat').spent, { usd: 2.5, input: 130, output: 26, cached: 5, ms: 12000, runs: 7 }, 'the planning stages count too');
+  assert.deepEqual(ticket(w, 1).spent, { usd: 1.5, input: 30, output: 6, cached: 0, ms: 3000, runs: 3 });
+  assert.deepEqual(ticket(w, 1).sessions.map(x => [x.id, x.input, x.output]), [['s1', 10, 2], ['s2', 10, 2], ['s3', 10, 2]]);
+  assert.equal(ticket(w, 2).spent, undefined);
 });

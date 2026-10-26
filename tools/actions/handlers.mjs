@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { readFrontmatter, setFrontmatter } from '../lib/frontmatter.mjs';
 import { promote } from './policy.mjs';
+import { spentOf } from '../lib/spend.mjs';
 import { ID_PATTERN, validateManifest } from '../widgets/manifest.mjs';
 import { readLayout, writeLayout } from '../widgets/widgets.mjs';
 import { installWidget, openBuildTicket, openFixTicket, proposeCodeRemoval } from '../widgets/code-widgets.mjs';
@@ -35,7 +36,7 @@ export function runClaude(prompt, cwd, allowedTools) {
   if (r.error || r.status !== 0) return { ok: false, text: String(r.error?.message || r.stderr || `exit ${r.status}`).trim() };
   try {
     const out = JSON.parse(r.stdout);
-    return { ok: !out.is_error, text: String(out.result ?? ''), sessionId: out.session_id };
+    return { ok: !out.is_error, text: String(out.result ?? ''), sessionId: out.session_id, spent: spentOf(out) };
   } catch {
     return { ok: true, text: r.stdout.trim() };
   }

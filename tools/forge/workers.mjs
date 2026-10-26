@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
+import { spentOf } from '../lib/spend.mjs';
 
 export const WORKER_TIMEOUT_H = 3;
 // gh only for the ticket and its PR: no merge, no api, no repo commands. Merging stays a card.
@@ -111,21 +112,6 @@ export function sandboxEnv(dir) {
   return { ...env, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), XDG_CONFIG_HOME: path.join(dir, 'config'), GH_CONFIG_DIR: path.join(dir, 'gh'), GIT_CONFIG_GLOBAL: path.join(dir, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
 }
 
-/** What a run spent, from claude's JSON result. total_cost_usd is the API price; on a subscription nothing is billed. */
-const spentOf = out => {
-  const u = out.usage ?? {};
-  const n = v => Number(v) || 0;
-  return { usd: n(out.total_cost_usd), input: n(u.input_tokens) + n(u.cache_creation_input_tokens), output: n(u.output_tokens), cached: n(u.cache_read_input_tokens), ms: n(out.duration_ms) };
-};
-
-/** Adds a finished run's spend to the forge's running total. */
-export function addSpend(b, s) {
-  if (!s?.spent) return;
-  const t = (b.spent ??= { usd: 0, input: 0, output: 0, cached: 0, ms: 0, runs: 0 });
-  for (const k of ['usd', 'input', 'output', 'cached', 'ms']) t[k] = (t[k] ?? 0) + s.spent[k];
-  t.runs += 1;
-}
-
 /** The last fenced ```json block of a run's answer: { value } or { error }. */
 export function jsonBlock(text) {
   const blocks = [...String(text).matchAll(/```json\s*\n([\s\S]*?)```/g)];
@@ -133,12 +119,12 @@ export function jsonBlock(text) {
   try { return { value: JSON.parse(blocks.at(-1)[1]) }; } catch (e) { return { error: `the JSON report doesn't parse (${e.message})` }; }
 }
 
-/** 'running', 'timeout', or the finished result { ok, text, usageLimit, spent }. */
+/** 'running', 'timeout', or the finished result { ok, text, usageLimit, spent, session }. */
 export function workerStatus(run, { now, sys = system }) {
   if (sys.alive(run.pid, run.started)) return (now - new Date(run.started)) / 36e5 >= WORKER_TIMEOUT_H ? 'timeout' : 'running';
   const raw = fs.existsSync(run.log) ? fs.readFileSync(run.log, 'utf8').trim() : '';
   let out;
   try { out = JSON.parse(raw); } catch { out = { is_error: true, result: raw.slice(-300) || 'no output' }; }
   const text = String(out.result ?? '');
-  return { ok: !out.is_error, text, usageLimit: !!out.is_error && USAGE_LIMIT.test(text), spent: spentOf(out) };
+  return { ok: !out.is_error, text, usageLimit: !!out.is_error && USAGE_LIMIT.test(text), spent: spentOf(out), session: out.session_id };
 }

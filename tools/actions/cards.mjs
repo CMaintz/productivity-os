@@ -14,10 +14,10 @@ import { isNever, levelFor, parsePolicy } from './policy.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
 
 export const ACTIONS_DIR = path.join('_system', 'actions');
-const OPEN = ['pending', 'approved', 'running', 'snoozed'];
+export const OPEN = ['pending', 'approved', 'running', 'snoozed'];
 const q = v => JSON.stringify(v ?? '');
 
-const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+export const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 const addDays = (iso, days) => new Date(new Date(iso).valueOf() + days * 864e5).toISOString().slice(0, 10);
 
 // Meta Bind buttons. Each one only sets fields on this card; nothing runs in Obsidian.
@@ -87,17 +87,22 @@ export function updateCard(text, fields) {
 
 export const appendResult = (text, result) => `${text.trimEnd()}\n${result.trim()}\n`;
 
-/** Creates a card unless an open one with the same key exists or the policy says never. */
-export function createCard(vault, spec, now = new Date().toISOString()) {
-  const policyFile = path.join(vault, '_system', 'policy.md');
-  const policy = parsePolicy(fs.existsSync(policyFile) ? fs.readFileSync(policyFile, 'utf8') : '');
+export const policyFile = vault => path.join(vault, '_system', 'policy.md');
+const readPolicy = vault => parsePolicy(fs.existsSync(policyFile(vault)) ? fs.readFileSync(policyFile(vault), 'utf8') : '');
+
+/**
+ * Creates a card unless an open one with the same key exists or the policy says never.
+ * `ask` keeps it pending whatever the policy level, for proposers whose cards must always
+ * wait for a click. `policy` lets a caller that has already vetted the file pass it in.
+ */
+export function createCard(vault, spec, now = new Date().toISOString(), { ask = false, policy = readPolicy(vault) } = {}) {
   if (isNever(policy, spec)) return null;
   if (listCards(vault).some(c => c.key === spec.key && OPEN.includes(c.status))) return null;
   fs.mkdirSync(cardsDir(vault), { recursive: true });
   const base = path.join(cardsDir(vault), `${now.slice(0, 10)}-${slug(spec.title)}`);
   let file = `${base}.md`;
   for (let i = 2; fs.existsSync(file); i++) file = `${base}-${i}.md`;
-  fs.writeFileSync(file, renderCard(spec, { now, level: levelFor(policy, spec.action) }));
+  fs.writeFileSync(file, renderCard(spec, { now, level: ask ? 'suggest' : levelFor(policy, spec.action) }));
   return file;
 }
 

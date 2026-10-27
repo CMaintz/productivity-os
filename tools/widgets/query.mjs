@@ -37,5 +37,9 @@ function sorter(sort = []) {
 const pick = (row, fields) => (fields ? Object.fromEntries(['title', 'path', ...fields].filter(k => k in row).map(k => [k, row[k]])) : row);
 
 export function runQuery(rows, { where, sort, limit } = {}, fields) {
-  return rows.filter(r => matches(r, where)).sort(sorter(sort)).slice(0, limit ?? 200).map(r => pick(r, fields));
+  return rows
+    .filter(r => matches(r, where))
+    .sort(sorter(sort))
+    .slice(0, limit ?? 200)
+    .map(r => pick(r, fields));
 }

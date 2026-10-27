@@ -18,9 +18,15 @@ function vault() {
   const v = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-'));
   copyTemplate(TEMPLATE, v);
   for (const d of ['_system/actions', 'Projects', 'Inbox', 'Sessions', 'Daily']) fs.mkdirSync(path.join(v, d), { recursive: true });
-  fs.writeFileSync(path.join(v, 'Projects', 'site.md'), '---\ntype: project\nstatus: active\npriority: 1\nnext: "ship editor"\nrepo: o/site\nci: failing\nopen_prs: 2\nfailing_prs: 1\nagent_blocked: 0\nupdated: 2026-10-13\n---\n# site\n\n## Tasks\n- [ ] secret task text\n');
+  fs.writeFileSync(
+    path.join(v, 'Projects', 'site.md'),
+    '---\ntype: project\nstatus: active\npriority: 1\nnext: "ship editor"\nrepo: o/site\nci: failing\nopen_prs: 2\nfailing_prs: 1\nagent_blocked: 0\nupdated: 2026-10-13\n---\n# site\n\n## Tasks\n- [ ] secret task text\n',
+  );
   fs.writeFileSync(path.join(v, 'Projects', 'gone.md'), '---\ntype: project\nstatus: archived\n---\n');
-  fs.writeFileSync(path.join(v, 'Sessions', '2026-10-14-site-abc.md'), '---\ntype: session\nstatus: waiting\nproject: "[[Projects/site]]"\nwaiting_for: "Claude needs your permission to use Bash"\nprompts: 3\nlast_prompt: "my private prompt"\nstarted: "2026-10-14T09:00:00Z"\nupdated: "2026-10-14T11:00:00Z"\n---\n# x\n## Prompts\n- 09:00 my private prompt\n');
+  fs.writeFileSync(
+    path.join(v, 'Sessions', '2026-10-14-site-abc.md'),
+    '---\ntype: session\nstatus: waiting\nproject: "[[Projects/site]]"\nwaiting_for: "Claude needs your permission to use Bash"\nprompts: 3\nlast_prompt: "my private prompt"\nstarted: "2026-10-14T09:00:00Z"\nupdated: "2026-10-14T11:00:00Z"\n---\n# x\n## Prompts\n- 09:00 my private prompt\n',
+  );
   fs.writeFileSync(path.join(v, 'Daily', '2026-10-14.md'), '---\ntype: daily\n---\n# Tue\n\n## Top 3\n1. Fix CI\n2. Write post\n3. \n\n## Tasks\n- [ ] a\n- [x] b\n');
   fs.writeFileSync(path.join(v, 'Inbox', 'n.md'), 'x');
   createCard(v, { action: 'reminder', key: 'k1', title: 'Look at this', reason: 'because' }, NOW.toISOString());
@@ -31,14 +37,21 @@ function vault() {
 function fakeSupabase(events = [], errors = []) {
   const db = { snapshot: null, events, errors, calls: [] };
   const fetchImpl = async (url, init) => {
-    const u = new URL(url); db.calls.push(`${init.method} ${u.pathname}`);
+    const u = new URL(url);
+    db.calls.push(`${init.method} ${u.pathname}`);
     assert.equal(init.headers.apikey, 'svc');
     const ok = body => ({ ok: true, status: body === null ? 204 : 200, json: async () => body, text: async () => '' });
-    if (u.pathname.endsWith('/snapshot')) { db.snapshot = JSON.parse(init.body)[0]; return ok(null); }
+    if (u.pathname.endsWith('/snapshot')) {
+      db.snapshot = JSON.parse(init.body)[0];
+      return ok(null);
+    }
     if (u.pathname.endsWith('/widget_errors')) return ok(init.method === 'GET' ? db.errors : null);
     if (init.method === 'GET') return ok(db.events.filter(e => !e.applied_at));
     const id = Number(u.searchParams.get('id').replace('eq.', ''));
-    Object.assign(db.events.find(e => e.id === id), JSON.parse(init.body));
+    Object.assign(
+      db.events.find(e => e.id === id),
+      JSON.parse(init.body),
+    );
     return ok(null);
   };
   return { db, fetchImpl };
@@ -50,7 +63,11 @@ test('snapshot carries metadata only: no task text, prompt text or note bodies',
   assert.deepEqual(rows('today')[0].top3, ['Fix CI', 'Write post']);
   assert.equal(rows('today')[0].openTasks, 1);
   assert.deepEqual(s.counts, { pendingCards: 1, waitingSessions: 1, attention: 1, activeProjects: 1, inbox: 1 });
-  assert.deepEqual(rows('projects').map(p => p.slug), ['site'], 'archived projects are left out');
+  assert.deepEqual(
+    rows('projects').map(p => p.slug),
+    ['site'],
+    'archived projects are left out',
+  );
   assert.equal(rows('projects')[0].next, 'ship editor');
   assert.equal(rows('sessions')[0].project, 'site');
   assert.equal(rows('cards')[0].title, 'Look at this');
@@ -68,7 +85,10 @@ test('pull applies presses the card is waiting on, ignores stale ones, marks eve
     { id: 3, card_file: '_system/actions/nope.md', card_key: 'x', status: 'approved', always: false, never: false, reason: '' },
   ]);
   const out = await pull(v, CONFIG, rest(CONFIG, fetchImpl), NOW);
-  assert.deepEqual(out.map(o => o.outcome), ['applied', 'ignored: card is rejected', 'card not found']);
+  assert.deepEqual(
+    out.map(o => o.outcome),
+    ['applied', 'ignored: card is rejected', 'card not found'],
+  );
   const c = listCards(v)[0];
   assert.equal(c.status, 'rejected');
   assert.equal(c.never, true);

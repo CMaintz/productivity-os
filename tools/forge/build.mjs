@@ -34,14 +34,29 @@ const DEFAULT_USAGE_LIMIT = 80;
 const HOUR = 36e5;
 
 const buildFile = (vault, slug) => path.join(vault, BUILD_DIR, `${slug}.json`);
-export const loadBuild = (vault, slug) => { try { return JSON.parse(fs.readFileSync(buildFile(vault, slug), 'utf8')); } catch { return null; } };
-const saveBuild = (vault, b) => { fs.mkdirSync(path.join(vault, BUILD_DIR), { recursive: true }); writeFileAtomic(buildFile(vault, b.slug), JSON.stringify(b, null, 2) + '\n'); };
+export const loadBuild = (vault, slug) => {
+  try {
+    return JSON.parse(fs.readFileSync(buildFile(vault, slug), 'utf8'));
+  } catch {
+    return null;
+  }
+};
+const saveBuild = (vault, b) => {
+  fs.mkdirSync(path.join(vault, BUILD_DIR), { recursive: true });
+  writeFileAtomic(buildFile(vault, b.slug), JSON.stringify(b, null, 2) + '\n');
+};
 const json = (run, args) => JSON.parse(run(args) || '[]');
 
 /** gh pr checks exits non-zero when a check failed or is pending; its JSON is still on stdout. */
 function checksOf(run, repo, pr) {
-  try { return json(run, ['pr', 'checks', String(pr), '--repo', repo, '--json', 'name,bucket']); } catch (e) {
-    try { return JSON.parse(String(e.stdout || '[]')); } catch { return []; }
+  try {
+    return json(run, ['pr', 'checks', String(pr), '--repo', repo, '--json', 'name,bucket']);
+  } catch (e) {
+    try {
+      return JSON.parse(String(e.stdout || '[]'));
+    } catch {
+      return [];
+    }
   }
 }
 const allGreen = checks => checks.length > 0 && checks.every(c => ['pass', 'skipping'].includes(c.bucket));
@@ -64,7 +79,14 @@ export function enterBuild(vault, f, ctx) {
   const { tickets } = parsePlan(fs.readFileSync(path.join(f.dir, 'plan.md'), 'utf8'));
   const issues = fieldsOf(fs.readFileSync(f.file, 'utf8')).issues || {};
   const b = {
-    slug: f.slug, name: f.name || f.slug, repo, clone, spent: f.spent || undefined, owner: ownerOf(vault), concurrency: DEFAULT_CONCURRENCY, started: ctx.now.toISOString(),
+    slug: f.slug,
+    name: f.name || f.slug,
+    repo,
+    clone,
+    spent: f.spent || undefined,
+    owner: ownerOf(vault),
+    concurrency: DEFAULT_CONCURRENCY,
+    started: ctx.now.toISOString(),
     tickets: Object.fromEntries(tickets.map(t => [t.n, { issue: issues[t.n], deps: t.dependsOn, state: t.dependsOn.length ? 'waiting' : 'ready', attempts: 0, blocks: 0 }])),
   };
   saveBuild(vault, b);
@@ -101,7 +123,10 @@ function sync(b, ctx, log) {
     const flagged = (issue.labels ?? []).some(l => l.name === 'agent:blocked');
     t.flagged = flagged;
     if (flagged && !t.run && ['ready', 'waiting', 'pr'].includes(t.state)) markBlocked(t, t.blocked ?? 'Labelled agent:blocked.');
-    if (!flagged && t.state === 'blocked' && !t.leadRun && t.lead === t.blocks) { Object.assign(t, { state: 'ready', attempts: 0 }); log.push(`T${n}: unblocked on GitHub; ready`); }
+    if (!flagged && t.state === 'blocked' && !t.leadRun && t.lead === t.blocks) {
+      Object.assign(t, { state: 'ready', attempts: 0 });
+      log.push(`T${n}: unblocked on GitHub; ready`);
+    }
   }
 }
 
@@ -109,7 +134,11 @@ function fail(ctx, b, n, why, log) {
   const t = b.tickets[n];
   t.attempts += 1;
   t.run = null;
-  if (t.attempts < MAX_ATTEMPTS) { t.state = 'ready'; log.push(`T${n}: ${why.split('\n')[0].slice(0, 120)}; retrying`); return; }
+  if (t.attempts < MAX_ATTEMPTS) {
+    t.state = 'ready';
+    log.push(`T${n}: ${why.split('\n')[0].slice(0, 120)}; retrying`);
+    return;
+  }
   relabel(ctx, b, t, ['agent:blocked'], ['agent:working']);
   ctx.gh(['issue', 'comment', String(t.issue), '--repo', b.repo, '--body-file', '-'], `Product Forge: this ticket failed ${MAX_ATTEMPTS} times. Last result:\n\n${why.slice(0, 1500)}`);
   markBlocked(t, why);
@@ -138,10 +167,27 @@ function collect(vault, b, ctx, log) {
     if (s === 'running') continue;
     charge(t, s);
     addSpend(b, s);
-    if (s === 'timeout') { ctx.sys.kill(t.run.pid); s = { ok: false, text: 'no result after the time limit', usageLimit: false }; }
-    if (s.usageLimit) { Object.assign(t, { state: 'ready', run: null }); b.paused_until = pauseUntil(ctx.usage, ctx.now); log.push(`T${n}: hit the usage limit; paused until ${b.paused_until}`); continue; }
-    if (t.flagged) { t.run = null; markBlocked(t, s.text || 'The worker labelled it agent:blocked.'); log.push(`T${n}: the worker says it's blocked`); continue; }
-    if (t.pr) { Object.assign(t, { state: 'pr', run: null }); log.push(`T${n}: worker finished with PR #${t.pr}`); continue; }
+    if (s === 'timeout') {
+      ctx.sys.kill(t.run.pid);
+      s = { ok: false, text: 'no result after the time limit', usageLimit: false };
+    }
+    if (s.usageLimit) {
+      Object.assign(t, { state: 'ready', run: null });
+      b.paused_until = pauseUntil(ctx.usage, ctx.now);
+      log.push(`T${n}: hit the usage limit; paused until ${b.paused_until}`);
+      continue;
+    }
+    if (t.flagged) {
+      t.run = null;
+      markBlocked(t, s.text || 'The worker labelled it agent:blocked.');
+      log.push(`T${n}: the worker says it's blocked`);
+      continue;
+    }
+    if (t.pr) {
+      Object.assign(t, { state: 'pr', run: null });
+      log.push(`T${n}: worker finished with PR #${t.pr}`);
+      continue;
+    }
     fail(ctx, b, n, s.text || 'the worker ended without a PR', log);
   }
 }
@@ -150,14 +196,27 @@ function collect(vault, b, ctx, log) {
 function reviewPrs(vault, b, ctx, log) {
   for (const [n, t] of Object.entries(b.tickets).filter(([, x]) => x.state === 'pr')) {
     const m = mergeable(ctx.gh, b.repo, t.pr);
-    if (m.red) { fail(ctx, b, n, `PR #${t.pr} has failing checks: ${m.red.join(', ')}`, log); continue; }
+    if (m.red) {
+      fail(ctx, b, n, `PR #${t.pr} has failing checks: ${m.red.join(', ')}`, log);
+      continue;
+    }
     if (!m.ok || m.sha !== t.sha || t.merge_sha === t.sha) continue;
-    createCard(vault, {
-      action: 'forge_merge_pr', key: `forge-merge:${b.slug}:${t.pr}:${t.sha}`, risk: 'medium', title: `Forge ${b.name}: merge T${n} (#${t.pr})`,
-      reason: `PR #${t.pr} is clean: every check green and nothing conflicting.`, context: `https://github.com/${b.repo}/pull/${t.pr}`,
-      explain: `squash-merges #${t.pr} at ${String(t.sha).slice(0, 7)} (only that commit; a newer push needs a new card).`, undo: 'revert the merge commit on main (git revert -m 1 <sha>) in a PR.',
-      params: { repo: b.repo, pr: t.pr, sha: t.sha, issue: t.issue }, expiresDays: 7,
-    }, ctx.now.toISOString());
+    createCard(
+      vault,
+      {
+        action: 'forge_merge_pr',
+        key: `forge-merge:${b.slug}:${t.pr}:${t.sha}`,
+        risk: 'medium',
+        title: `Forge ${b.name}: merge T${n} (#${t.pr})`,
+        reason: `PR #${t.pr} is clean: every check green and nothing conflicting.`,
+        context: `https://github.com/${b.repo}/pull/${t.pr}`,
+        explain: `squash-merges #${t.pr} at ${String(t.sha).slice(0, 7)} (only that commit; a newer push needs a new card).`,
+        undo: 'revert the merge commit on main (git revert -m 1 <sha>) in a PR.',
+        params: { repo: b.repo, pr: t.pr, sha: t.sha, issue: t.issue },
+        expiresDays: 7,
+      },
+      ctx.now.toISOString(),
+    );
     t.merge_sha = t.sha;
     log.push(`T${n}: PR #${t.pr} is green; merge card proposed`);
   }
@@ -167,7 +226,13 @@ function reviewPrs(vault, b, ctx, log) {
 function usagePaused(vault, b, ctx, log) {
   if (b.paused_until && new Date(b.paused_until) > ctx.now) return true;
   b.paused_until = null;
-  if (!ctx.usage) { if (!b.unpaced_noted) { log.push('no _system/usage.json, so the build runs unpaced'); b.unpaced_noted = true; } return false; }
+  if (!ctx.usage) {
+    if (!b.unpaced_noted) {
+      log.push('no _system/usage.json, so the build runs unpaced');
+      b.unpaced_noted = true;
+    }
+    return false;
+  }
   const limit = Number(readToolsConfig(vault).usageLimit) || DEFAULT_USAGE_LIMIT;
   const pct = Math.max(Number(ctx.usage.fiveHourPct) || 0, Number(ctx.usage.weeklyPct) || 0);
   if (pct < limit) return false;
@@ -184,7 +249,9 @@ function releaseAndStart(vault, b, ctx, log) {
   }
   if (usagePaused(vault, b, ctx, log)) return;
   const running = Object.values(b.tickets).filter(t => t.run).length;
-  const ready = Object.entries(b.tickets).filter(([, t]) => t.state === 'ready' && !t.run).sort(([a], [c]) => a - c);
+  const ready = Object.entries(b.tickets)
+    .filter(([, t]) => t.state === 'ready' && !t.run)
+    .sort(([a], [c]) => a - c);
   for (const [n, t] of ready.slice(0, Math.max(0, (Number(b.concurrency) || DEFAULT_CONCURRENCY) - running))) {
     t.run = startWorker({ clone: b.clone, n, issueUrl: `https://github.com/${b.repo}/issues/${t.issue}`, owner: b.owner, logDir: ctx.logDir, now: ctx.now, attempt: t.attempts, sys: ctx.sys });
     t.state = 'running';
@@ -199,14 +266,21 @@ const STALE_MIN = 30;
 /** The status line's last usage record, or null when there is none or it is too old to say anything about now. */
 function freshUsage(vault, now) {
   let u;
-  try { u = JSON.parse(fs.readFileSync(path.join(vault, '_system', 'usage.json'), 'utf8')); } catch { return null; }
+  try {
+    u = JSON.parse(fs.readFileSync(path.join(vault, '_system', 'usage.json'), 'utf8'));
+  } catch {
+    return null;
+  }
   return u.recordedAt && (now - new Date(u.recordedAt)) / 6e4 <= STALE_MIN ? u : { stale: u.recordedAt ?? 'unknown' };
 }
 
 /** The usage record for pacing; a stale one is logged once and ignored. */
 function readUsage(vault, now, b, log) {
   const u = freshUsage(vault, now);
-  if (!u?.stale) { if (u) b.stale_noted = null; return u; }
+  if (!u?.stale) {
+    if (u) b.stale_noted = null;
+    return u;
+  }
   if (b.stale_noted !== u.stale) log.push(`usage record is from ${u.stale}, too old to trust; unpaced for now`);
   b.stale_noted = u.stale;
   return null;
@@ -215,9 +289,25 @@ function readUsage(vault, now, b, log) {
 function finish(vault, f, b, now) {
   const all = Object.keys(b.tickets);
   b.finished = now.toISOString();
-  if (b.verify) { save(f, { stage: 'verify', status: 'running' }, now, 'build: verify fixes done; verifying again'); return; }
+  if (b.verify) {
+    save(f, { stage: 'verify', status: 'running' }, now, 'build: verify fixes done; verifying again');
+    return;
+  }
   const key = `forge-built:${b.slug}`;
-  createCard(vault, { action: 'forge_review', key, risk: 'low', title: `Forge ${b.name}: built`, reason: `All ${all.length} tickets are done (started ${b.started.slice(0, 10)}).`, context: `https://github.com/${b.repo}`, explain: 'marks the build reviewed. Verifying end-to-end (slice 3) comes next.', params: { slug: b.slug, stage: 'built' } }, now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_review',
+      key,
+      risk: 'low',
+      title: `Forge ${b.name}: built`,
+      reason: `All ${all.length} tickets are done (started ${b.started.slice(0, 10)}).`,
+      context: `https://github.com/${b.repo}`,
+      explain: 'marks the build reviewed. Verifying end-to-end (slice 3) comes next.',
+      params: { slug: b.slug, stage: 'built' },
+    },
+    now.toISOString(),
+  );
   save(f, { stage: 'built', status: 'waiting', review_key: key }, now, `build: all ${all.length} tickets done`);
 }
 
@@ -225,7 +315,10 @@ function pass(vault, b, ctx, log) {
   sync(b, ctx, log);
   collect(vault, b, ctx, log);
   reviewPrs(vault, b, ctx, log);
-  for (const n of Object.keys(b.tickets).filter(x => b.tickets[x].state === 'asked')) { const line = collectAnswer(vault, ctx, b, n); if (line) log.push(line); }
+  for (const n of Object.keys(b.tickets).filter(x => b.tickets[x].state === 'asked')) {
+    const line = collectAnswer(vault, ctx, b, n);
+    if (line) log.push(line);
+  }
   const stuck = Object.keys(b.tickets).find(n => b.tickets[n].state === 'blocked' && !b.tickets[n].leadRun && b.tickets[n].lead !== b.tickets[n].blocks);
   if (stuck) log.push(startLead(vault, ctx, b, stuck));
   releaseAndStart(vault, b, ctx, log);

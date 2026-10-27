@@ -17,23 +17,39 @@ export const ACTIONS_DIR = path.join('_system', 'actions');
 const OPEN = ['pending', 'approved', 'running', 'snoozed'];
 const q = v => JSON.stringify(v ?? '');
 
-const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const slug = s =>
+  String(s)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
 const addDays = (iso, days) => new Date(new Date(iso).valueOf() + days * 864e5).toISOString().slice(0, 10);
 
 // Meta Bind buttons. Each one only sets fields on this card; nothing runs in Obsidian.
-const button = (id, label, style, updates) => [
-  '```meta-bind-button',
-  `label: ${label}`, `id: ${id}`, 'hidden: true', `style: ${style}`, 'actions:',
-  ...updates.flatMap(([k, v]) => ['  - type: updateMetadata', `    bindTarget: ${k}`, '    evaluate: false', `    value: ${v}`]),
-  '```',
-].join('\n');
+const button = (id, label, style, updates) =>
+  [
+    '```meta-bind-button',
+    `label: ${label}`,
+    `id: ${id}`,
+    'hidden: true',
+    `style: ${style}`,
+    'actions:',
+    ...updates.flatMap(([k, v]) => ['  - type: updateMetadata', `    bindTarget: ${k}`, '    evaluate: false', `    value: ${v}`]),
+    '```',
+  ].join('\n');
 
 const BUTTONS = [
   button('do-it', 'Do it', 'primary', [['status', 'approved']]),
   button('not-now', 'Not now', 'default', [['status', 'snoozed']]),
   button('no', 'No', 'destructive', [['status', 'rejected']]),
-  button('always', 'Always do this', 'default', [['always', 'true'], ['status', 'approved']]),
-  button('never', 'Never suggest this', 'default', [['never', 'true'], ['status', 'rejected']]),
+  button('always', 'Always do this', 'default', [
+    ['always', 'true'],
+    ['status', 'approved'],
+  ]),
+  button('never', 'Never suggest this', 'default', [
+    ['never', 'true'],
+    ['status', 'rejected'],
+  ]),
   button('undo', 'Undo', 'default', [['status', 'undone']]),
 ].join('\n');
 
@@ -44,12 +60,26 @@ const BUTTONS = [
 export function renderCard(spec, { now, level = 'suggest' }) {
   const auto = level !== 'suggest';
   const fields = {
-    type: 'action', action: spec.action, key: q(spec.key), risk: spec.risk ?? 'low',
-    status: auto ? 'approved' : 'pending', reason: q(spec.reason), context: q(spec.context ?? ''),
-    params: JSON.stringify(spec.params ?? {}), level, created: q(now), expires: addDays(now, spec.expiresDays ?? 7),
-    decided_by: auto ? 'policy' : '""', decided_at: auto ? q(now) : '""', always: false, never: false, decline_reason: '""',
+    type: 'action',
+    action: spec.action,
+    key: q(spec.key),
+    risk: spec.risk ?? 'low',
+    status: auto ? 'approved' : 'pending',
+    reason: q(spec.reason),
+    context: q(spec.context ?? ''),
+    params: JSON.stringify(spec.params ?? {}),
+    level,
+    created: q(now),
+    expires: addDays(now, spec.expiresDays ?? 7),
+    decided_by: auto ? 'policy' : '""',
+    decided_at: auto ? q(now) : '""',
+    always: false,
+    never: false,
+    decline_reason: '""',
   };
-  const fm = `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n`;
+  const fm = `---\n${Object.entries(fields)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')}\n---\n`;
   return `${fm}# ${spec.title}
 
 **Why:** ${spec.reason}
@@ -73,10 +103,15 @@ export const cardsDir = vault => path.join(vault, ACTIONS_DIR);
 export function listCards(vault) {
   const dir = cardsDir(vault);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => {
-    const file = path.join(dir, f); const text = fs.readFileSync(file, 'utf8');
-    return { file, text, ...fieldsOf(text) };
-  }).filter(c => c.type === 'action');
+  return fs
+    .readdirSync(dir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => {
+      const file = path.join(dir, f);
+      const text = fs.readFileSync(file, 'utf8');
+      return { file, text, ...fieldsOf(text) };
+    })
+    .filter(c => c.type === 'action');
 }
 
 const yaml = v => (typeof v === 'string' ? q(v) : typeof v === 'object' ? JSON.stringify(v) : v);
@@ -104,9 +139,16 @@ export function createCard(vault, spec, now = new Date().toISOString()) {
 function main() {
   const [cmd, json] = process.argv.slice(2);
   const vault = vaultFromArgs();
-  if (cmd !== 'create' || !json) { console.error("Usage: cards.mjs create '<json spec>' [--vault <dir>]"); process.exit(2); }
+  if (cmd !== 'create' || !json) {
+    console.error("Usage: cards.mjs create '<json spec>' [--vault <dir>]");
+    process.exit(2);
+  }
   const spec = JSON.parse(json);
-  for (const k of ['action', 'key', 'title', 'reason']) if (!spec[k]) { console.error(`spec.${k} is required`); process.exit(2); }
+  for (const k of ['action', 'key', 'title', 'reason'])
+    if (!spec[k]) {
+      console.error(`spec.${k} is required`);
+      process.exit(2);
+    }
   const file = createCard(vault, spec);
   console.log(file ? `Created ${path.relative(vault, file)}` : 'Skipped: an open card with this key exists, or it is on the never list.');
 }

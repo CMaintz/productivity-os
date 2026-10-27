@@ -113,7 +113,8 @@ var productivityViews = (() => {
       else if (PRIVATE_FOLDERS.includes(parts[0])) errors.push(`source.folder "${parts[0]}" is private; use a snapshot source instead`);
     } else errors.push('source.kind must be "snapshot" or "notes"');
     checkWhere(s.where, errors, "source.where");
-    if (s.sort !== void 0 && (!Array.isArray(s.sort) || s.sort.some((x) => !FIELD.test(x?.field ?? "") || !["asc", "desc", void 0].includes(x.dir)))) errors.push("source.sort must be [{ field, dir }]");
+    if (s.sort !== void 0 && (!Array.isArray(s.sort) || s.sort.some((x) => !FIELD.test(x?.field ?? "") || !["asc", "desc", void 0].includes(x.dir))))
+      errors.push("source.sort must be [{ field, dir }]");
     else for (const x of s.sort ?? []) if (PRIVATE_FIELDS.includes(x.field)) errors.push(`source.sort: field "${x.field}" is private`);
     if (s.limit !== void 0 && !(Number.isInteger(s.limit) && s.limit > 0 && s.limit <= 200)) errors.push("source.limit must be 1-200");
   }
@@ -197,14 +198,28 @@ var productivityViews = (() => {
     function ListView({ m, rows, ctx }) {
       if (!rows.length) return empty(h);
       const sub = (r) => (m.fields ?? []).map((f) => cell(f, r[f], ctx.now)).filter(Boolean).join(" · ");
-      return h("ul", { class: "list" }, rows.map((r, i) => h("li", { key: i }, h("span", null, titleOf(r)), h("span", { class: "muted" }, sub(r)))));
+      return h(
+        "ul",
+        { class: "list" },
+        rows.map((r, i) => h("li", { key: i }, h("span", null, titleOf(r)), h("span", { class: "muted" }, sub(r))))
+      );
     }
     function TableView({ m, rows, ctx }) {
       if (!rows.length) return empty(h);
       const fields = m.fields?.length ? m.fields : Object.keys(rows[0]);
       const num = (f) => isNumeric(f, rows) ? "num" : void 0;
-      const head = h("tr", null, fields.map((f) => h("th", { key: f, class: num(f) }, label(f))));
-      const body = rows.map((r, i) => h("tr", { key: i, "data-status": r.status }, fields.map((f) => h("td", { key: f, class: num(f) }, cell(f, r[f], ctx.now)))));
+      const head = h(
+        "tr",
+        null,
+        fields.map((f) => h("th", { key: f, class: num(f) }, label(f)))
+      );
+      const body = rows.map(
+        (r, i) => h(
+          "tr",
+          { key: i, "data-status": r.status },
+          fields.map((f) => h("td", { key: f, class: num(f) }, cell(f, r[f], ctx.now)))
+        )
+      );
       return h("table", null, h("thead", null, head), h("tbody", null, body));
     }
     function KanbanView({ m, rows, ctx }) {
@@ -212,25 +227,35 @@ var productivityViews = (() => {
       const by = m.groupBy;
       const groups = [...new Set(rows.map((r) => String(r[by] ?? "—")))];
       const rest = (m.fields ?? []).filter((f) => f !== by);
-      const item = (r, i) => h("li", { key: i }, titleOf(r), rest.length ? h("span", { class: "muted" }, rest.map((f) => cell(f, r[f], ctx.now)).filter(Boolean).join(" · ")) : null);
-      return h("div", { class: "kanban" }, groups.map((g) => h(
-        "section",
-        { key: g },
-        h("h3", { class: "sub" }, `${g} (${rows.filter((r) => String(r[by] ?? "—") === g).length})`),
-        h("ul", null, rows.filter((r) => String(r[by] ?? "—") === g).map(item))
-      )));
+      const item = (r, i) => h(
+        "li",
+        { key: i },
+        titleOf(r),
+        rest.length ? h(
+          "span",
+          { class: "muted" },
+          rest.map((f) => cell(f, r[f], ctx.now)).filter(Boolean).join(" · ")
+        ) : null
+      );
+      return h(
+        "div",
+        { class: "kanban" },
+        groups.map(
+          (g) => h("section", { key: g }, h("h3", { class: "sub" }, `${g} (${rows.filter((r) => String(r[by] ?? "—") === g).length})`), h("ul", null, rows.filter((r) => String(r[by] ?? "—") === g).map(item)))
+        )
+      );
     }
     function BarView({ m, rows }) {
       if (!rows.length) return empty(h);
       const pairs = m.groupBy ? [...new Set(rows.map((r) => String(r[m.groupBy] ?? "—")))].map((g) => [g, rows.filter((r) => String(r[m.groupBy] ?? "—") === g).length]) : rows.map((r) => [titleOf(r), Number(r[m.valueField]) || 0]);
       const max = Math.max(1, ...pairs.map(([, n]) => n));
-      return h("ul", { class: "bars" }, pairs.map(([k, n]) => h(
-        "li",
-        { key: k },
-        h("span", { class: "bar-label" }, k),
-        h("span", { class: "bar", style: `width:${Math.round(n / max * 100)}%` }),
-        h("span", { class: "bar-value" }, String(n))
-      )));
+      return h(
+        "ul",
+        { class: "bars" },
+        pairs.map(
+          ([k, n]) => h("li", { key: k }, h("span", { class: "bar-label" }, k), h("span", { class: "bar", style: `width:${Math.round(n / max * 100)}%` }), h("span", { class: "bar-value" }, String(n)))
+        )
+      );
     }
     return { stat: StatView, list: ListView, table: TableView, kanban: KanbanView, bar: BarView };
   }
@@ -252,7 +277,11 @@ var productivityViews = (() => {
         "div",
         null,
         h("p", { class: "muted mono" }, t.date ?? ""),
-        top3.length ? h("ol", { class: "top3" }, top3.map((x, i) => h("li", { key: i }, x))) : h("p", { class: "empty" }, "No Top 3 yet. Run /today in the vault."),
+        top3.length ? h(
+          "ol",
+          { class: "top3" },
+          top3.map((x, i) => h("li", { key: i }, x))
+        ) : h("p", { class: "empty" }, "No Top 3 yet. Run /today in the vault."),
         h("p", { class: "muted" }, `${t.openTasks ?? 0} open tasks`)
       );
     }
@@ -274,8 +303,20 @@ var productivityViews = (() => {
       return h(
         "div",
         null,
-        h("div", { class: "buttons" }, choices.map(([label2, p, cls]) => h("button", { key: label2, class: cls, disabled: !!sent, onClick: () => send(label2, p) }, label2))),
-        done ? null : h("input", { class: "reason", maxLength: 200, placeholder: "why not? (optional)", "aria-label": "Reason", disabled: !!sent, value: reason, onInput: (e) => setReason(e.target.value) }),
+        h(
+          "div",
+          { class: "buttons" },
+          choices.map(([label2, p, cls]) => h("button", { key: label2, class: cls, disabled: !!sent, onClick: () => send(label2, p) }, label2))
+        ),
+        done ? null : h("input", {
+          class: "reason",
+          maxLength: 200,
+          placeholder: "why not? (optional)",
+          "aria-label": "Reason",
+          disabled: !!sent,
+          value: reason,
+          onInput: (e) => setReason(e.target.value)
+        }),
         sent ? h("p", { class: "sent", role: "status" }, sent) : null,
         failed ? h("p", { class: "error", role: "alert" }, failed) : null
       );
@@ -298,9 +339,17 @@ var productivityViews = (() => {
       return h(
         "div",
         null,
-        pending.length ? h("ul", { class: "cards" }, pending.map((c) => h(CardItem, { key: String(c.file), card: c, ctx }))) : h("p", { class: "empty" }, "Nothing waiting on you."),
+        pending.length ? h(
+          "ul",
+          { class: "cards" },
+          pending.map((c) => h(CardItem, { key: String(c.file), card: c, ctx }))
+        ) : h("p", { class: "empty" }, "Nothing waiting on you."),
         auto.length ? h("h3", { class: "sub" }, "Ran on their own") : null,
-        auto.length ? h("ul", { class: "cards auto" }, auto.map((c) => h(CardItem, { key: String(c.file), card: c, ctx }))) : null
+        auto.length ? h(
+          "ul",
+          { class: "cards auto" },
+          auto.map((c) => h(CardItem, { key: String(c.file), card: c, ctx }))
+        ) : null
       );
     }
     return { today: TodayView, cards: CardsView };
@@ -330,7 +379,11 @@ var productivityViews = (() => {
     }
     function Board({ layout, widgets, ctx }) {
       const shown = layout.filter((l) => widgets[l.id] && !l.disabled);
-      return h("div", { class: "board" }, shown.map((l) => h(WidgetView, { key: l.id, widget: widgets[l.id], ctx, size: l.size })));
+      return h(
+        "div",
+        { class: "board" },
+        shown.map((l) => h(WidgetView, { key: l.id, widget: widgets[l.id], ctx, size: l.size }))
+      );
     }
     return { WidgetView, Board, views };
   }
@@ -362,7 +415,11 @@ var productivityViews = (() => {
       const extra = [m.groupBy, m.valueField].filter(Boolean);
       const shown = m.fields && [...m.fields, ...extra];
       const read = m.source.kind === "notes" ? shown : void 0;
-      return runQuery(pages.map((p) => pageRow(p, read)), m.source, shown);
+      return runQuery(
+        pages.map((p) => pageRow(p, read)),
+        m.source,
+        shown
+      );
     }
     function Widget({ manifest }) {
       let rows = [];
@@ -380,9 +437,10 @@ var productivityViews = (() => {
     const manifest = JSON.parse(await dc.app.vault.adapter.read(`_system/widgets/${id.replace(/[^a-z0-9-]/g, "")}.json`));
     const errors = validateManifest(manifest);
     const { Widget } = createDatacoreWidgets(dc);
-    if (errors.length) return function Invalid() {
-      return dc.preact.h("p", { class: "error" }, `Widget "${id}" is invalid: ${errors.join("; ")}`);
-    };
+    if (errors.length)
+      return function Invalid() {
+        return dc.preact.h("p", { class: "error" }, `Widget "${id}" is invalid: ${errors.join("; ")}`);
+      };
     return function View() {
       return dc.preact.h(Widget, { manifest });
     };

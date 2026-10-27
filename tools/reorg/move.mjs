@@ -39,7 +39,11 @@ const isInside = (child, parent) => {
 };
 
 function git(cwd, args) {
-  try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; }
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
 }
 
 // Uncommitted, stashed or unpushed work. Moving keeps it intact, but we still want it saved first.
@@ -57,17 +61,20 @@ export function unsavedWork(dir) {
 // ---------- validation ----------
 function checkOverlaps(moves) {
   const errors = [];
-  moves.forEach((m, i) => moves.forEach((n, j) => {
-    if (i >= j) return;
-    if (samePath(m.to, n.to)) errors.push(`moves ${i + 1} and ${j + 1} share destination ${m.to}`);
-    if (isInside(n.from, m.from) || isInside(m.from, n.from)) errors.push(`moves ${i + 1} and ${j + 1} overlap (one source contains the other)`);
-    if (isInside(m.to, n.from) || isInside(n.to, m.from)) errors.push(`moves ${i + 1} and ${j + 1} conflict (a destination is inside another move's source)`);
-  }));
+  moves.forEach((m, i) =>
+    moves.forEach((n, j) => {
+      if (i >= j) return;
+      if (samePath(m.to, n.to)) errors.push(`moves ${i + 1} and ${j + 1} share destination ${m.to}`);
+      if (isInside(n.from, m.from) || isInside(m.from, n.from)) errors.push(`moves ${i + 1} and ${j + 1} overlap (one source contains the other)`);
+      if (isInside(m.to, n.from) || isInside(n.to, m.from)) errors.push(`moves ${i + 1} and ${j + 1} conflict (a destination is inside another move's source)`);
+    }),
+  );
   return errors;
 }
 
 export function checkMove(m, { allowDirty }) {
-  const problems = []; const warnings = [];
+  const problems = [];
+  const warnings = [];
   if (!m.from || !m.to) return { problems: ['move needs "from" and "to"'], warnings };
   if (!path.isAbsolute(m.from) || !path.isAbsolute(m.to)) problems.push('paths must be absolute');
   if (!fs.existsSync(m.from)) problems.push('source does not exist');
@@ -93,14 +100,27 @@ export function checkMove(m, { allowDirty }) {
 // between C:\ and c:\ cwds.
 function transcriptCwd(dir, name) {
   let files = [];
-  try { files = fs.readdirSync(dir, { recursive: true }).filter(f => f.endsWith('.jsonl')); } catch { return null; }
+  try {
+    files = fs.readdirSync(dir, { recursive: true }).filter(f => f.endsWith('.jsonl'));
+  } catch {
+    return null;
+  }
   const want = name.toLowerCase();
   for (const f of files) {
     let text;
-    try { text = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; } // live session rotated it, or too large to read
+    try {
+      text = fs.readFileSync(path.join(dir, f), 'utf8');
+    } catch {
+      continue;
+    } // live session rotated it, or too large to read
     for (const line of text.split('\n')) {
       if (!line.includes('"cwd"')) continue;
-      try { const cwd = JSON.parse(line).cwd; if (cwd && claudeEncode(cwd).toLowerCase() === want) return cwd; } catch { /* skip partial line */ }
+      try {
+        const cwd = JSON.parse(line).cwd;
+        if (cwd && claudeEncode(cwd).toLowerCase() === want) return cwd;
+      } catch {
+        /* skip partial line */
+      }
     }
   }
   return null;
@@ -140,7 +160,10 @@ function rename(from, to) {
 export function applyMoves(checked, opts) {
   const log = { appliedAt: new Date().toISOString(), home: opts.home, done: [], failed: [], skipped: [] };
   for (const r of checked.results) {
-    if (r.problems.length) { log.skipped.push({ from: r.from, to: r.to, problems: r.problems }); continue; }
+    if (r.problems.length) {
+      log.skipped.push({ from: r.from, to: r.to, problems: r.problems });
+      continue;
+    }
     try {
       rename(r.from, r.to);
     } catch (e) {
@@ -151,7 +174,12 @@ export function applyMoves(checked, opts) {
     const history = [];
     for (const h of r.history) {
       if (fs.existsSync(h.to)) continue;
-      try { rename(h.from, h.to); history.push(h); } catch { /* history is best-effort */ }
+      try {
+        rename(h.from, h.to);
+        history.push(h);
+      } catch {
+        /* history is best-effort */
+      }
     }
     log.done.push({ from: r.from, to: r.to, reason: r.reason, history, warnings: r.warnings });
   }
@@ -200,12 +228,21 @@ function main() {
     res.failed.forEach(f => console.log(`✗ ${f.path}: ${f.error}`));
     process.exit(res.failed.length ? 1 : 0);
   }
-  if (!args.plan) { console.error('Usage: move.mjs <plan.json> [--apply] [--allow-dirty] | --undo <log.json>'); process.exit(2); }
+  if (!args.plan) {
+    console.error('Usage: move.mjs <plan.json> [--apply] [--allow-dirty] | --undo <log.json>');
+    process.exit(2);
+  }
   const opts = { allowDirty: args.allowDirty, home: args.home };
   const checked = planMoves(JSON.parse(fs.readFileSync(args.plan, 'utf8')), opts);
   printPlan(checked, args.apply);
-  if (checked.globalErrors.length) { console.log('\nPlan has conflicts; nothing was moved.'); process.exit(1); }
-  if (!args.apply) { console.log('\nDry run only. Re-run with --apply to move.'); return; }
+  if (checked.globalErrors.length) {
+    console.log('\nPlan has conflicts; nothing was moved.');
+    process.exit(1);
+  }
+  if (!args.apply) {
+    console.log('\nDry run only. Re-run with --apply to move.');
+    return;
+  }
   const log = applyMoves(checked, opts);
   fs.mkdirSync(args.out, { recursive: true });
   const logPath = path.join(args.out, `reorg-log-${log.appliedAt.replace(/[:.]/g, '-')}.json`);

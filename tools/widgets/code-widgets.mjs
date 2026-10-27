@@ -26,11 +26,13 @@ const ERROR_WINDOW_H = 24;
 
 export const repoOf = vault => readToolsConfig(vault).githubRepo || DEFAULT_REPO;
 
-
 /** The manifest a requested widget will ship with, permissions derived from what it reads. */
 export function draftManifest({ id, title, source, fields = [] }) {
   const m = { id, title, view: `code:${id}`, size: 'm', fields, source };
-  return { ...m, permissions: { collections: source?.kind === 'snapshot' ? [source.collection] : [], ...(source?.kind === 'notes' ? { folders: [source.folder] } : {}), fields: fieldsUsed(m), connectors: [] } };
+  return {
+    ...m,
+    permissions: { collections: source?.kind === 'snapshot' ? [source.collection] : [], ...(source?.kind === 'notes' ? { folders: [source.folder] } : {}), fields: fieldsUsed(m), connectors: [] },
+  };
 }
 
 export function proposeCodeWidget(vault, spec, now = new Date().toISOString()) {
@@ -38,13 +40,20 @@ export function proposeCodeWidget(vault, spec, now = new Date().toISOString()) {
   const manifest = draftManifest(spec);
   const errors = validateManifest(manifest);
   if (errors.length) return { errors };
-  const file = createCard(vault, {
-    action: 'build_code_widget', key: `code-widget:${spec.id}`, risk: 'low',
-    title: `Build a "${spec.title}" widget`, reason: spec.purpose,
-    explain: `opens an agent ticket in ${repoOf(vault)}. An agent builds it on a branch with tests; if CI and the permission guard pass, it merges and deploys itself, and a notice card appears here.`,
-    undo: 'close the ticket on GitHub before the agent picks it up; after it ships, Undo on the notice card removes it.',
-    params: { spec: { id: spec.id, title: spec.title, purpose: spec.purpose }, manifest },
-  }, now);
+  const file = createCard(
+    vault,
+    {
+      action: 'build_code_widget',
+      key: `code-widget:${spec.id}`,
+      risk: 'low',
+      title: `Build a "${spec.title}" widget`,
+      reason: spec.purpose,
+      explain: `opens an agent ticket in ${repoOf(vault)}. An agent builds it on a branch with tests; if CI and the permission guard pass, it merges and deploys itself, and a notice card appears here.`,
+      undo: 'close the ticket on GitHub before the agent picks it up; after it ships, Undo on the notice card removes it.',
+      params: { spec: { id: spec.id, title: spec.title, purpose: spec.purpose }, manifest },
+    },
+    now,
+  );
   return { file };
 }
 
@@ -103,7 +112,11 @@ export function openFixTicket(card, ctx) {
 // ---------- after CI merges a widget PR ----------
 
 const readInstalled = vault => {
-  try { return JSON.parse(fs.readFileSync(path.join(vault, INSTALLED_FILE), 'utf8')); } catch { return { prs: [] }; }
+  try {
+    return JSON.parse(fs.readFileSync(path.join(vault, INSTALLED_FILE), 'utf8'));
+  } catch {
+    return { prs: [] };
+  }
 };
 const WIDGET_JSON = /^dashboard\/src\/widgets\/code\/([a-z0-9][a-z0-9-]{0,40})\/widget\.json$/;
 
@@ -132,16 +145,32 @@ export function installMerged(vault, { run = gh, now = new Date().toISOString() 
   for (const pr of prs.filter(p => !seen.prs.includes(p.number)).reverse()) {
     const ids = [...new Set((pr.files ?? []).map(f => WIDGET_JSON.exec(f.path)?.[1]).filter(Boolean))].filter(id => !handled.has(id));
     let manifests;
-    try { manifests = ids.map(id => [id, manifestOnMain(run, repo, id)]); } catch (e) { out.push(`retry #${pr.number} later: ${e.message.split('\n')[0]}`); continue; }
+    try {
+      manifests = ids.map(id => [id, manifestOnMain(run, repo, id)]);
+    } catch (e) {
+      out.push(`retry #${pr.number} later: ${e.message.split('\n')[0]}`);
+      continue;
+    }
     for (const [id, manifest] of manifests) {
       handled.add(id);
-      if (!manifest) { out.push(removeFromVault(vault, id)); continue; }
-      const file = createCard(vault, {
-        action: 'install_code_widget', key: `install:${id}:${pr.number}`, risk: 'low',
-        title: `New widget: ${manifest.title}`, reason: `PR #${pr.number} (${pr.title}) passed CI and the permission guard, merged and deployed.`,
-        explain: `adds \`${id}\` to the dashboard layout.`, undo: 'press Undo: it leaves the dashboard at once, and a card offers to remove its code.',
-        params: { manifest, pr: pr.number },
-      }, now);
+      if (!manifest) {
+        out.push(removeFromVault(vault, id));
+        continue;
+      }
+      const file = createCard(
+        vault,
+        {
+          action: 'install_code_widget',
+          key: `install:${id}:${pr.number}`,
+          risk: 'low',
+          title: `New widget: ${manifest.title}`,
+          reason: `PR #${pr.number} (${pr.title}) passed CI and the permission guard, merged and deployed.`,
+          explain: `adds \`${id}\` to the dashboard layout.`,
+          undo: 'press Undo: it leaves the dashboard at once, and a card offers to remove its code.',
+          params: { manifest, pr: pr.number },
+        },
+        now,
+      );
       out.push(file ? `install ${id}` : `skipped ${id}`);
     }
     seen.prs.push(pr.number);
@@ -179,12 +208,22 @@ export function installWidget(card, ctx) {
 export function proposeCodeRemoval(vault, id, now = new Date().toISOString()) {
   const repoDir = readToolsConfig(vault).productivityOs;
   if (!repoDir) return null;
-  return createCard(vault, {
-    action: 'claude_task', key: `remove-code-widget:${id}`, risk: 'low',
-    title: `Remove the ${id} widget's code`, reason: `You undid the ${id} widget; its code is still in the repo.`,
-    explain: 'Claude deletes the folder, regenerates the registry, and opens a widget:code PR that merges itself once CI passes.',
-    params: { cwd: repoDir, prompt: `Remove the code widget "${id}": git switch -c remove-widget-${id} origin/main, delete dashboard/src/widgets/code/${id}/, run node tools/widgets/code-registry.mjs, run mise run gate, commit, push, and gh pr create --label widget:code --title "revert(widget): remove ${id}" --body "Undo from the dashboard."` },
-  }, now);
+  return createCard(
+    vault,
+    {
+      action: 'claude_task',
+      key: `remove-code-widget:${id}`,
+      risk: 'low',
+      title: `Remove the ${id} widget's code`,
+      reason: `You undid the ${id} widget; its code is still in the repo.`,
+      explain: 'Claude deletes the folder, regenerates the registry, and opens a widget:code PR that merges itself once CI passes.',
+      params: {
+        cwd: repoDir,
+        prompt: `Remove the code widget "${id}": git switch -c remove-widget-${id} origin/main, delete dashboard/src/widgets/code/${id}/, run node tools/widgets/code-registry.mjs, run mise run gate, commit, push, and gh pr create --label widget:code --title "revert(widget): remove ${id}" --body "Undo from the dashboard."`,
+      },
+    },
+    now,
+  );
 }
 
 // ---------- runtime off-switch ----------
@@ -202,19 +241,32 @@ export function applyWidgetErrors(vault, errors, now = new Date()) {
     const since = [windowStart, w.since ?? ''].sort().pop();
     const mine = errors.filter(e => e.widget_id === w.id && e.created_at > since);
     if (mine.length < ERROR_LIMIT) return w;
-    off.push({ id: w.id, errors: mine.map(e => e.message).slice(-5).reverse() });
+    off.push({
+      id: w.id,
+      errors: mine
+        .map(e => e.message)
+        .slice(-5)
+        .reverse(),
+    });
     return { ...w, disabled: true };
   });
   if (!off.length) return [];
   writeLayout(vault, { ...layout, widgets });
   for (const { id, errors: msgs } of off) {
-    createCard(vault, {
-      action: 'fix_widget', key: `fix-widget:${id}`, risk: 'low', title: `Fix the ${id} widget`,
-      reason: `It crashed ${ERROR_LIMIT}+ times in ${ERROR_WINDOW_H}h on the dashboard, so it's switched off.`,
-      explain: 'opens an agent ticket to fix it; the fix ships through the same guarded PR flow and switches it back on.',
-      undo: `to switch it back on without a fix, set "disabled": false for ${id} in _system/layouts/dashboard.json.`,
-      params: { id, errors: msgs },
-    }, now.toISOString());
+    createCard(
+      vault,
+      {
+        action: 'fix_widget',
+        key: `fix-widget:${id}`,
+        risk: 'low',
+        title: `Fix the ${id} widget`,
+        reason: `It crashed ${ERROR_LIMIT}+ times in ${ERROR_WINDOW_H}h on the dashboard, so it's switched off.`,
+        explain: 'opens an agent ticket to fix it; the fix ships through the same guarded PR flow and switches it back on.',
+        undo: `to switch it back on without a fix, set "disabled": false for ${id} in _system/layouts/dashboard.json.`,
+        params: { id, errors: msgs },
+      },
+      now.toISOString(),
+    );
   }
   return off.map(o => o.id);
 }
@@ -222,9 +274,15 @@ export function applyWidgetErrors(vault, errors, now = new Date()) {
 function main() {
   const [cmd, json] = process.argv.slice(2);
   const vault = vaultFromArgs();
-  if (cmd !== 'propose' || !json) { console.error("Usage: code-widgets.mjs propose '<json {id,title,purpose,source,fields}>' [--vault <dir>]"); process.exit(2); }
+  if (cmd !== 'propose' || !json) {
+    console.error("Usage: code-widgets.mjs propose '<json {id,title,purpose,source,fields}>' [--vault <dir>]");
+    process.exit(2);
+  }
   const r = proposeCodeWidget(vault, JSON.parse(json));
-  if (r.errors) { console.error(`Can't propose it:\n- ${r.errors.join('\n- ')}`); process.exit(1); }
+  if (r.errors) {
+    console.error(`Can't propose it:\n- ${r.errors.join('\n- ')}`);
+    process.exit(1);
+  }
   console.log(r.file ? `Proposed as ${path.relative(vault, r.file)}` : 'Skipped: an open card for this widget exists, or it is on the never list.');
 }
 

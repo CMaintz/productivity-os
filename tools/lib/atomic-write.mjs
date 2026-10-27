@@ -15,15 +15,16 @@ const MAX_DELAY_MS = 100;
 
 // A dotfile so Obsidian never indexes it; the .tmp suffix keeps it out of every
 // .md/.json scan in tools/.
-const tempPathFor = file =>
-  path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+const tempPathFor = file => path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
 
 const sleepSync = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 function renameWithRetry(from, to, retryMs) {
   const deadline = Date.now() + retryMs;
   for (let attempt = 0; ; attempt++) {
-    try { return fs.renameSync(from, to); } catch (e) {
+    try {
+      return fs.renameSync(from, to);
+    } catch (e) {
       if (!RETRY_CODES.has(e.code) || Date.now() >= deadline) throw e;
     }
     sleepSync(Math.min(10 * 2 ** attempt, MAX_DELAY_MS));
@@ -33,7 +34,11 @@ function renameWithRetry(from, to, retryMs) {
 // Renaming over a symlink would replace the link itself, and the temp would bring the
 // default mode; an in-place write kept both (e.g. a 0600 settings.json linked from dotfiles).
 function existingTarget(file) {
-  try { return { target: fs.realpathSync(file), mode: fs.statSync(file).mode & 0o7777 }; } catch { return { target: file }; }
+  try {
+    return { target: fs.realpathSync(file), mode: fs.statSync(file).mode & 0o7777 };
+  } catch {
+    return { target: file };
+  }
 }
 
 /**

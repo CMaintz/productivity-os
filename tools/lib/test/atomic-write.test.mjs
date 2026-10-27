@@ -40,7 +40,9 @@ async function readWhileWriting(file, writes) {
     writes();
     worker.postMessage('stop');
     return await done;
-  } finally { await worker.terminate(); }
+  } finally {
+    await worker.terminate();
+  }
 }
 
 test('a reader running during repeated rewrites only ever sees a complete file', async () => {
@@ -48,8 +50,14 @@ test('a reader running during repeated rewrites only ever sees a complete file',
   const big = 'a'.repeat(1e6);
   const small = 'b'.repeat(1e3);
   fs.writeFileSync(file, small);
-  const r = await readWhileWriting(file, () => { for (let i = 0; i < 60; i++) writeFileAtomic(file, i % 2 ? small : big); });
-  assert.deepEqual(r.lengths.filter(n => n !== big.length && n !== small.length), [], 'saw a partial file');
+  const r = await readWhileWriting(file, () => {
+    for (let i = 0; i < 60; i++) writeFileAtomic(file, i % 2 ? small : big);
+  });
+  assert.deepEqual(
+    r.lengths.filter(n => n !== big.length && n !== small.length),
+    [],
+    'saw a partial file',
+  );
   assert.ok(r.lengths.includes(big.length) && r.lengths.includes(small.length), 'the reader never overlapped the writes');
 });
 
@@ -72,7 +80,9 @@ test('a target that stays locked fails the write, keeps the original and cleans 
   const dir = tmpDir();
   const file = path.join(dir, 'policy.md');
   fs.writeFileSync(file, 'original');
-  t.mock.method(fs, 'renameSync', () => { throw busy(); });
+  t.mock.method(fs, 'renameSync', () => {
+    throw busy();
+  });
   assert.throws(() => writeFileAtomic(file, 'replacement'), { code: 'EBUSY' });
   t.mock.restoreAll();
   assert.equal(fs.readFileSync(file, 'utf8'), 'original');
@@ -85,7 +95,13 @@ test('a briefly locked target (Obsidian or OneDrive holding it) is retried until
   fs.writeFileSync(file, 'original');
   const real = fs.renameSync;
   let calls = 0;
-  t.mock.method(fs, 'renameSync', (a, b) => (++calls < 3 ? (() => { throw busy(); })() : real(a, b)));
+  t.mock.method(fs, 'renameSync', (a, b) =>
+    ++calls < 3
+      ? (() => {
+          throw busy();
+        })()
+      : real(a, b),
+  );
   writeFileAtomic(file, 'replacement');
   assert.equal(fs.readFileSync(file, 'utf8'), 'replacement');
   assert.deepEqual(fs.readdirSync(dir), ['policy.md']);
@@ -94,7 +110,9 @@ test('a briefly locked target (Obsidian or OneDrive holding it) is retried until
 test('a caller that must not block (the status line) gives up on a locked target at once', t => {
   const file = path.join(tmpDir(), 'usage.json');
   fs.writeFileSync(file, 'original');
-  t.mock.method(fs, 'renameSync', () => { throw busy(); });
+  t.mock.method(fs, 'renameSync', () => {
+    throw busy();
+  });
   const started = Date.now();
   assert.throws(() => writeFileAtomic(file, 'replacement', { retryMs: 0 }), { code: 'EBUSY' });
   assert.ok(Date.now() - started < 500, 'waited on the lock');

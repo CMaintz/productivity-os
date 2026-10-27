@@ -13,14 +13,22 @@ import { withStatusLine, withoutStatusLine } from '../install.mjs';
 const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'statusline.mjs');
 const NOW = new Date('2026-10-15T09:00:00Z');
 const epoch = iso => Date.parse(iso) / 1000;
-const status = (five, week) => ({ session_id: 's', model: { display_name: 'Opus' }, rate_limits: {
-  ...(five ? { five_hour: { used_percentage: five[0], resets_at: epoch(five[1]) } } : {}),
-  ...(week ? { seven_day: { used_percentage: week[0], resets_at: epoch(week[1]) } } : {}),
-} });
+const status = (five, week) => ({
+  session_id: 's',
+  model: { display_name: 'Opus' },
+  rate_limits: {
+    ...(five ? { five_hour: { used_percentage: five[0], resets_at: epoch(five[1]) } } : {}),
+    ...(week ? { seven_day: { used_percentage: week[0], resets_at: epoch(week[1]) } } : {}),
+  },
+});
 
-test('usage: both windows recorded; the reset that matters is the fuller window\'s', () => {
-  assert.deepEqual(usageFromStatus(status([85, '2026-10-15T11:00:00Z'], [40, '2026-10-20T00:00:00Z']), NOW),
-    { fiveHourPct: 85, weeklyPct: 40, resetsAt: '2026-10-15T11:00:00.000Z', recordedAt: NOW.toISOString() });
+test("usage: both windows recorded; the reset that matters is the fuller window's", () => {
+  assert.deepEqual(usageFromStatus(status([85, '2026-10-15T11:00:00Z'], [40, '2026-10-20T00:00:00Z']), NOW), {
+    fiveHourPct: 85,
+    weeklyPct: 40,
+    resetsAt: '2026-10-15T11:00:00.000Z',
+    recordedAt: NOW.toISOString(),
+  });
   assert.equal(usageFromStatus(status([10, '2026-10-15T11:00:00Z'], [92, '2026-10-20T00:00:00Z']), NOW).resetsAt, '2026-10-20T00:00:00.000Z');
   assert.equal(usageFromStatus(status(null, [50, '2026-10-20T00:00:00Z']), NOW).fiveHourPct, null, 'a window Claude Code dropped is unknown, not 0');
   assert.equal(usageFromStatus({ session_id: 's' }, NOW), null, 'no rate_limits (API key, or before the first reply): nothing to record');

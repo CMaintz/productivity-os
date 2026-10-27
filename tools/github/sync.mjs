@@ -27,8 +27,7 @@ function parseArgs(argv) {
 /** Default fetcher: one GraphQL call per repo through the gh CLI. */
 export function ghFetch(repo) {
   const [owner, name] = repo.split('/');
-  const out = execFileSync('gh', ['api', 'graphql', '-f', `query=${REPO_QUERY}`, '-F', `owner=${owner}`, '-F', `name=${name}`],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const out = execFileSync('gh', ['api', 'graphql', '-f', `query=${REPO_QUERY}`, '-F', `owner=${owner}`, '-F', `name=${name}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   return JSON.parse(out).data.repository;
 }
 
@@ -36,11 +35,15 @@ export function ghFetch(repo) {
 export function notesWithRepo(vault) {
   const dir = path.join(vault, 'Projects');
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => {
-    const file = path.join(dir, f);
-    const repo = fs.readFileSync(file, 'utf8').match(/^repo:\s*([\w.-]+\/[\w.-]+)\s*$/m)?.[1];
-    return repo ? { file, repo } : null;
-  }).filter(Boolean);
+  return fs
+    .readdirSync(dir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => {
+      const file = path.join(dir, f);
+      const repo = fs.readFileSync(file, 'utf8').match(/^repo:\s*([\w.-]+\/[\w.-]+)\s*$/m)?.[1];
+      return repo ? { file, repo } : null;
+    })
+    .filter(Boolean);
 }
 
 export function applyToNote(note, summary, syncedAt) {
@@ -60,7 +63,12 @@ export function syncVault(vault, { only = null, fetch = ghFetch, now = new Date(
       writeFileAtomic(file, applyToNote(fs.readFileSync(file, 'utf8'), summarise(data), syncedAt));
       result.updated.push(repo);
     } catch (e) {
-      result.failed.push({ repo, error: String(e.stderr || e.message).trim().split('\n')[0] });
+      result.failed.push({
+        repo,
+        error: String(e.stderr || e.message)
+          .trim()
+          .split('\n')[0],
+      });
     }
   }
   return result;
@@ -68,8 +76,11 @@ export function syncVault(vault, { only = null, fetch = ghFetch, now = new Date(
 
 function main() {
   const a = parseArgs(process.argv.slice(2));
-  try { execFileSync('gh', ['auth', 'status'], { stdio: 'ignore' }); } catch {
-    console.error('The gh CLI is missing or not logged in. Install it and run `gh auth login`.'); process.exit(1);
+  try {
+    execFileSync('gh', ['auth', 'status'], { stdio: 'ignore' });
+  } catch {
+    console.error('The gh CLI is missing or not logged in. Install it and run `gh auth login`.');
+    process.exit(1);
   }
   const r = syncVault(a.vault, { only: a.only });
   console.log(`GitHub sync: ${r.updated.length} project notes updated, ${r.failed.length} failed`);

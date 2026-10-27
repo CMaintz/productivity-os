@@ -22,7 +22,12 @@ const wrangler = w => w.sys.ran.filter(r => r.cmd === 'npx' && r.args.includes('
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
 
 /** The preview's detached script, run in-process here so the test sees what it does at once. */
-const previewInline = w => { w.sys.spawnNode = (script, args) => { fs.writeFileSync(args.at(-1), JSON.stringify(preview(w.sys, args[1]))); return ++w.sys.pid; }; };
+const previewInline = w => {
+  w.sys.spawnNode = (script, args) => {
+    fs.writeFileSync(args.at(-1), JSON.stringify(preview(w.sys, args[1])));
+    return ++w.sys.pid;
+  };
+};
 
 /** A Cloudflare-ready product repo: a wrangler config and a recent wrangler that prints a preview URL. */
 function cloudflareReady(w, version = '4.140.0') {
@@ -46,7 +51,11 @@ async function verified({ usage } = {}) {
   return w;
 }
 
-const approve = async (w, m = 4) => { press(cardBy(w, 'forge_demo'), 'done'); runOnce(w.v, { now: at(m) }); return pass(w, m + 1); };
+const approve = async (w, m = 4) => {
+  press(cardBy(w, 'forge_demo'), 'done');
+  runOnce(w.v, { now: at(m) });
+  return pass(w, m + 1);
+};
 
 /** The tour run leaves these screenshots in its checkout and reports them. */
 function finishTour(w, stories = [1, 2], extra = COST) {
@@ -66,9 +75,19 @@ test('a verified product asks before anything goes to Cloudflare; approving make
   assert.equal(wrangler(w).length, 0, 'nothing deployed before you say so');
   assert.match((await approve(w)).join(), new RegExp(`preview at ${URL}`));
   assert.equal(forge(w).stage, 'demo');
-  assert.deepEqual(w.sys.ran.filter(r => r.cmd === 'npm').map(r => r.args.join(' ')), ['ci', 'run build']);
-  assert.deepEqual(wrangler(w).map(r => r.args.join(' ')), ['--no-install wrangler --version', '--no-install wrangler preview --name demo'], "the repo's own wrangler, never one fetched on the fly");
-  assert.ok(w.sys.ran.every(r => r.cwd === demoDir(w)), 'in its own checkout of main');
+  assert.deepEqual(
+    w.sys.ran.filter(r => r.cmd === 'npm').map(r => r.args.join(' ')),
+    ['ci', 'run build'],
+  );
+  assert.deepEqual(
+    wrangler(w).map(r => r.args.join(' ')),
+    ['--no-install wrangler --version', '--no-install wrangler preview --name demo'],
+    "the repo's own wrangler, never one fetched on the fly",
+  );
+  assert.ok(
+    w.sys.ran.every(r => r.cwd === demoDir(w)),
+    'in its own checkout of main',
+  );
   const tour = w.sys.started.at(-1);
   assert.match(tour.prompt, /^You are the demo/);
   assert.ok(tour.prompt.includes(URL));
@@ -88,7 +107,10 @@ test('the tour runs without your Cloudflare and GitHub credentials, and writes o
     for (const k of ['XDG_CONFIG_HOME', 'GH_CONFIG_DIR']) assert.deepEqual(fs.readdirSync(env[k]), [], `${k} is an empty folder, so no stored login is found`);
     assert.equal(env.GIT_CONFIG_NOSYSTEM, '1', 'no credential helper from git config');
     assert.equal(fs.readFileSync(env.GIT_CONFIG_GLOBAL, 'utf8'), '');
-    assert.deepEqual(tools.split(',').filter(t => /^(Write|Edit)/.test(t)), ['Write(forge-demo/**)', 'Edit(forge-demo/**)']);
+    assert.deepEqual(
+      tools.split(',').filter(t => /^(Write|Edit)/.test(t)),
+      ['Write(forge-demo/**)', 'Edit(forge-demo/**)'],
+    );
   } finally {
     delete process.env.CLOUDFLARE_API_TOKEN;
     delete process.env.GH_TOKEN;
@@ -98,7 +120,11 @@ test('the tour runs without your Cloudflare and GitHub credentials, and writes o
 test('the preview runs detached: the executor neither waits for it nor starts it twice', async () => {
   const w = await verified();
   cloudflareReady(w);
-  w.sys.spawnNode = (script, args, log) => { const pid = ++w.sys.pid; w.sys.nodes.push({ pid, script, args, log }); return pid; };
+  w.sys.spawnNode = (script, args, log) => {
+    const pid = ++w.sys.pid;
+    w.sys.nodes.push({ pid, script, args, log });
+    return pid;
+  };
   const alive = w.sys.alive;
   w.sys.alive = pid => w.sys.nodes.some(n => n.pid === pid && !n.done) || alive(pid);
   assert.match((await approve(w)).join(), /making the preview/);
@@ -116,13 +142,19 @@ test('the preview checkout is always main, even if a forge/demo branch exists', 
   const w = await verified();
   cloudflareReady(w);
   const calls = [];
-  w.sys.git = args => { calls.push(args); return args[0] === 'ls-remote' ? 'abc\trefs/heads/forge/demo\n' : ''; };
+  w.sys.git = args => {
+    calls.push(args);
+    return args[0] === 'ls-remote' ? 'abc\trefs/heads/forge/demo\n' : '';
+  };
   await approve(w);
   assert.equal(calls.find(a => a[0] === 'worktree' && a[1] === 'add').at(-1), 'origin/main');
 });
 
 test('without a usable Cloudflare setup the demo runs locally and says why', async () => {
-  for (const [setup, why] of [[() => {}, /no wrangler config/], [w => cloudflareReady(w, '4.100.0'), /wrangler 4\.100\.0 is older than 4\.135/]]) {
+  for (const [setup, why] of [
+    [() => {}, /no wrangler config/],
+    [w => cloudflareReady(w, '4.100.0'), /wrangler 4\.100\.0 is older than 4\.135/],
+  ]) {
     const w = await verified();
     setup(w);
     await approve(w);
@@ -138,7 +170,10 @@ test('a failed preview command falls back to local instead of failing the demo',
   const w = await verified();
   cloudflareReady(w);
   const ready = w.sys.respond;
-  w.sys.respond = (cmd, args, cwd) => { if (args.includes('preview')) throw new Error('Authentication error [code: 10000]'); return ready(cmd, args, cwd); };
+  w.sys.respond = (cmd, args, cwd) => {
+    if (args.includes('preview')) throw new Error('Authentication error [code: 10000]');
+    return ready(cmd, args, cwd);
+  };
   await approve(w);
   assert.match(w.sys.started.at(-1).prompt, /npm run preview/);
   finishTour(w);
@@ -176,7 +211,13 @@ test('a screenshot path outside the tour checkout is never copied', async () => 
   fs.symlinkSync(outside, path.join(cwd, 'forge-demo', 'story-3.png'));
   fs.writeFileSync(path.join(cwd, 'forge-demo', 'story-4.png'), 'not an image');
   fs.symlinkSync(w.v, path.join(cwd, 'linked'));
-  const shots = [[1, path.relative(cwd, outside)], [2, outside], [3, 'forge-demo/story-3.png'], [4, 'forge-demo/story-4.png'], [5, 'linked/private.png']].map(([story, file]) => ({ story, file }));
+  const shots = [
+    [1, path.relative(cwd, outside)],
+    [2, outside],
+    [3, 'forge-demo/story-3.png'],
+    [4, 'forge-demo/story-4.png'],
+    [5, 'linked/private.png'],
+  ].map(([story, file]) => ({ story, file }));
   w.sys.finish(tourReport(shots), false, /^You are the demo/);
   await pass(w, 6);
   assert.deepEqual(fs.readdirSync(path.join(forge(w).dir, 'demo')), [], 'not via ../, an absolute path, a linked file or a linked folder, and only real PNGs');

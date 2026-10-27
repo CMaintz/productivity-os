@@ -27,11 +27,20 @@ const PREVIEW = 160;
 const MAX_PROMPTS = 50;
 
 const oneLine = (s, n = PREVIEW) => {
-  const t = String(s ?? '').replace(/\s+/g, ' ').trim();
+  const t = String(s ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
 const q = s => JSON.stringify(s ?? '');
-const textOf = c => (Array.isArray(c) ? c.filter(x => x?.type === 'text').map(x => x.text).join('\n') : String(c ?? '')).trim();
+const textOf = c =>
+  (Array.isArray(c)
+    ? c
+        .filter(x => x?.type === 'text')
+        .map(x => x.text)
+        .join('\n')
+    : String(c ?? '')
+  ).trim();
 // Text Claude Code adds in your name: an interrupt, or a local command's output. Your turn again.
 const isStop = t => t.startsWith('[Request interrupted') || t.startsWith('<local-command-stdout>');
 
@@ -83,7 +92,11 @@ function readNew(file, offset, size, maxRead) {
   for (let len = Math.min(size - offset, maxRead); ; len = Math.min(size - offset, len * 2)) {
     const buf = Buffer.alloc(len);
     const fd = fs.openSync(file, 'r');
-    try { fs.readSync(fd, buf, 0, len, offset); } finally { fs.closeSync(fd); }
+    try {
+      fs.readSync(fd, buf, 0, len, offset);
+    } finally {
+      fs.closeSync(fd);
+    }
     const end = buf.lastIndexOf(0x0a);
     if (end >= 0) return { lines: buf.subarray(0, end).toString('utf8').split('\n'), offset: offset + end + 1 };
     // One line longer than the slice: read further, unless it isn't finished being written.
@@ -100,13 +113,24 @@ function noteFile(vault, s, project) {
 
 function render(s, project, status) {
   const fields = {
-    type: 'session', status, project: project.note ? `"[[${project.note}]]"` : q(project.slug), cwd: q(s.cwd), session_id: q(s.id),
-    started: q(s.started), updated: q(s.lastAt), prompts: s.promptIds.length, last_prompt: q(s.previews.at(-1)?.text ?? ''),
+    type: 'session',
+    status,
+    project: project.note ? `"[[${project.note}]]"` : q(project.slug),
+    cwd: q(s.cwd),
+    session_id: q(s.id),
+    started: q(s.started),
+    updated: q(s.lastAt),
+    prompts: s.promptIds.length,
+    last_prompt: q(s.previews.at(-1)?.text ?? ''),
     waiting_for: q(status === 'waiting' ? `permission for ${s.tool ?? 'a tool'}` : ''),
-    tokens_in: s.tokens?.input ?? 0, tokens_out: s.tokens?.output ?? 0, tokens_cached: s.tokens?.cached ?? 0,
+    tokens_in: s.tokens?.input ?? 0,
+    tokens_out: s.tokens?.output ?? 0,
+    tokens_cached: s.tokens?.cached ?? 0,
   };
   const lines = s.previews.map(p => `- ${p.ts.slice(11, 16)} ${p.text}`).join('\n');
-  return `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n# ${project.slug} · ${s.id.slice(0, 8)}\n\n## Prompts\n${lines}${lines ? '\n' : ''}`;
+  return `---\n${Object.entries(fields)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')}\n---\n# ${project.slug} · ${s.id.slice(0, 8)}\n\n## Prompts\n${lines}${lines ? '\n' : ''}`;
 }
 
 /** Applies new transcript lines to their sessions. Returns the prompts seen for the first time, for the activity log. */
@@ -114,7 +138,11 @@ function apply(sessions, lines, touched) {
   const added = [];
   for (const line of lines) {
     let e;
-    try { e = JSON.parse(line); } catch { continue; }
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
     if (!e?.sessionId || !e.timestamp) continue;
     const s = (sessions[e.sessionId] ??= { id: e.sessionId, promptIds: [], previews: [] });
     if (String(e.entrypoint ?? '').startsWith('sdk')) s.headless = true;
@@ -143,7 +171,9 @@ function loadState(file, now) {
   try {
     const text = fs.readFileSync(file, 'utf8');
     return { state: { files: {}, sessions: {}, ...JSON.parse(text) }, saved: text.trim() };
-  } catch { return { state: { files: {}, sessions: {}, since: now.toISOString(), agentsSince: now.toISOString() }, saved: '' }; }
+  } catch {
+    return { state: { files: {}, sessions: {}, since: now.toISOString(), agentsSince: now.toISOString() }, saved: '' };
+  }
 }
 
 /** A folder's transcripts and its sessions' sub-agent transcripts (<session>/subagents/*.jsonl); a folder that can't be listed is skipped. */
@@ -153,8 +183,16 @@ function transcriptsIn(dir) {
     if (d.name.endsWith('.jsonl')) files.push({ file: path.join(dir, d.name) });
     const agents = path.join(dir, d.name, 'subagents');
     try {
-      if (d.isDirectory() && fs.existsSync(agents)) files.push(...fs.readdirSync(agents).filter(n => n.endsWith('.jsonl')).map(n => ({ file: path.join(agents, n), agent: true })));
-    } catch { /* not a folder, or gone meanwhile: try again next pass */ }
+      if (d.isDirectory() && fs.existsSync(agents))
+        files.push(
+          ...fs
+            .readdirSync(agents)
+            .filter(n => n.endsWith('.jsonl'))
+            .map(n => ({ file: path.join(agents, n), agent: true })),
+        );
+    } catch {
+      /* not a folder, or gone meanwhile: try again next pass */
+    }
   }
   return files;
 }
@@ -177,7 +215,9 @@ function readAll(root, state, now, maxRead) {
         const { lines, offset } = readNew(file, f.offset, st.size, maxRead);
         f.offset = offset;
         added.push(...apply(state.sessions, lines, touched));
-      } catch { /* deleted meanwhile, or unreadable: try again next pass */ }
+      } catch {
+        /* deleted meanwhile, or unreadable: try again next pass */
+      }
     }
   }
   for (const file of Object.keys(state.files)) if (!present.has(file)) delete state.files[file];
@@ -194,14 +234,20 @@ export function syncSessions(vault, { home = os.homedir(), now = new Date(), max
   const { added, touched } = readAll(root, state, now, maxRead);
   const written = [];
   for (const s of Object.values(state.sessions)) {
-    if (!s.headless && (now - new Date(s.lastAt ?? s.usedAt)) / 864e5 > FORGET_DAYS) { delete state.sessions[s.id]; continue; }
+    if (!s.headless && (now - new Date(s.lastAt ?? s.usedAt)) / 864e5 > FORGET_DAYS) {
+      delete state.sessions[s.id];
+      continue;
+    }
     if (s.headless || !s.lastAt) continue;
     const status = statusOf(s, now);
     if (!touched.has(s.id) && s.status === status) continue;
     const project = projectFor(s.cwd, vault);
     const target = noteFile(vault, s, project);
     const text = render(s, project, status);
-    if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== text) { writeFileAtomic(target, text); written.push(path.basename(target)); }
+    if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== text) {
+      writeFileAtomic(target, text);
+      written.push(path.basename(target));
+    }
     s.status = status;
   }
   // State first (atomically): if appending the log then fails, a prompt is missed, never logged twice.
@@ -213,10 +259,15 @@ export function syncSessions(vault, { home = os.homedir(), now = new Date(), max
   const logged = added.filter(a => a.ts >= state.since && state.sessions[a.id] && !state.sessions[a.id].headless);
   if (logged.length) {
     fs.mkdirSync(path.join(vault, '_system'), { recursive: true });
-    fs.appendFileSync(path.join(vault, '_system', 'activity.jsonl'), logged.map(a => {
-      const s = state.sessions[a.id];
-      return JSON.stringify({ ts: a.ts, event: 'UserPromptSubmit', session_id: s.id, project: projectFor(s.cwd, vault).slug, cwd: s.cwd, prompt: a.text }) + '\n';
-    }).join(''));
+    fs.appendFileSync(
+      path.join(vault, '_system', 'activity.jsonl'),
+      logged
+        .map(a => {
+          const s = state.sessions[a.id];
+          return JSON.stringify({ ts: a.ts, event: 'UserPromptSubmit', session_id: s.id, project: projectFor(s.cwd, vault).slug, cwd: s.cwd, prompt: a.text }) + '\n';
+        })
+        .join(''),
+    );
   }
   return written;
 }

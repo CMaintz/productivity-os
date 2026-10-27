@@ -20,7 +20,10 @@ test('lead decisions: the last decision line wins; none means null', () => {
 test('build: clone, workers in dependency order, retry, merge card, release, built', async () => {
   const w = building();
   assert.match((await pass(w, 1)).join(), /T1: worker started/);
-  assert.ok(w.gh.calls.some(c => c.args[0] === 'repo' && c.args[1] === 'clone'), 'the repo is cloned');
+  assert.ok(
+    w.gh.calls.some(c => c.args[0] === 'repo' && c.args[1] === 'clone'),
+    'the repo is cloned',
+  );
   assert.equal(w.sys.started.length, 1, 'only T1 has no dependencies');
   assert.match(w.sys.started[0].prompt, /^\/feature https:\/\/github.com\/me\/tidewell\/issues\/11/);
   assert.match(w.sys.started[0].cwd, /tidewell-worktrees[\\/]T1$/);
@@ -102,7 +105,11 @@ test('build: two failures block the ticket; the lead (detached, read-only) unblo
   w.sys.finish('blocked myself', false, /feature/);
   assert.match((await pass(w, 6)).join(), /the worker says it's blocked.*lead agent started/, 'a repeated block gets a fresh lead run');
   assert.match(w.sys.started.at(-1).prompt, /Number them from T4/);
-  w.sys.finish('REPLAN:\n### T4: Part A\nDepends on: none\nIntent: a\nAcceptance criteria:\n- [ ] a\nScope boundaries:\n- a\nPointers:\n- a\n\n### T5: Part B\nDepends on: T4, T2\nIntent: b\nAcceptance criteria:\n- [ ] b\nScope boundaries:\n- b\nPointers:\n- b\n', false, /lead agent/);
+  w.sys.finish(
+    'REPLAN:\n### T4: Part A\nDepends on: none\nIntent: a\nAcceptance criteria:\n- [ ] a\nScope boundaries:\n- a\nPointers:\n- a\n\n### T5: Part B\nDepends on: T4, T2\nIntent: b\nAcceptance criteria:\n- [ ] b\nScope boundaries:\n- b\nPointers:\n- b\n',
+    false,
+    /lead agent/,
+  );
   assert.match((await pass(w, 7)).join(), /T1: lead re-planned it into T4, T5/);
   assert.equal(ticket(w, 1).state, 'replaced');
   assert.deepEqual(ticket(w, 5).deps, [4, 2], 'new tickets may depend on existing ones');
@@ -129,7 +136,10 @@ test('build: a red PR is a failed try; GitHub errors skip the pass without faili
   w.sys.finish('shipped');
   assert.match((await pass(w, 2)).join(), /PR #\d+ has failing checks: c1; retrying.*T1: worker started/);
   const real = w.gh.run;
-  w.gh.run = args => { if (args[0] === 'issue' && args[1] === 'list') throw new Error('HTTP 502: Bad Gateway'); return real(args); };
+  w.gh.run = args => {
+    if (args[0] === 'issue' && args[1] === 'list') throw new Error('HTTP 502: Bad Gateway');
+    return real(args);
+  };
   assert.match((await pass(w, 3)).join(), /GitHub error, trying again next pass: HTTP 502/);
   assert.deepEqual(await pass(w, 4), [], 'the same error is logged once');
   assert.equal(listForges(w.v)[0].status, 'running');
@@ -181,6 +191,13 @@ test('build: what workers and the lead spend counts toward the forge cost and th
   await pass(w, 4);
   assert.deepEqual(loadBuild(w.v, 'tidy-flat').spent, { usd: 2.5, input: 130, output: 26, cached: 5, ms: 12000, runs: 7 }, 'the planning stages count too');
   assert.deepEqual(ticket(w, 1).spent, { usd: 1.5, input: 30, output: 6, cached: 0, ms: 3000, runs: 3 });
-  assert.deepEqual(ticket(w, 1).sessions.map(x => [x.id, x.input, x.output]), [['s1', 10, 2], ['s2', 10, 2], ['s3', 10, 2]]);
+  assert.deepEqual(
+    ticket(w, 1).sessions.map(x => [x.id, x.input, x.output]),
+    [
+      ['s1', 10, 2],
+      ['s2', 10, 2],
+      ['s3', 10, 2],
+    ],
+  );
   assert.equal(ticket(w, 2).spent, undefined);
 });

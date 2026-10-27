@@ -19,10 +19,23 @@ function vault() {
   fs.writeFileSync(path.join(v, '_system', 'changelog.md'), '# log\n');
   return v;
 }
-const project = (v, slug, fm) => fs.writeFileSync(path.join(v, 'Projects', `${slug}.md`), `---\ntype: project\n${Object.entries(fm).map(([k, x]) => `${k}: ${x}`).join('\n')}\n---\n# ${slug}\n`);
-const setStatus = (file, fields) => fs.writeFileSync(file, Object.entries(fields).reduce((t, [k, x]) => setFrontmatter(t, k, x), fs.readFileSync(file, 'utf8')));
+const project = (v, slug, fm) =>
+  fs.writeFileSync(
+    path.join(v, 'Projects', `${slug}.md`),
+    `---\ntype: project\n${Object.entries(fm)
+      .map(([k, x]) => `${k}: ${x}`)
+      .join('\n')}\n---\n# ${slug}\n`,
+  );
+const setStatus = (file, fields) =>
+  fs.writeFileSync(
+    file,
+    Object.entries(fields).reduce((t, [k, x]) => setFrontmatter(t, k, x), fs.readFileSync(file, 'utf8')),
+  );
 const card = v => listCards(v)[0];
-const fakeClaude = calls => (prompt, cwd, tools) => { calls.push({ prompt, cwd, tools }); return { ok: true, text: 'Fixed it. PR: https://github.com/o/r/pull/9', sessionId: 'sess-1' }; };
+const fakeClaude = calls => (prompt, cwd, tools) => {
+  calls.push({ prompt, cwd, tools });
+  return { ok: true, text: 'Fixed it. PR: https://github.com/o/r/pull/9', sessionId: 'sess-1' };
+};
 
 test('policy: parses old and new tables, round-trips, and keeps never list', () => {
   const old = parsePolicy('| action | level | promote after | approvals in a row |\n|---|---|---|---|\n| triage_inbox | auto-notice | — | 0 |\n| file_note | suggest | 5 | 2 |');
@@ -53,15 +66,21 @@ test('policy: streak earns a promotion within max; reject demotes; always jumps;
 });
 
 test('rules: failing CI, stale project, blocked tickets, full inbox', () => {
-  const specs = suggestions({
-    projects: [
-      { slug: 'site', repo: 'o/site', path: '/p/site', status: 'active', updated: '2026-10-13', ci: 'failing', agent_blocked: 1 },
-      { slug: 'old', status: 'active', updated: '2026-08-01' },
-      { slug: 'paused', status: 'paused', updated: '2025-01-01', ci: 'failing' },
-    ],
-    inboxCount: 6,
-  }, NOW);
-  assert.deepEqual(specs.map(s => s.action), ['fix_ci', 'reminder', 'pause_stale_project', 'triage_inbox']);
+  const specs = suggestions(
+    {
+      projects: [
+        { slug: 'site', repo: 'o/site', path: '/p/site', status: 'active', updated: '2026-10-13', ci: 'failing', agent_blocked: 1 },
+        { slug: 'old', status: 'active', updated: '2026-08-01' },
+        { slug: 'paused', status: 'paused', updated: '2025-01-01', ci: 'failing' },
+      ],
+      inboxCount: 6,
+    },
+    NOW,
+  );
+  assert.deepEqual(
+    specs.map(s => s.action),
+    ['fix_ci', 'reminder', 'pause_stale_project', 'triage_inbox'],
+  );
   assert.match(specs[0].params.prompt, /Never push to main/);
 });
 

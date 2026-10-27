@@ -7,22 +7,29 @@ import { execFileSync } from 'node:child_process';
 import { buildInventory, defaultRoots, claudeEncode, renderMarkdown } from '../inventory.mjs';
 
 const sh = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' });
-const write = (p, s = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); };
+const write = (p, s = 'x') => {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, s);
+};
 
 function fixture() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'inv-'));
   const P = path.join(home, 'Projects');
   // clean git repo with remote + ADR
   const a = path.join(P, 'web', 'site');
-  write(path.join(a, 'package.json'), '{}'); write(path.join(a, 'src/index.ts'));
-  write(path.join(a, 'docs/adr/0001-use-astro.md')); write(path.join(a, 'README.md'));
+  write(path.join(a, 'package.json'), '{}');
+  write(path.join(a, 'src/index.ts'));
+  write(path.join(a, 'docs/adr/0001-use-astro.md'));
+  write(path.join(a, 'README.md'));
   write(path.join(a, 'node_modules/big/index.js'));
-  sh(a, 'init', '-q'); sh(a, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.');
+  sh(a, 'init', '-q');
+  sh(a, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.');
   sh(a, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init');
   sh(a, 'remote', 'add', 'origin', 'https://github.com/CMaintz/site.git');
   // dirty repo, no remote
   const b = path.join(P, 'scratch');
-  write(path.join(b, 'main.py')); sh(b, 'init', '-q');
+  write(path.join(b, 'main.py'));
+  sh(b, 'init', '-q');
   sh(b, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.');
   sh(b, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init');
   write(path.join(b, 'main.py'), 'changed');
@@ -31,7 +38,9 @@ function fixture() {
   write(path.join(home, 'IdeaProjects', 'javaThing', 'src/Main.java'));
   write(path.join(home, 'IdeaProjects', 'javaThing', 'SECURITY-AUDIT.md'));
   // loose docs outside projects
-  write(path.join(P, 'ideas.md')); write(path.join(P, 'web', 'site-notes.md')); write(path.join(P, 'spec.pdf'));
+  write(path.join(P, 'ideas.md'));
+  write(path.join(P, 'web', 'site-notes.md'));
+  write(path.join(P, 'spec.pdf'));
   // claude history for site
   fs.mkdirSync(path.join(home, '.claude', 'projects', claudeEncode(a)), { recursive: true });
   return { home, a, b };
@@ -39,7 +48,9 @@ function fixture() {
 
 test('default roots pick up *Projects siblings', () => {
   const { home } = fixture();
-  const roots = defaultRoots(home).map(r => path.basename(r)).sort();
+  const roots = defaultRoots(home)
+    .map(r => path.basename(r))
+    .sort();
   assert.deepEqual(roots, ['IdeaProjects', 'Projects']);
 });
 
@@ -94,7 +105,10 @@ test('worktrees are flagged and not counted as duplicate clones', () => {
   assert.ok(byPath[wt].flags.includes('worktree'));
   assert.equal(byPath[a].worktree, false);
   assert.equal(byPath[clone].worktree, false);
-  assert.deepEqual(inv.duplicates.map(d => ({ ...d, paths: d.paths.sort() })), [{ github: 'cmaintz/site', paths: [a, clone].sort() }]);
+  assert.deepEqual(
+    inv.duplicates.map(d => ({ ...d, paths: d.paths.sort() })),
+    [{ github: 'cmaintz/site', paths: [a, clone].sort() }],
+  );
 });
 
 test('folders inside _notes and _archive are docs, not projects, unless they are repos', () => {
@@ -105,7 +119,8 @@ test('folders inside _notes and _archive are docs, not projects, unless they are
   write(path.join(P, '_archive', 'proto', 'design', 'SPEC.md'));
   write(path.join(P, '_archive', 'old-repo', 'pom.xml'));
   const gitRepo = path.join(P, '_archive', 'a', 'b', 'c', 'git-repo');
-  write(path.join(gitRepo, 'x.txt')); sh(gitRepo, 'init', '-q');
+  write(path.join(gitRepo, 'x.txt'));
+  sh(gitRepo, 'init', '-q');
   const inv = buildInventory({ roots: [P], home, github: null });
   const names = inv.projects.map(p => p.name);
   assert.ok(names.includes('old-repo'));

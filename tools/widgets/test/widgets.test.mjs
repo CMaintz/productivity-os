@@ -26,9 +26,20 @@ function vault() {
 }
 
 test('query: where (incl. $or and operators), nulls-last sort, limit, field pick', () => {
-  const rows = [{ a: 1, s: 'x', t: ['k'] }, { a: 3, s: 'y' }, { a: null, s: 'x' }, { a: 2, s: 'z' }];
-  assert.deepEqual(runQuery(rows, { sort: [{ field: 'a', dir: 'desc' }] }).map(r => r.a), [3, 2, 1, null]);
-  assert.deepEqual(runQuery(rows, { where: { $or: [{ s: 'y' }, { a: { lt: 2 } }] } }).map(r => r.a), [1, 3]);
+  const rows = [
+    { a: 1, s: 'x', t: ['k'] },
+    { a: 3, s: 'y' },
+    { a: null, s: 'x' },
+    { a: 2, s: 'z' },
+  ];
+  assert.deepEqual(
+    runQuery(rows, { sort: [{ field: 'a', dir: 'desc' }] }).map(r => r.a),
+    [3, 2, 1, null],
+  );
+  assert.deepEqual(
+    runQuery(rows, { where: { $or: [{ s: 'y' }, { a: { lt: 2 } }] } }).map(r => r.a),
+    [1, 3],
+  );
   assert.equal(matches({ t: ['k'] }, { t: { contains: 'k' } }), true);
   assert.equal(matches({ a: '' }, { a: { exists: false } }), true);
   assert.deepEqual(runQuery(rows, { limit: 1 }, ['a']), [{ a: 1 }]);
@@ -37,8 +48,19 @@ test('query: where (incl. $or and operators), nulls-last sort, limit, field pick
 test('manifest validation catches bad shapes, unsafe folders and private fields', () => {
   const ok = { id: 'w', title: 'W', view: 'table', fields: ['status'], source: { kind: 'notes', folder: 'Writing' } };
   assert.deepEqual(validateManifest(ok), []);
-  const bad = validateManifest({ id: 'Bad Id', title: '', view: 'pie', size: 'xl', fields: ['last_prompt'], source: { kind: 'notes', folder: '../etc', where: { status: { like: 'x' } }, limit: 500 } });
-  for (const msg of ['id must', 'title must', 'view must', 'size must', 'private', 'folder', 'unknown operator', 'limit']) assert.ok(bad.some(e => e.includes(msg)), msg);
+  const bad = validateManifest({
+    id: 'Bad Id',
+    title: '',
+    view: 'pie',
+    size: 'xl',
+    fields: ['last_prompt'],
+    source: { kind: 'notes', folder: '../etc', where: { status: { like: 'x' } }, limit: 500 },
+  });
+  for (const msg of ['id must', 'title must', 'view must', 'size must', 'private', 'folder', 'unknown operator', 'limit'])
+    assert.ok(
+      bad.some(e => e.includes(msg)),
+      msg,
+    );
   assert.ok(validateManifest({ ...ok, view: 'kanban' }).some(e => e.includes('groupBy')));
   assert.ok(validateManifest({ ...ok, fields: undefined }).some(e => e.includes('must list the fields')));
 });
@@ -46,10 +68,19 @@ test('manifest validation catches bad shapes, unsafe folders and private fields'
 test('snapshot v2 renders the default layout from widgets and leaks nothing beyond whitelisted fields', () => {
   const s = buildSnapshot(vault(), { now: NOW, host: 'desk' });
   assert.equal(s.version, 2);
-  assert.deepEqual(s.layout.map(w => w.id), ['today', 'attention', 'cards', 'sessions', 'forges', 'writing', 'projects']);
+  assert.deepEqual(
+    s.layout.map(w => w.id),
+    ['today', 'attention', 'cards', 'sessions', 'forges', 'writing', 'projects'],
+  );
   for (const id of Object.keys(s.widgets)) assert.equal(s.widgets[id].error, undefined, `${id}: ${s.widgets[id].error}`);
-  assert.deepEqual(s.widgets.attention.rows.map(r => r.slug), ['site']);
-  assert.deepEqual(s.widgets.projects.rows.map(r => r.slug), ['site']);
+  assert.deepEqual(
+    s.widgets.attention.rows.map(r => r.slug),
+    ['site'],
+  );
+  assert.deepEqual(
+    s.widgets.projects.rows.map(r => r.slug),
+    ['site'],
+  );
   assert.deepEqual(s.widgets.writing.rows, [{ title: 'Post A', path: 'Writing/post-a.md', status: 'draft', publish_date: '2026-11-01' }]);
   assert.doesNotMatch(JSON.stringify(s), /secret checklist|Private draft body|secret_field|hidden/);
 });
@@ -79,7 +110,10 @@ test('create_widget: proposed as a card, approval writes file + layout, Undo rem
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/status: "?done"?/, 'status: undone'));
   runOnce(v, { now: NOW });
   assert.equal(fs.existsSync(path.join(v, '_system', 'widgets', 'ideas.json')), false);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, '_system', 'layouts', 'dashboard.json'), 'utf8')).widgets.some(w => w.id === 'ideas'), false);
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(v, '_system', 'layouts', 'dashboard.json'), 'utf8')).widgets.some(w => w.id === 'ideas'),
+    false,
+  );
 });
 
 test('a tampered create_widget card cannot write outside the widgets folder', () => {
@@ -103,7 +137,7 @@ test('manifests reject wrong operator types and private where/sort fields and fo
   assert.ok(errs({ where: { status: { in: 5 } } }).some(e => e.includes('wrong value type')));
   assert.ok(errs({ where: { status: { exists: 'yes' } } }).some(e => e.includes('wrong value type')));
   assert.ok(errs({ where: { status: { a: 1 } } }).some(e => e.includes('unknown operator')));
-  assert.ok(errs({ where: { last_prompt: { contains: 'password' } } }).some(e => e.includes('private and can\'t be queried')));
+  assert.ok(errs({ where: { last_prompt: { contains: 'password' } } }).some(e => e.includes("private and can't be queried")));
   assert.ok(errs({ sort: [{ field: 'cwd' }] }).some(e => e.includes('private')));
   for (const folder of ['Sessions', '_system/actions', '.', 'Writing/../_system', 'C:/x']) assert.ok(errs({ folder }).length, folder);
   assert.deepEqual(errs({ folder: 'Writing/Drafts' }), []);
@@ -124,7 +158,10 @@ test('manifests reject wrong operator types and private where/sort fields and fo
   const { file } = proposeWidget(v, { ...base, id: 'ok-two' }, NOW.toISOString());
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('status: pending', 'status: approved'));
   runOnce(v, { now: NOW });
-  const done = fs.readFileSync(file, 'utf8').replace(/status: "?done"?/, 'status: undone').replace('"removeWidget":"ok-two"', '"removeWidget":"../../keep"');
+  const done = fs
+    .readFileSync(file, 'utf8')
+    .replace(/status: "?done"?/, 'status: undone')
+    .replace('"removeWidget":"ok-two"', '"removeWidget":"../../keep"');
   fs.writeFileSync(file, done);
   runOnce(v, { now: NOW });
   assert.ok(fs.existsSync(victim), 'a tampered undo cannot delete outside the widgets folder');

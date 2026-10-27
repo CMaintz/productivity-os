@@ -13,8 +13,11 @@ const TODAY = new Date('2026-10-11');
 const tmpVault = () => fs.mkdtempSync(path.join(os.tmpdir(), 'vault-'));
 
 const explorer = (dir = 'C:\\Users\\akash\\Projects\\movie-explorer') => ({
-  name: 'Movie Explorer', path: dir, github: 'cmaintz/movie-explorer',
-  lastCommitDate: '2026-10-01T10:00:00Z', languages: ['TypeScript'],
+  name: 'Movie Explorer',
+  path: dir,
+  github: 'cmaintz/movie-explorer',
+  lastCommitDate: '2026-10-01T10:00:00Z',
+  languages: ['TypeScript'],
   docs: [
     { type: 'adr', path: 'docs/adr/0001 use astro.md', modified: '2026-09-01T00:00:00Z', tracked: true },
     { type: 'note', path: 'scratch.md', modified: '2026-10-02T00:00:00Z', tracked: false },
@@ -68,7 +71,10 @@ test('clones of one repo keep their own notes and worktrees get none', () => {
   const archive = { ...explorer(path.resolve('/p/_archive/movie-explorer')), name: 'movie-explorer' };
   const wt = { ...explorer(path.resolve('/p/school/_wt/feature')), name: 'feature', worktree: true };
   const r = syncProjects(v, { projects: [school, archive, wt] }, TODAY);
-  assert.deepEqual(r.created.map(f => path.basename(f)), ['movie-explorer.md', 'archive-movie-explorer.md']);
+  assert.deepEqual(
+    r.created.map(f => path.basename(f)),
+    ['movie-explorer.md', 'archive-movie-explorer.md'],
+  );
   const pathOf = f => fs.readFileSync(path.join(v, 'Projects', f), 'utf8').match(/^path: (.*)$/m)[1];
   const again = syncProjects(v, { projects: [archive, school, wt] }, TODAY);
   assert.equal(again.unchanged.length, 2);
@@ -76,14 +82,17 @@ test('clones of one repo keep their own notes and worktrees get none', () => {
   assert.equal(JSON.parse(pathOf('archive-movie-explorer.md')), archive.path);
 });
 
-test('a moved checkout takes its old note only when no project sits at that note\'s path', () => {
+test("a moved checkout takes its old note only when no project sits at that note's path", () => {
   const v = tmpVault();
   syncProjects(v, { projects: [explorer()] }, TODAY);
   const moved = explorer(path.resolve('/p/web/movie-explorer'));
   const clone = explorer();
   const r = syncProjects(v, { projects: [moved, clone] }, TODAY);
   assert.equal(r.unchanged.length, 1, 'the clone still at the old path keeps the note');
-  assert.deepEqual(r.created.map(f => path.basename(f)), ['web-movie-explorer.md']);
+  assert.deepEqual(
+    r.created.map(f => path.basename(f)),
+    ['web-movie-explorer.md'],
+  );
 });
 
 test('older notes without a docs block get one before the Log', () => {
@@ -127,6 +136,9 @@ test('a renamed folder keeps its note even when a new clone of another repo take
   const other = { ...explorer(path.resolve('/p/work/movie-explorer')), name: 'movie-explorer', github: 'someone/movie-explorer' };
   const r = syncProjects(v, { projects: [other, renamed] }, TODAY);
   assert.equal(r.refreshed.length, 1);
-  assert.deepEqual(r.created.map(f => path.basename(f)), ['work-movie-explorer.md']);
+  assert.deepEqual(
+    r.created.map(f => path.basename(f)),
+    ['work-movie-explorer.md'],
+  );
   assert.equal(JSON.parse(fs.readFileSync(path.join(v, 'Projects', 'movie-explorer.md'), 'utf8').match(/^path: (.*)$/m)[1]), renamed.path);
 });

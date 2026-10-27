@@ -47,8 +47,7 @@ export function rest(config, fetchImpl = fetch) {
 
 export async function push(vault, config, call, now = new Date()) {
   const data = buildSnapshot(vault, { now, host: os.hostname() });
-  await call('POST', '/snapshot?on_conflict=owner_id', [{ owner_id: config.ownerId, data, updated_at: now.toISOString() }],
-    { prefer: 'resolution=merge-duplicates,return=minimal' });
+  await call('POST', '/snapshot?on_conflict=owner_id', [{ owner_id: config.ownerId, data, updated_at: now.toISOString() }], { prefer: 'resolution=merge-duplicates,return=minimal' });
   return data;
 }
 
@@ -113,8 +112,10 @@ async function main() {
   const vault = i > 0 ? process.argv[i + 1] : process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault');
   const r = await syncDashboard(vault);
   if (r.skipped) console.log(`dashboard: ${r.skipped} (${CONFIG_FILE})`);
-  else if (r.error) { console.error(`dashboard: ${r.error}`); process.exit(1); }
-  else console.log(`dashboard: snapshot pushed, ${r.applied.length} button press(es) applied`);
+  else if (r.error) {
+    console.error(`dashboard: ${r.error}`);
+    process.exit(1);
+  } else console.log(`dashboard: snapshot pushed, ${r.applied.length} button press(es) applied`);
 }
 
 if (process.argv[1] && path.basename(process.argv[1]) === 'sync.mjs') main();

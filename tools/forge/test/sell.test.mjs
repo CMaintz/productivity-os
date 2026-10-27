@@ -27,19 +27,27 @@ function productRepo(w) {
   // Your real env files are git-ignored: they live in the clone, never in the forge's fresh worktree.
   const clone = path.join(w.v, 'Projects', 'tidewell');
   fs.mkdirSync(clone, { recursive: true });
-  fs.writeFileSync(path.join(clone, '.env'), `STRIPE_SECRET_KEY=${STRIPE}\nRESEND_API_KEY=re_supersecretvalue123\nexport EXPORTED_KEY=Exp0rtedS3cret!\nINLINE_KEY=InlineS3cret99 # dev only\nNODE_ENV=production\nSHORT_PRE=Abcdef12\nLONG_PRE=Abcdef12XYZ999\n`);
+  fs.writeFileSync(
+    path.join(clone, '.env'),
+    `STRIPE_SECRET_KEY=${STRIPE}\nRESEND_API_KEY=re_supersecretvalue123\nexport EXPORTED_KEY=Exp0rtedS3cret!\nINLINE_KEY=InlineS3cret99 # dev only\nNODE_ENV=production\nSHORT_PRE=Abcdef12\nLONG_PRE=Abcdef12XYZ999\n`,
+  );
   fs.writeFileSync(path.join(clone, '.dev.vars'), 'WORKER_SECRET=W0rkerS3cretValue\n');
   fs.mkdirSync(path.join(r, 'worker'), { recursive: true });
   fs.writeFileSync(path.join(r, 'worker', 'index.ts'), 'export default { fetch(req, env) { return fetch(env.API_SECRET); } };\n');
   fs.writeFileSync(path.join(r, 'wrangler.jsonc'), '{\n  // the worker\n  "name": "tidewell", // its name\n  "routes": ["example.com/*"],\n  "vars": { "APP_ENV": "preview", },\n}\n');
-  fs.writeFileSync(path.join(r, 'package-lock.json'), JSON.stringify({ packages: {
-    '': { name: 'tidewell' },
-    'node_modules/astro': { license: 'MIT' },
-    'node_modules/sharp': { license: 'Apache-2.0' },
-    'node_modules/either': { license: '(MIT OR GPL-3.0)' },
-    'node_modules/gpl-thing': { license: 'GPL-3.0' },
-    'node_modules/vitest': { license: 'GPL-3.0', dev: true },
-  } }));
+  fs.writeFileSync(
+    path.join(r, 'package-lock.json'),
+    JSON.stringify({
+      packages: {
+        '': { name: 'tidewell' },
+        'node_modules/astro': { license: 'MIT' },
+        'node_modules/sharp': { license: 'Apache-2.0' },
+        'node_modules/either': { license: '(MIT OR GPL-3.0)' },
+        'node_modules/gpl-thing': { license: 'GPL-3.0' },
+        'node_modules/vitest': { license: 'GPL-3.0', dev: true },
+      },
+    }),
+  );
   fs.mkdirSync(path.join(r, 'node_modules', 'x'), { recursive: true });
   fs.writeFileSync(path.join(r, 'node_modules', 'x', 'i.js'), 'process.env.NOT_OURS');
 }
@@ -49,7 +57,13 @@ function demoed() {
   const w = building();
   const f = forge(w);
   const b = {
-    slug: 'tidy-flat', name: 'Tidewell', repo: 'me/tidewell', clone: path.join(w.v, 'Projects', 'tidewell'), owner: 'me', started: NOW.toISOString(), tickets: {},
+    slug: 'tidy-flat',
+    name: 'Tidewell',
+    repo: 'me/tidewell',
+    clone: path.join(w.v, 'Projects', 'tidewell'),
+    owner: 'me',
+    started: NOW.toISOString(),
+    tickets: {},
     verify: { low: ['Unused helper in lib/'], accepted: ['Share link expires too early'] },
     demo: { preview: { url: 'https://demo-tidewell.me.workers.dev' }, gaps: ['story 2 has no screenshot'] },
   };
@@ -58,12 +72,22 @@ function demoed() {
   fs.writeFileSync(path.join(f.dir, 'naming.md'), '## Candidates\n| # | Name | Why |\n|---|---|---|\n| 1 | Tidewell | calm |\n| 2 | Flatmate | plain |\n');
   fs.writeFileSync(path.join(f.dir, 'demo.md'), '# Tidewell: demo\n## What was built\nA shared shopping list.\n');
   createCard(w.v, { action: 'forge_sell', key: 'forge-sell:tidy-flat', risk: 'low', title: 'x', reason: 'x', params: { slug: 'tidy-flat', stage: 'demoed' } }, NOW.toISOString());
-  fs.writeFileSync(f.file, fs.readFileSync(f.file, 'utf8').replace('stage: build', 'stage: demoed').replace(/^status: .*$/m, 'status: waiting').replace('review_key: ""', 'review_key: "forge-sell:tidy-flat"'));
+  fs.writeFileSync(
+    f.file,
+    fs
+      .readFileSync(f.file, 'utf8')
+      .replace('stage: build', 'stage: demoed')
+      .replace(/^status: .*$/m, 'status: waiting')
+      .replace('review_key: ""', 'review_key: "forge-sell:tidy-flat"'),
+  );
   productRepo(w);
   return w;
 }
 
-const approve = async (w, m = 1) => { press(cardBy(w, 'forge_sell'), 'done'); return pass(w, m); };
+const approve = async (w, m = 1) => {
+  press(cardBy(w, 'forge_sell'), 'done');
+  return pass(w, m);
+};
 
 /** The drafting run writes these drafts into forge-pack/ and reports. */
 function finishDrafts(w, names = DRAFTS, text = n => `# ${n}\nDraft text.\n`) {
@@ -101,7 +125,8 @@ test('the secrets inventory lists names and where they are used, never values', 
   finishDrafts(w);
   await pass(w, 2);
   const inv = read(w, 'handover/secrets-inventory.md');
-  for (const n of ['SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'APP_ENV', 'API_SECRET', 'WORKER_SECRET', 'EXPORTED_KEY']) assert.match(inv, new RegExp(`\\b${n}\\b`), n);
+  for (const n of ['SUPABASE_URL', 'PUBLIC_SUPABASE_ANON_KEY', 'STRIPE_SECRET_KEY', 'RESEND_API_KEY', 'APP_ENV', 'API_SECRET', 'WORKER_SECRET', 'EXPORTED_KEY'])
+    assert.match(inv, new RegExp(`\\b${n}\\b`), n);
   assert.match(inv, /API_SECRET \| worker\/index\.ts/, 'a Worker secret, read as env.NAME');
   assert.doesNotMatch(inv, /W0rker|Exp0rted|InlineS3cret/, 'names from your env files, never their values');
   assert.match(inv, /src\/db\.ts/);
@@ -135,9 +160,11 @@ test('known issues and the transfer checklist come from the forge, not the model
 test('secret-looking values and your .env values are redacted from the drafts before they reach the vault', async () => {
   const w = demoed();
   await approve(w);
-  finishDrafts(w, DRAFTS, n => (n === 'runbook'
-    ? `# Runbook\nSet the key to ${STRIPE} and RESEND to re_supersecretvalue123.\nA token: ${GH_TOKEN}\n-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----\n`
-    : `# ${n}\nfine\n`));
+  finishDrafts(w, DRAFTS, n =>
+    n === 'runbook'
+      ? `# Runbook\nSet the key to ${STRIPE} and RESEND to re_supersecretvalue123.\nA token: ${GH_TOKEN}\n-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----\n`
+      : `# ${n}\nfine\n`,
+  );
   await pass(w, 2);
   const runbook = read(w, 'handover/runbook.md');
   for (const leak of ['sk_live', 'supersecret', 'ghp_', 'MIIEvQ']) assert.ok(!runbook.includes(leak), leak);
@@ -171,7 +198,7 @@ test('a forge-pack folder that links out of the checkout is not read', async () 
   assert.match(cardBy(w, 'reminder').text, /missing: landing/);
 });
 
-test('the run\'s own words on the card and in the known issues are redacted too; the checkout is removed after', async () => {
+test("the run's own words on the card and in the known issues are redacted too; the checkout is removed after", async () => {
   const w = demoed();
   const b = path.join(w.v, '_system', 'forge-builds', 'tidy-flat.json');
   const state = JSON.parse(fs.readFileSync(b, 'utf8'));
@@ -179,17 +206,25 @@ test('the run\'s own words on the card and in the known issues are redacted too;
   fs.writeFileSync(b, JSON.stringify(state));
   const calls = [];
   const git = w.sys.git;
-  w.sys.git = (args, cwd) => { calls.push(args); return git(args, cwd); };
+  w.sys.git = (args, cwd) => {
+    calls.push(args);
+    return git(args, cwd);
+  };
   await approve(w);
   finishDrafts(w);
   await pass(w, 2);
   assert.ok(!read(w, 'handover/known-issues.md').includes('sk_live'));
-  assert.ok(calls.some(a => a[0] === 'worktree' && a[1] === 'remove' && a.at(-1) === packWt(w)), 'the pack checkout is cleaned up');
+  assert.ok(
+    calls.some(a => a[0] === 'worktree' && a[1] === 'remove' && a.at(-1) === packWt(w)),
+    'the pack checkout is cleaned up',
+  );
 });
 
 test('a sell stage that keeps erroring stops as failed instead of retrying forever', async () => {
   const w = demoed();
-  w.sys.git = () => { throw new Error('fatal: not a git repository'); };
+  w.sys.git = () => {
+    throw new Error('fatal: not a git repository');
+  };
   press(cardBy(w, 'forge_sell'), 'done');
   for (let m = 1; m <= 6; m++) await pass(w, m);
   assert.equal(forge(w).status, 'failed');
@@ -203,12 +238,19 @@ test('the pack: every draft marked DRAFT, handover files apart, nothing publishe
   fs.mkdirSync(path.join(run.cwd, 'forge-pack'), { recursive: true });
   fs.writeFileSync(path.join(w.v, 'outside.md'), '# private vault note');
   fs.symlinkSync(path.join(w.v, 'outside.md'), path.join(run.cwd, 'forge-pack', 'one-pager.md'));
-  finishDrafts(w, DRAFTS.filter(n => n !== 'one-pager'));
+  finishDrafts(
+    w,
+    DRAFTS.filter(n => n !== 'one-pager'),
+  );
   assert.match((await pass(w, 2)).join(), /retrying/, 'a missing draft gets one more try');
-  finishDrafts(w, DRAFTS.filter(n => n !== 'one-pager'));
+  finishDrafts(
+    w,
+    DRAFTS.filter(n => n !== 'one-pager'),
+  );
   assert.match((await pass(w, 3)).join(), /pack ready/);
   assert.equal(forge(w).stage, 'packed');
-  for (const f of ['landing.md', 'pitch.md', 'video-script.md', 'listing.md', 'handover/architecture.md', 'handover/runbook.md', 'handover/secrets-inventory.md']) assert.match(read(w, f), /^> DRAFT: not published/, f);
+  for (const f of ['landing.md', 'pitch.md', 'video-script.md', 'listing.md', 'handover/architecture.md', 'handover/runbook.md', 'handover/secrets-inventory.md'])
+    assert.match(read(w, f), /^> DRAFT: not published/, f);
   assert.ok(!fs.existsSync(path.join(packed(w), 'one-pager.md')), 'a symlink out of the folder is not followed');
   const card = cardBy(w, 'reminder');
   assert.match(card.text, /nothing was published, listed or sent/i);
@@ -226,4 +268,3 @@ test('a usage limit while drafting waits for the window; it is not a failed pack
   await pass(w, 70);
   assert.equal(w.sys.started.length, 2);
 });
-

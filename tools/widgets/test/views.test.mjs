@@ -18,7 +18,11 @@ function fakeDc(pages) {
     dc: {
       preact: { h },
       useState: initial => [initial, () => {}],
-      useQuery: q => { queries.push(q); const folder = q.match(/path\("([^"]+)"\)/)?.[1]; return pages.filter(p => p.$path.startsWith(`${folder}/`)); },
+      useQuery: q => {
+        queries.push(q);
+        const folder = q.match(/path\("([^"]+)"\)/)?.[1];
+        return pages.filter(p => p.$path.startsWith(`${folder}/`));
+      },
     },
   };
 }
@@ -42,7 +46,13 @@ test('Datacore renders a notes kanban and a snapshot-style table with the shared
   assert.match(html, /draft \(1\)/);
   assert.match(html, /idea \(1\)/);
   assert.doesNotMatch(html, /published/);
-  assert.deepEqual(useRows(writing).map(r => Object.keys(r).sort()), [['path', 'status', 'title'], ['path', 'status', 'title']]);
+  assert.deepEqual(
+    useRows(writing).map(r => Object.keys(r).sort()),
+    [
+      ['path', 'status', 'title'],
+      ['path', 'status', 'title'],
+    ],
+  );
   const projects = { id: 'projects', title: 'Projects', view: 'table', fields: ['slug', 'ci'], source: { kind: 'snapshot', collection: 'projects', where: { status: 'active' } } };
   assert.match(text(h(Widget, { manifest: projects })), /site.*❌ failing/);
   assert.ok(queries.includes('@page and path("Projects")'));
@@ -60,7 +70,16 @@ test('widgetView loads a manifest by id from the vault and renders it', async ()
   const { widgetView } = await loadViews();
   const { dc } = fakeDc([page('Writing/a.md', { type: 'post', status: 'draft' })]);
   const read = [];
-  dc.app = { vault: { adapter: { read: async p => { read.push(p); return JSON.stringify({ id: 'writing', title: 'W', view: 'list', fields: ['status'], source: { kind: 'notes', folder: 'Writing' } }); } } } };
+  dc.app = {
+    vault: {
+      adapter: {
+        read: async p => {
+          read.push(p);
+          return JSON.stringify({ id: 'writing', title: 'W', view: 'list', fields: ['status'], source: { kind: 'notes', folder: 'Writing' } });
+        },
+      },
+    },
+  };
   const View = await widgetView(dc, 'writing');
   assert.match(text(h(View, {})), /draft/);
   await widgetView(dc, '../../etc/passwd');

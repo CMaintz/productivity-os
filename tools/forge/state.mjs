@@ -9,12 +9,18 @@ import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const q = v => JSON.stringify(v);
 export const stops = v => (Array.isArray(v) ? v : String(v ?? '').split(',')).map(s => String(s).trim()).filter(s => STAGE_IDS.includes(s));
-const load = file => { const text = fs.readFileSync(file, 'utf8'); return { file, text, ...fieldsOf(text) }; };
+const load = file => {
+  const text = fs.readFileSync(file, 'utf8');
+  return { file, text, ...fieldsOf(text) };
+};
 
 export function listForges(vault) {
   const dir = path.join(vault, FORGE_DIR);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(n => n.endsWith('.md')).map(n => load(path.join(dir, n)))
+  return fs
+    .readdirSync(dir)
+    .filter(n => n.endsWith('.md'))
+    .map(n => load(path.join(dir, n)))
     .filter(f => f.type === 'forge' && /^[a-z0-9-]+$/.test(String(f.slug)))
     .map(f => ({ ...f, dir: path.join(dir, f.slug), stop_after: stops(f.stop_after) }));
 }

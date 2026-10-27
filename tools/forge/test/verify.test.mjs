@@ -39,7 +39,10 @@ test('approving "built" starts three detached checks; reviewers are read-only', 
 test('findings of medium and up go back into the build as tickets; low ones are only noted; then verify runs again', async () => {
   const w = await readyToVerify();
   await pass(w, 2);
-  finishRound(w, { arch: report([], [{ title: 'Unused helper in lib/', severity: 'low', details: 'dead code' }]), spec: report([], [{ title: 'Share link expires too early', severity: 'medium', details: 'story 2 says a week' }]) });
+  finishRound(w, {
+    arch: report([], [{ title: 'Unused helper in lib/', severity: 'low', details: 'dead code' }]),
+    spec: report([], [{ title: 'Share link expires too early', severity: 'medium', details: 'story 2 says a week' }]),
+  });
   assert.match((await pass(w, 3)).join(), /verify round 1: 1 finding to fix; back to build/);
   assert.equal(forge(w).stage, 'build');
   assert.match(forge(w).text, /low: Unused helper in lib\//);
@@ -69,7 +72,11 @@ test('coverage is enforced: a story without an E2E check, or a run without a usa
 test('a finding that still has an open ticket reuses it instead of opening a duplicate', async () => {
   const w = await readyToVerify();
   await pass(w, 2);
-  const f = (...titles) => report([], titles.map(title => ({ title, severity: 'medium', details: 'd' })));
+  const f = (...titles) =>
+    report(
+      [],
+      titles.map(title => ({ title, severity: 'medium', details: 'd' })),
+    );
   finishRound(w, { spec: f('Share link expires too early', 'List title not saved') });
   await pass(w, 3);
   const fixes = Object.values(loadBuild(w.v, 'tidy-flat').tickets).filter(x => x.verify);
@@ -106,7 +113,12 @@ test('three rounds at most, then it asks', async () => {
   const w = await readyToVerify();
   for (let r = 0; r < 3; r++) {
     await pass(w, 10 * r + 2);
-    finishRound(w, { spec: report([], Array.from({ length: 3 - r }, (_, i) => ({ title: `R${r} issue ${i}`, severity: 'high', details: 'd' }))) });
+    finishRound(w, {
+      spec: report(
+        [],
+        Array.from({ length: 3 - r }, (_, i) => ({ title: `R${r} issue ${i}`, severity: 'high', details: 'd' })),
+      ),
+    });
     await pass(w, 10 * r + 3);
     for (const t of Object.values(loadBuild(w.v, 'tidy-flat').tickets)) w.gh.issues.get(t.issue).state = 'CLOSED';
     if (r < 2) await pass(w, 10 * r + 4);
@@ -122,7 +134,7 @@ test('three rounds at most, then it asks', async () => {
 
 // ---- review findings: each test failed before its fix ----
 
-test('the two reviewers get separate checkouts, so one never deletes the other\'s', async () => {
+test("the two reviewers get separate checkouts, so one never deletes the other's", async () => {
   const w = await readyToVerify();
   await pass(w, 2);
   const [, arch, spec] = w.sys.started.slice(-3);
@@ -132,7 +144,11 @@ test('the two reviewers get separate checkouts, so one never deletes the other\'
 test('a reused fix ticket starts over: its old merged PR does not close it again', async () => {
   const w = await readyToVerify();
   await pass(w, 2);
-  const f = (...titles) => report([], titles.map(title => ({ title, severity: 'medium', details: 'd' })));
+  const f = (...titles) =>
+    report(
+      [],
+      titles.map(title => ({ title, severity: 'medium', details: 'd' })),
+    );
   finishRound(w, { spec: f('Share link expires too early', 'List title not saved') });
   await pass(w, 3);
   const fix = Object.entries(loadBuild(w.v, 'tidy-flat').tickets).find(([, t]) => t.verify === 'Share link expires too early');
@@ -153,15 +169,29 @@ test('a reused fix ticket starts over: its old merged PR does not close it again
 test('a GitHub error while filing tickets loses nothing: the next pass finishes the job, no duplicates', async () => {
   const w = await readyToVerify();
   await pass(w, 2);
-  finishRound(w, { spec: report([], [{ title: 'A', severity: 'high', details: 'd' }, { title: 'B', severity: 'high', details: 'd' }]) });
+  finishRound(w, {
+    spec: report(
+      [],
+      [
+        { title: 'A', severity: 'high', details: 'd' },
+        { title: 'B', severity: 'high', details: 'd' },
+      ],
+    ),
+  });
   const real = w.gh.run;
   let creates = 0;
-  w.gh.run = (args, input) => { if (args[1] === 'create' && ++creates === 2) throw new Error('HTTP 502'); return real(args, input); };
+  w.gh.run = (args, input) => {
+    if (args[1] === 'create' && ++creates === 2) throw new Error('HTTP 502');
+    return real(args, input);
+  };
   assert.match((await pass(w, 3)).join(), /GitHub error/);
   assert.notEqual(forge(w).status, 'failed');
   w.gh.run = real;
   assert.match((await pass(w, 4)).join(), /2 findings to fix; back to build/);
-  const titles = w.gh.calls.filter(c => c.args[1] === 'create' && !c.args.includes('epic')).map(c => c.args[c.args.indexOf('--title') + 1]).filter(t => t.startsWith('verify: '));
+  const titles = w.gh.calls
+    .filter(c => c.args[1] === 'create' && !c.args.includes('epic'))
+    .map(c => c.args[c.args.indexOf('--title') + 1])
+    .filter(t => t.startsWith('verify: '));
   assert.deepEqual(titles.sort(), ['verify: A', 'verify: B']);
 });
 
@@ -224,8 +254,14 @@ test("qa's E2E tests must land on main: a clean round with the test PR still ope
 test('"Do it" after an early stop buys exactly one more round', async () => {
   const w = await readyToVerify();
   await pass(w, 2);
-  const n = (k, r) => report([], Array.from({ length: k }, (_, i) => ({ title: `R${r} problem ${i}`, severity: 'medium', details: 'd' })));
-  const closeAll = () => { for (const t of Object.values(loadBuild(w.v, 'tidy-flat').tickets)) w.gh.issues.get(t.issue).state = 'CLOSED'; };
+  const n = (k, r) =>
+    report(
+      [],
+      Array.from({ length: k }, (_, i) => ({ title: `R${r} problem ${i}`, severity: 'medium', details: 'd' })),
+    );
+  const closeAll = () => {
+    for (const t of Object.values(loadBuild(w.v, 'tidy-flat').tickets)) w.gh.issues.get(t.issue).state = 'CLOSED';
+  };
   finishRound(w, { spec: n(3, 1) });
   await pass(w, 3);
   closeAll();
@@ -247,7 +283,10 @@ test('a story only counts as tested when a test in the repo is tagged with it', 
   finishRound(w, { tests: '// story 1 only\n' });
   await pass(w, 3);
   const titles = w.gh.calls.filter(c => c.args[1] === 'create').map(c => c.args[c.args.indexOf('--title') + 1]);
-  assert.ok(titles.some(t => /story 2 has no E2E test/.test(t)), 'claiming "story 2" in the report is not enough');
+  assert.ok(
+    titles.some(t => /story 2 has no E2E test/.test(t)),
+    'claiming "story 2" in the report is not enough',
+  );
 });
 
 test('an open verify issue the build does not know yet is adopted, not ignored or duplicated', async () => {

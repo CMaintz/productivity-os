@@ -36,14 +36,24 @@ const ENV_FILES = ['.env', '.env.local', '.env.production', '.dev.vars'];
 // Shapes of common secrets; anything matching is redacted from the drafts.
 const SECRET_SHAPES = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-  /\bsk_(live|test)_[A-Za-z0-9]{16,}/g, /\bsk-[A-Za-z0-9_-]{20,}/g, /\bgh[pousr]_[A-Za-z0-9]{30,}/g, /\bgithub_pat_\w{30,}/g,
-  /\bAKIA[0-9A-Z]{16}\b/g, /\bxox[abposr]-[A-Za-z0-9-]{10,}/g, /\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}/g,
+  /\bsk_(live|test)_[A-Za-z0-9]{16,}/g,
+  /\bsk-[A-Za-z0-9_-]{20,}/g,
+  /\bgh[pousr]_[A-Za-z0-9]{30,}/g,
+  /\bgithub_pat_\w{30,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bxox[abposr]-[A-Za-z0-9-]{10,}/g,
+  /\beyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}/g,
 ];
 const MAX_ATTEMPTS = 2;
 const MAX_ERRORS = 5;
 const HOUR = 36e5;
 
-const firstLine = e => String(e?.message || e).split('\n').map(l => l.trim()).find(Boolean)?.slice(0, 200) ?? 'unknown error';
+const firstLine = e =>
+  String(e?.message || e)
+    .split('\n')
+    .map(l => l.trim())
+    .find(Boolean)
+    ?.slice(0, 200) ?? 'unknown error';
 const rel = (root, p) => path.relative(root, p).split(path.sep).join('/');
 const readIf = p => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '');
 
@@ -60,10 +70,28 @@ function parseJsonc(text) {
   let out = '';
   for (let i = 0, str = false; i < text.length; i++) {
     const c = text[i];
-    if (str) { out += c; if (c === '\\') out += text[++i] ?? ''; else if (c === '"') str = false; continue; }
-    if (c === '"') { str = true; out += c; continue; }
-    if (c === '/' && text[i + 1] === '/') { while (i < text.length && text[i] !== '\n') i++; out += '\n'; continue; }
-    if (c === '/' && text[i + 1] === '*') { i = text.indexOf('*/', i + 2); if (i < 0) break; i++; continue; }
+    if (str) {
+      out += c;
+      if (c === '\\') out += text[++i] ?? '';
+      else if (c === '"') str = false;
+      continue;
+    }
+    if (c === '"') {
+      str = true;
+      out += c;
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      out += '\n';
+      continue;
+    }
+    if (c === '/' && text[i + 1] === '*') {
+      i = text.indexOf('*/', i + 2);
+      if (i < 0) break;
+      i++;
+      continue;
+    }
     out += c;
   }
   return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
@@ -76,10 +104,15 @@ function wranglerConfig(wt) {
     try {
       const c = parseJsonc(json);
       return { name: c.name, vars: Object.assign({}, c.vars, ...Object.values(c.env ?? {}).map(e => e?.vars ?? {})) };
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   }
   const toml = readIf(path.join(wt, 'wrangler.toml'));
-  const sections = toml.split(/^\[(?:env\.[\w-]+\.)?vars\]\s*$/m).slice(1).map(x => x.split(/^\[/m)[0]);
+  const sections = toml
+    .split(/^\[(?:env\.[\w-]+\.)?vars\]\s*$/m)
+    .slice(1)
+    .map(x => x.split(/^\[/m)[0]);
   const vars = Object.fromEntries(sections.flatMap(v => [...v.matchAll(/^([A-Za-z_]\w*)\s*=/gm)].map(m => [m[1], ''])));
   return { name: toml.match(/^name\s*=\s*"([^"]+)"/m)?.[1], vars };
 }
@@ -118,13 +151,22 @@ export function secretNames(wt, dirs = [wt]) {
   return names;
 }
 
-const permissive = license => String(license).replace(/[()]/g, '').split(/\s+OR\s+/i).some(alt => alt.split(/\s+AND\s+/i).every(l => PERMISSIVE.test(l.trim())));
+const permissive = license =>
+  String(license)
+    .replace(/[()]/g, '')
+    .split(/\s+OR\s+/i)
+    .some(alt => alt.split(/\s+AND\s+/i).every(l => PERMISSIVE.test(l.trim())));
 
 /** Production dependencies from package-lock.json with their license, flagging the ones to check. */
 export function licenses(wt) {
   let lock;
-  try { lock = JSON.parse(readIf(path.join(wt, 'package-lock.json'))); } catch { return null; }
-  return Object.entries(lock.packages ?? {}).filter(([k, v]) => k && !v.dev)
+  try {
+    lock = JSON.parse(readIf(path.join(wt, 'package-lock.json')));
+  } catch {
+    return null;
+  }
+  return Object.entries(lock.packages ?? {})
+    .filter(([k, v]) => k && !v.dev)
     .map(([k, v]) => ({ name: k.replace(/^.*node_modules\//, ''), license: String(v.license ?? 'unknown'), ok: permissive(v.license ?? '') }))
     .sort((a, b) => Number(a.ok) - Number(b.ok) || a.name.localeCompare(b.name));
 }
@@ -145,12 +187,26 @@ function facts(f, b, wt) {
 }
 
 function factsBrief(fx) {
-  return Object.values(fx).map(t => t.split('\n').filter(l => !l.startsWith('# ')).join('\n')).join('\n');
+  return Object.values(fx)
+    .map(t =>
+      t
+        .split('\n')
+        .filter(l => !l.startsWith('# '))
+        .join('\n'),
+    )
+    .join('\n');
 }
 
 function startDrafts(f, b, ctx, p) {
   const demo = readIf(path.join(f.dir, 'demo.md'));
-  const vars = { NAME: b.name, REPO: b.repo, PREVIEW: b.demo?.preview?.url ?? 'none (local only)', DEMO: demo.slice(0, 6000), FACTS: factsBrief(facts(f, b, p.wt)).slice(0, 8000), FILES: DRAFTS.map(n => `forge-pack/${n}.md`).join(', ') };
+  const vars = {
+    NAME: b.name,
+    REPO: b.repo,
+    PREVIEW: b.demo?.preview?.url ?? 'none (local only)',
+    DEMO: demo.slice(0, 6000),
+    FACTS: factsBrief(facts(f, b, p.wt)).slice(0, 8000),
+    FILES: DRAFTS.map(n => `forge-pack/${n}.md`).join(', '),
+  };
   const prompt = Object.entries(vars).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), fs.readFileSync(path.join(PROMPTS, 'sell-pack.md'), 'utf8'));
   const env = sandboxEnv(path.join(ctx.logDir, 'sell-sandbox'));
   return startRun({ prompt, cwd: p.wt, tools: PACK_TOOLS, logDir: ctx.logDir, name: 'sell-pack', now: ctx.now, env, sys: ctx.sys });
@@ -163,7 +219,9 @@ function draftOf(wt, name) {
     // forge-pack must really be in the checkout, not a link to somewhere else.
     root = fs.realpathSync(path.join(wt, 'forge-pack'));
     if (!root.startsWith(fs.realpathSync(wt) + path.sep)) return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
   const real = insideFile(path.join(root, `${name}.md`), root);
   const text = real ? fs.readFileSync(real, 'utf8') : '';
   return /^# \S/m.test(text) ? text : null;
@@ -175,7 +233,13 @@ const looksSecret = v => v.length >= 8 && !(v.length <= 16 && /^[a-z]+(-[a-z0-9]
 
 /** The text with your env files' values (longest first) and secret-shaped strings replaced; and how many were. */
 export function redact(text, dirs) {
-  const values = [...new Set(envEntries(dirs).map(e => e.value).filter(looksSecret))].sort((a, c) => c.length - a.length);
+  const values = [
+    ...new Set(
+      envEntries(dirs)
+        .map(e => e.value)
+        .filter(looksSecret),
+    ),
+  ].sort((a, c) => c.length - a.length);
   let n = 0;
   let out = text;
   for (const v of values) {
@@ -195,7 +259,10 @@ function pack(vault, f, b, ctx, p) {
   const missing = [];
   for (const name of DRAFTS) {
     const text = draftOf(p.wt, name);
-    if (!text) { missing.push(name); continue; }
+    if (!text) {
+      missing.push(name);
+      continue;
+    }
     const r = redact(text, envDirs(b, p.wt));
     redacted += r.redacted;
     const to = path.join(HANDOVER.includes(name) ? 'handover' : '', `${name}.md`);
@@ -207,12 +274,25 @@ function pack(vault, f, b, ctx, p) {
     written.push(`handover/${name}.md`);
   }
   const failure = p.failure ? redact(p.failure, envDirs(b, p.wt)).text : null;
-  createCard(vault, {
-    action: 'reminder', key: `forge-packed:${b.slug}`, risk: 'low', title: `Forge ${b.name}: sell and handover pack ready`,
-    reason: `Drafts in [[Forge/${b.slug}/pack]]: ${written.join(', ')}.${missing.length ? ` missing: ${missing.join(', ')}.` : ''}${redacted ? ` Redacted ${redacted} secret-looking value${redacted === 1 ? '' : 's'}.` : ''}${failure ? ` The drafting run failed: ${failure}.` : ''} Nothing was published, listed or sent: those steps are yours.`,
-    context: `https://github.com/${b.repo}`, explain: 'nothing runs; this is the last Forge stage.', params: {},
-  }, ctx.now.toISOString());
-  try { ctx.sys.git(['worktree', 'remove', '--force', p.wt], b.clone); } catch { /* git prunes it later */ }
+  createCard(
+    vault,
+    {
+      action: 'reminder',
+      key: `forge-packed:${b.slug}`,
+      risk: 'low',
+      title: `Forge ${b.name}: sell and handover pack ready`,
+      reason: `Drafts in [[Forge/${b.slug}/pack]]: ${written.join(', ')}.${missing.length ? ` missing: ${missing.join(', ')}.` : ''}${redacted ? ` Redacted ${redacted} secret-looking value${redacted === 1 ? '' : 's'}.` : ''}${failure ? ` The drafting run failed: ${failure}.` : ''} Nothing was published, listed or sent: those steps are yours.`,
+      context: `https://github.com/${b.repo}`,
+      explain: 'nothing runs; this is the last Forge stage.',
+      params: {},
+    },
+    ctx.now.toISOString(),
+  );
+  try {
+    ctx.sys.git(['worktree', 'remove', '--force', p.wt], b.clone);
+  } catch {
+    /* git prunes it later */
+  }
   save(f, { stage: 'packed', status: 'done' }, ctx.now, `sell: pack ready (${written.length} files${missing.length ? `, missing ${missing.join(', ')}` : ''})`);
   return `sell: pack ready (${written.length} files)`;
 }
@@ -222,12 +302,18 @@ export function sellStep(vault, f, b, ctx) {
   const p = (b.sell ??= { attempts: 0 });
   const log = [];
   try {
-    if (!p.wt) { p.wt = prepareWorktree(ctx.sys, b.clone, 'pack', 0, { fromMain: true }); ctx.persist(); }
+    if (!p.wt) {
+      p.wt = prepareWorktree(ctx.sys, b.clone, 'pack', 0, { fromMain: true });
+      ctx.persist();
+    }
     if (p.run && !p.ready) {
       let s = workerStatus(p.run, { now: ctx.now, sys: ctx.sys });
       if (s === 'running') return log;
       addSpend(b, s);
-      if (s === 'timeout') { ctx.sys.kill(p.run.pid); s = { ok: false, text: 'no result after the time limit' }; }
+      if (s === 'timeout') {
+        ctx.sys.kill(p.run.pid);
+        s = { ok: false, text: 'no result after the time limit' };
+      }
       p.run = null;
       if (s.usageLimit) {
         p.retryAfter = new Date(ctx.now.valueOf() + HOUR).toISOString();
@@ -249,8 +335,10 @@ export function sellStep(vault, f, b, ctx) {
     if (p.ready) log.push(pack(vault, f, b, ctx, p));
   } catch (e) {
     p.errors = (p.errors ?? 0) + 1;
-    if (p.errors >= MAX_ERRORS) { save(f, { status: 'failed' }, ctx.now, `sell: failed after ${p.errors} errors: ${firstLine(e)}`); log.push('sell: failed'); }
-    else log.push(`sell: error, trying again next pass: ${firstLine(e)}`);
+    if (p.errors >= MAX_ERRORS) {
+      save(f, { status: 'failed' }, ctx.now, `sell: failed after ${p.errors} errors: ${firstLine(e)}`);
+      log.push('sell: failed');
+    } else log.push(`sell: error, trying again next pass: ${firstLine(e)}`);
   }
   return log;
 }

@@ -9,14 +9,20 @@ import { syncVault, notesWithRepo } from '../sync.mjs';
 const NOW = new Date('2026-10-13T08:30:00Z');
 const rollup = state => ({ statusCheckRollup: state ? { state } : null });
 const pr = (number, extra = {}, state = 'SUCCESS') => ({
-  number, title: `PR ${number}`, url: `https://github.com/o/r/pull/${number}`, isDraft: false,
-  reviewDecision: 'REVIEW_REQUIRED', updatedAt: '2026-10-12T00:00:00Z',
-  commits: { nodes: [{ commit: rollup(state) }] }, ...extra,
+  number,
+  title: `PR ${number}`,
+  url: `https://github.com/o/r/pull/${number}`,
+  isDraft: false,
+  reviewDecision: 'REVIEW_REQUIRED',
+  updatedAt: '2026-10-12T00:00:00Z',
+  commits: { nodes: [{ commit: rollup(state) }] },
+  ...extra,
 });
 const issue = (number, labels = []) => ({ number, title: `Issue ${number}`, url: `https://github.com/o/r/issues/${number}`, labels: { nodes: labels.map(name => ({ name })) } });
 
 const REPO = {
-  url: 'https://github.com/o/r', isArchived: false,
+  url: 'https://github.com/o/r',
+  isArchived: false,
   defaultBranchRef: { name: 'main', target: rollup('FAILURE') },
   pullRequests: { totalCount: 2, nodes: [pr(91, { reviewDecision: 'APPROVED' }), pr(92, { isDraft: true }, 'FAILURE')] },
   issues: { totalCount: 3, nodes: [issue(5, ['agent:blocked']), issue(6, ['agent:ready']), issue(7, ['bug'])] },
@@ -26,7 +32,10 @@ test('summary, block and frontmatter fields', () => {
   const s = summarise(REPO);
   assert.equal(s.ci, 'failing');
   assert.equal(s.agent.blocked.length, 1);
-  assert.deepEqual(s.otherIssues.map(i => i.number), [7]);
+  assert.deepEqual(
+    s.otherIssues.map(i => i.number),
+    [7],
+  );
   const block = githubBlock(s, NOW.toISOString());
   assert.match(block, /\*\*main:\*\* ❌ failing · \[repo\]\(https:\/\/github.com\/o\/r\) · synced 2026-10-13 08:30/);
   assert.match(block, /- \[#91\]\(https:\/\/github.com\/o\/r\/pull\/91\) PR 91 · CI ✅ · approved/);
@@ -44,7 +53,10 @@ test('sync writes the block before Docs, updates frontmatter, and keeps going pa
   fs.writeFileSync(path.join(vault, 'Projects', 'gone.md'), '---\nrepo: o/gone\n---\n');
   fs.writeFileSync(path.join(vault, 'Projects', 'local.md'), '---\nrepo: \n---\n');
   assert.equal(notesWithRepo(vault).length, 2);
-  const fetch = repo => { if (repo === 'o/gone') throw new Error('Could not resolve to a Repository'); return REPO; };
+  const fetch = repo => {
+    if (repo === 'o/gone') throw new Error('Could not resolve to a Repository');
+    return REPO;
+  };
   const r = syncVault(vault, { fetch, now: NOW });
   assert.deepEqual(r.updated, ['o/r']);
   assert.match(r.failed[0].error, /Could not resolve/);

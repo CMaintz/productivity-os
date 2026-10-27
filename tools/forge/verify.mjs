@@ -37,7 +37,8 @@ export function parseReport(text) {
   const { value: r, error } = jsonBlock(text);
   if (error) return { error };
   if (!Array.isArray(r?.checks) || r.checks.some(c => typeof c?.name !== 'string' || typeof c.ok !== 'boolean')) return { error: 'checks must be [{ name, ok }]' };
-  if (!Array.isArray(r.findings) || r.findings.some(f => typeof f?.title !== 'string' || !SEVERITIES.includes(f.severity))) return { error: `findings need a title and a severity of ${SEVERITIES.join('/')}` };
+  if (!Array.isArray(r.findings) || r.findings.some(f => typeof f?.title !== 'string' || !SEVERITIES.includes(f.severity)))
+    return { error: `findings need a title and a severity of ${SEVERITIES.join('/')}` };
   return { report: r };
 }
 
@@ -68,7 +69,18 @@ const prompt = (name, vars) => Object.entries(vars).reduce((t, [k, v]) => t.repl
 
 function startCheck(b, ctx, v, r, round) {
   const cwd = prepareWorktree(ctx.sys, b.clone, r.id === 'qa' ? `verify-${round}` : `review-${round}-${r.id}`);
-  return { ...startRun({ prompt: prompt(r.prompt, { ROUND: String(round), REPO: b.repo, OWNER: b.owner }), cwd, tools: r.tools, logDir: ctx.logDir, name: `verify-${round}-${r.id}`, now: ctx.now, sys: ctx.sys }), cwd };
+  return {
+    ...startRun({
+      prompt: prompt(r.prompt, { ROUND: String(round), REPO: b.repo, OWNER: b.owner }),
+      cwd,
+      tools: r.tools,
+      logDir: ctx.logDir,
+      name: `verify-${round}-${r.id}`,
+      now: ctx.now,
+      sys: ctx.sys,
+    }),
+    cwd,
+  };
 }
 
 /** Starts the three checks of the next round; the round only counts once all three are running. */
@@ -120,19 +132,34 @@ function assess(f, v) {
   const reports = {};
   for (const r of RUNS) {
     const parsed = v.results[r.id].ok ? parseReport(v.results[r.id].text) : { error: 'the run failed' };
-    if (parsed.error) { findings.push({ title: `${r.label} produced no usable report`, severity: 'high', details: parsed.error, source: r.id }); continue; }
+    if (parsed.error) {
+      findings.push({ title: `${r.label} produced no usable report`, severity: 'high', details: parsed.error, source: r.id });
+      continue;
+    }
     reports[r.id] = parsed.report;
     findings.push(...parsed.report.findings.map(x => ({ ...x, source: r.id })));
   }
   const spec = fs.existsSync(path.join(f.dir, 'spec.md')) ? fs.readFileSync(path.join(f.dir, 'spec.md'), 'utf8') : '';
   const stories = storyNumbers(spec);
-  if (!stories.length) findings.push({ title: "the spec's user stories couldn't be read", severity: 'high', details: 'docs/spec.md needs numbered stories ("1. As a ...") under "## User stories", or nothing can be checked against them.', source: 'qa' });
+  if (!stories.length)
+    findings.push({
+      title: "the spec's user stories couldn't be read",
+      severity: 'high',
+      details: 'docs/spec.md needs numbered stories ("1. As a ...") under "## User stories", or nothing can be checked against them.',
+      source: 'qa',
+    });
   if (reports.qa) {
-    const checked = new Set(reports.qa.checks.map(c => c.name.match(/^story (\d+)$/i)?.[1]).filter(Boolean).map(Number));
+    const checked = new Set(
+      reports.qa.checks
+        .map(c => c.name.match(/^story (\d+)$/i)?.[1])
+        .filter(Boolean)
+        .map(Number),
+    );
     const tagged = taggedStories(v.runs.qa.cwd);
     for (const n of stories) {
       if (!checked.has(n)) findings.push({ title: `story ${n} has no E2E check`, severity: 'high', story: n, details: 'The qa run reported no "story n" check for it.', source: 'qa' });
-      else if (!tagged.has(n)) findings.push({ title: `story ${n} has no E2E test in the repo`, severity: 'high', story: n, details: 'The qa run reported a check, but no test file is tagged "story n".', source: 'qa' });
+      else if (!tagged.has(n))
+        findings.push({ title: `story ${n} has no E2E test in the repo`, severity: 'high', story: n, details: 'The qa run reported a check, but no test file is tagged "story n".', source: 'qa' });
     }
     for (const c of reports.qa.checks.filter(x => !x.ok)) findings.push({ title: `${c.name} failed`, severity: 'medium', details: String(c.details ?? ''), source: 'qa' });
   }
@@ -140,9 +167,18 @@ function assess(f, v) {
 }
 
 // Titles go into GitHub as plain text; reviewer details are quoted and marked as data.
-const plainTitle = t => String(t).replace(/[\r\n`#*_<>[\]|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+const plainTitle = t =>
+  String(t)
+    .replace(/[\r\n`#*_<>[\]|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
 const ticketTitle = finding => `verify: ${plainTitle(finding.title)}`;
-const quoted = text => String(text || '(no details)').split(/\r?\n/).map(l => `> ${l}`).join('\n');
+const quoted = text =>
+  String(text || '(no details)')
+    .split(/\r?\n/)
+    .map(l => `> ${l}`)
+    .join('\n');
 
 function ticketBody(x, round) {
   return `### Intent
@@ -171,10 +207,17 @@ const nextTicket = b => Math.max(0, ...Object.keys(b.tickets).map(Number)) + 1;
 
 /** qa's E2E test PR for this round, as a ticket in the build so it gets a merge card. */
 function queueTestPr(b, ctx) {
-  const pr = JSON.parse(ctx.gh(['pr', 'list', '--repo', b.repo, '--state', 'open', '--head', `forge/verify-${b.verify.round}`, '--json', 'number,headRefName,headRefOid']) || '[]')
-    .find(p => p.headRefName === `forge/verify-${b.verify.round}`);
+  const pr = JSON.parse(ctx.gh(['pr', 'list', '--repo', b.repo, '--state', 'open', '--head', `forge/verify-${b.verify.round}`, '--json', 'number,headRefName,headRefOid']) || '[]').find(
+    p => p.headRefName === `forge/verify-${b.verify.round}`,
+  );
   if (!pr || Object.values(b.tickets).some(t => t.pr === pr.number)) return false;
-  const issue = issueNumberOf(createIssue(ctx.gh, b.repo, { title: `test(e2e): verify round ${b.verify.round}`, body: `The E2E tests qa wrote in verify round ${b.verify.round} (#${pr.number}). Verification only counts with them on main.\n`, labels: ['verify'] }));
+  const issue = issueNumberOf(
+    createIssue(ctx.gh, b.repo, {
+      title: `test(e2e): verify round ${b.verify.round}`,
+      body: `The E2E tests qa wrote in verify round ${b.verify.round} (#${pr.number}). Verification only counts with them on main.\n`,
+      labels: ['verify'],
+    }),
+  );
   b.tickets[nextTicket(b)] = { issue, deps: [], state: 'pr', pr: pr.number, sha: pr.headRefOid, attempts: 0, blocks: 0, verify: 'E2E tests' };
   ctx.persist();
   return true;
@@ -183,7 +226,9 @@ function queueTestPr(b, ctx) {
 /** Files v.fixing as tickets (reusing open ones; resumable after an error), then back to the build. */
 function fixLoop(f, b, ctx) {
   const v = b.verify;
-  const open = new Map(JSON.parse(ctx.gh(['issue', 'list', '--repo', b.repo, '--state', 'open', '--label', 'verify', '--limit', '200', '--json', 'number,title']) || '[]').map(i => [i.title, i.number]));
+  const open = new Map(
+    JSON.parse(ctx.gh(['issue', 'list', '--repo', b.repo, '--state', 'open', '--label', 'verify', '--limit', '200', '--json', 'number,title']) || '[]').map(i => [i.title, i.number]),
+  );
   while (v.fixing.length) {
     const x = v.fixing[0];
     const title = ticketTitle(x);
@@ -212,12 +257,22 @@ function startFixing(f, b, ctx, actionable) {
 
 function ask(vault, f, b, ctx, actionable, why, short) {
   const key = `forge-verify:${b.slug}:${b.verify.round}`;
-  createCard(vault, {
-    action: 'forge_review', key, risk: 'low', title: `Forge ${b.name}: verify needs your call`, reason: why,
-    context: `https://github.com/${b.repo}`,
-    explain: `files these as tickets, builds the fixes and verifies once more:\n${actionable.map(x => `- ${x.severity}: ${plainTitle(x.title)}`).join('\n')}\n\nNo accepts the product as it is.`,
-    undo: 'nothing to undo.', params: { slug: b.slug, stage: 'verify' }, expiresDays: 14,
-  }, ctx.now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_review',
+      key,
+      risk: 'low',
+      title: `Forge ${b.name}: verify needs your call`,
+      reason: why,
+      context: `https://github.com/${b.repo}`,
+      explain: `files these as tickets, builds the fixes and verifies once more:\n${actionable.map(x => `- ${x.severity}: ${plainTitle(x.title)}`).join('\n')}\n\nNo accepts the product as it is.`,
+      undo: 'nothing to undo.',
+      params: { slug: b.slug, stage: 'verify' },
+      expiresDays: 14,
+    },
+    ctx.now.toISOString(),
+  );
   b.verify.pending = actionable;
   save(f, { status: 'waiting', review_key: key }, ctx.now);
   return `verify isn't converging (${short}); asking you`;
@@ -226,11 +281,23 @@ function ask(vault, f, b, ctx, actionable, why, short) {
 /** Verified: the demo card asks before anything goes to Cloudflare. */
 function offerDemo(vault, f, b, ctx, reason, log) {
   const key = `forge-demo:${b.slug}`;
-  createCard(vault, {
-    action: 'forge_demo', key, risk: 'low', title: `Forge ${b.name}: verified; make a demo preview?`, reason, context: `https://github.com/${b.repo}`,
-    explain: 'builds main and runs `wrangler preview --name demo` with your Cloudflare login: an isolated preview, never production. Then an agent screenshots every user story, and you get a summary with known gaps and the usage cost. No leaves it verified without a demo.',
-    undo: 'delete the "demo" preview in the Cloudflare dashboard (Workers → the product → Previews).', params: { slug: b.slug, stage: 'verified' }, expiresDays: 30,
-  }, ctx.now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_demo',
+      key,
+      risk: 'low',
+      title: `Forge ${b.name}: verified; make a demo preview?`,
+      reason,
+      context: `https://github.com/${b.repo}`,
+      explain:
+        'builds main and runs `wrangler preview --name demo` with your Cloudflare login: an isolated preview, never production. Then an agent screenshots every user story, and you get a summary with known gaps and the usage cost. No leaves it verified without a demo.',
+      undo: 'delete the "demo" preview in the Cloudflare dashboard (Workers → the product → Previews).',
+      params: { slug: b.slug, stage: 'verified' },
+      expiresDays: 30,
+    },
+    ctx.now.toISOString(),
+  );
   save(f, { stage: 'verified', status: 'waiting', review_key: key }, ctx.now, log);
 }
 
@@ -255,8 +322,10 @@ function decide(vault, f, b, ctx) {
   const last = v.history.at(-1);
   v.history.push(actionable.length);
   ctx.persist();
-  if (v.round >= v.limit) return ask(vault, f, b, ctx, actionable, `Still ${plural(actionable.length, 'finding')} after ${plural(v.round, 'round')}.`, `${actionable.length} open after ${v.round} rounds`);
-  if (last !== undefined && actionable.length >= last) return ask(vault, f, b, ctx, actionable, `Round ${v.round} found no fewer problems than round ${v.round - 1}.`, `${plural(actionable.length, 'finding')}, ${last} last round`);
+  if (v.round >= v.limit)
+    return ask(vault, f, b, ctx, actionable, `Still ${plural(actionable.length, 'finding')} after ${plural(v.round, 'round')}.`, `${actionable.length} open after ${v.round} rounds`);
+  if (last !== undefined && actionable.length >= last)
+    return ask(vault, f, b, ctx, actionable, `Round ${v.round} found no fewer problems than round ${v.round - 1}.`, `${plural(actionable.length, 'finding')}, ${last} last round`);
   return startFixing(f, b, ctx, actionable);
 }
 

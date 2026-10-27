@@ -36,9 +36,19 @@ test('stages: outputs are checked for their sections; plans parse into ordered t
   assert.equal(candidates(NAMING)[0], 'Tidewell');
   const { tickets, problems } = parsePlan(PLAN);
   assert.deepEqual(problems, []);
-  assert.deepEqual(tickets.map(t => [t.n, t.dependsOn]), [[1, []], [3, [2]], [2, [1]]]);
+  assert.deepEqual(
+    tickets.map(t => [t.n, t.dependsOn]),
+    [
+      [1, []],
+      [3, [2]],
+      [2, [1]],
+    ],
+  );
   assert.match(tickets[2].criteria, /list saves/, 'bold field labels parse too');
-  assert.deepEqual(topoOrder(tickets).map(t => t.n), [1, 2, 3]);
+  assert.deepEqual(
+    topoOrder(tickets).map(t => t.n),
+    [1, 2, 3],
+  );
   assert.match(parsePlan(PLAN.replace('Depends on: T2', 'Depends on: T9')).problems.join(), /missing T9/);
   assert.match(parsePlan(PLAN.replace('Depends on: none', 'Depends on: T3')).problems.join(), /cycle/);
   assert.match(parsePlan(PLAN.replace('Pointers:\n- ADR 0001', '')).problems.join(), /T1 has no Pointers/);
@@ -46,7 +56,10 @@ test('stages: outputs are checked for their sections; plans parse into ordered t
 
 test('naming: free only on a clear 404, taken on 200, "?" when a lookup fails', async () => {
   const statuses = { 'tidewell.com': 404, 'tidewell.dev': 200 };
-  const fetchImpl = async url => { if (url.includes('npmjs')) throw new Error('offline'); return { status: statuses[url.split('/').pop()] ?? 500 }; };
+  const fetchImpl = async url => {
+    if (url.includes('npmjs')) throw new Error('offline');
+    return { status: statuses[url.split('/').pop()] ?? 500 };
+  };
   const run = () => 'me/tidewell';
   assert.deepEqual(await checkName('Tidewell', { fetchImpl, run, owner: 'me' }), { name: 'Tidewell', slug: 'tidewell', com: 'free', dev: 'taken', npm: '?', github: 'taken' });
   const once = await addAvailability(NAMING, { fetchImpl: fetch404, run: fakeGh([]), owner: 'me' });
@@ -95,7 +108,10 @@ test('interview forge: questions, spec stop, feedback rerun, naming stop, plan, 
   assert.match(t3.input, /Depends on: #2/);
   assert.ok(!t3.args.includes('agent:ready'), 'tickets with dependencies wait');
   assert.ok(gh.find(c => titleOf(c) === 'T1: Scaffold the repo').args.includes('agent:ready'));
-  assert.ok(gh.some(c => c.args.includes('repos/me/tidewell/contents/docs/spec.md')), 'the spec goes to docs/');
+  assert.ok(
+    gh.some(c => c.args.includes('repos/me/tidewell/contents/docs/spec.md')),
+    'the spec goes to docs/',
+  );
 });
 
 test('autonomous forge without stops runs straight to the repo card; bad output retries once then fails', async () => {
@@ -153,7 +169,15 @@ test('the model works in a folder that excludes the state note, with no web tool
   newForge(v, 'Plant tracker', { mode: 'autonomous', stopAfter: [], now: NOW });
   const calls = [];
   const tools = [];
-  await advanceForges(v, { now: at(1), runClaude: (p, cwd, t) => { tools.push(t); return fakeClaude(calls)(p, cwd); }, run: fakeGh([]), fetchImpl: fetch404 });
+  await advanceForges(v, {
+    now: at(1),
+    runClaude: (p, cwd, t) => {
+      tools.push(t);
+      return fakeClaude(calls)(p, cwd);
+    },
+    run: fakeGh([]),
+    fetchImpl: fetch404,
+  });
   assert.equal(path.relative(path.join(v, 'Forge'), calls[0].cwd), 'plant-tracker');
   assert.ok(fs.existsSync(path.join(v, 'Forge', 'plant-tracker.md')), 'state lives next to the workspace, not in it');
   assert.match(calls[0].prompt, /Outline:\nPlant tracker/, 'the outline arrives in the prompt');
@@ -178,7 +202,11 @@ test('rejecting the naming stop picks a new name, but your own rename sticks', a
 test('stopping during a long stage sticks; an output not rewritten this run is not accepted', async () => {
   const v = forgeAt('stack');
   const spent = { usd: 0.5, input: 10, output: 2, cached: 0, ms: 1000 };
-  const stopMidRun = (p, cwd) => { const f = forge(v); fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped')); return { ...fakeClaude([])(p, cwd), spent }; };
+  const stopMidRun = (p, cwd) => {
+    const f = forge(v);
+    fs.writeFileSync(f.file, f.text.replace('status: "running"', 'status: stopped').replace('status: running', 'status: stopped'));
+    return { ...fakeClaude([])(p, cwd), spent };
+  };
   await go(v, 1, stopMidRun);
   assert.equal(forge(v).status, 'stopped');
   assert.equal(forge(v).stage, 'stack', 'recording the spend does not hide your stop from the next save');
@@ -218,7 +246,10 @@ test('plan and naming parser edge cases; one broken forge never blocks the other
   const broken = listForges(v).find(f => f.slug === 'broken-one');
   fs.writeFileSync(broken.file, broken.text.replace(/^stop_after: .*$/m, 'stop_after: spec, naming'));
   assert.deepEqual(listForges(v).find(f => f.slug === 'broken-one').stop_after, ['spec', 'naming'], 'a comma list still works');
-  const boom = (p, cwd) => { if (cwd.endsWith('broken-one')) throw new Error('kaput'); return fakeClaude([])(p, cwd); };
+  const boom = (p, cwd) => {
+    if (cwd.endsWith('broken-one')) throw new Error('kaput');
+    return fakeClaude([])(p, cwd);
+  };
   assert.deepEqual(await go(v, 2, boom), ['forge broken-one: failed']);
   assert.deepEqual(await go(v, 3, boom), ['forge good-one: next'], 'the next forge still runs');
 });

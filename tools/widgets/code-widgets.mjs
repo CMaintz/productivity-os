@@ -16,6 +16,7 @@ import { readLayout, writeLayout, WIDGETS_DIR } from './widgets.mjs';
 import { createCard } from '../actions/cards.mjs';
 import { readToolsConfig } from '../lib/tools-config.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const DEFAULT_REPO = 'CMaintz/productivity-os';
 // Outside _system/widgets/, where every .json is read as a manifest.
@@ -146,7 +147,7 @@ export function installMerged(vault, { run = gh, now = new Date().toISOString() 
     seen.prs.push(pr.number);
   }
   fs.mkdirSync(path.dirname(path.join(vault, INSTALLED_FILE)), { recursive: true });
-  fs.writeFileSync(path.join(vault, INSTALLED_FILE), JSON.stringify(seen, null, 2) + '\n');
+  writeFileAtomic(path.join(vault, INSTALLED_FILE), JSON.stringify(seen, null, 2) + '\n');
   return out;
 }
 
@@ -165,7 +166,7 @@ export function installWidget(card, ctx) {
   const file = path.join(ctx.vault, WIDGETS_DIR, `${m.id}.json`);
   const isNew = !fs.existsSync(file);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(m, null, 2) + '\n');
+  writeFileAtomic(file, JSON.stringify(m, null, 2) + '\n');
   const layout = readLayout(ctx.vault);
   const since = ctx.now.toISOString();
   const entry = layout.widgets.find(w => w.id === m.id);

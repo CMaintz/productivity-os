@@ -27,6 +27,7 @@ import { addAvailability, slugOf } from './naming.mjs';
 import { ownerOf, proposeRepo } from './repo.mjs';
 import { buildOrVerify, progressOf, verifyDecision } from './build.mjs';
 import { addSpend } from '../lib/spend.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const PROMPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prompts');
 // No web access while the outline and spec are the input; research only where it helps.
@@ -103,7 +104,7 @@ function runStage(f, ctx) {
   // Written directly, not with save(): that reloads f, and the save after this one would then miss a stop you made during the run.
   const total = { spent: f.spent || undefined };
   addSpend(total, result);
-  if (total.spent) fs.writeFileSync(f.file, setFrontmatter(fs.readFileSync(f.file, 'utf8'), 'spent', JSON.stringify(total.spent)));
+  if (total.spent) writeFileAtomic(f.file, setFrontmatter(fs.readFileSync(f.file, 'utf8'), 'spent', JSON.stringify(total.spent)));
   return { asking, output, result, rewritten: mtime(output) > before };
 }
 
@@ -118,7 +119,7 @@ async function finishStage(vault, f, ctx, rewritten) {
   const file = path.join(f.dir, stage.output);
   if (rewritten && stage.id === 'naming') {
     const { text } = await addAvailability(fs.readFileSync(file, 'utf8'), { fetchImpl: ctx.fetchImpl, run: ctx.gh, owner: ownerOf(vault) });
-    fs.writeFileSync(file, text);
+    writeFileAtomic(file, text);
   }
   const problems = rewritten ? checkOutput(stage, fs.readFileSync(file, 'utf8')) : [`${stage.output} wasn't written this run`];
   if (problems.length) {

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fieldsOf, setFrontmatter } from '../lib/frontmatter.mjs';
 import { FORGE_DIR, STAGE_IDS } from './stages.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const q = v => JSON.stringify(v);
 export const stops = v => (Array.isArray(v) ? v : String(v ?? '').split(',')).map(s => String(s).trim()).filter(s => STAGE_IDS.includes(s));
@@ -31,6 +32,6 @@ export function save(f, fields, now, log) {
   let text = Object.entries({ ...apply, updated: now.toISOString() }).reduce((t, [k, v]) => setFrontmatter(t, k, encode(v)), current.text);
   const line = stoppedByYou ? `${log ?? f.stage} (you stopped the forge meanwhile; it stays stopped)` : log;
   if (line) text = `${text.trimEnd()}\n- ${now.toISOString().slice(0, 16).replace('T', ' ')} ${line}\n`;
-  fs.writeFileSync(f.file, text);
+  writeFileAtomic(f.file, text);
   Object.assign(f, load(f.file), { stop_after: stops(fieldsOf(text).stop_after) });
 }

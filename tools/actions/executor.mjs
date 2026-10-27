@@ -25,6 +25,7 @@ import { installMerged } from '../widgets/code-widgets.mjs';
 import { gh } from '../lib/gh.mjs';
 import { advanceForges } from '../forge/forge.mjs';
 import { syncSessions } from '../sessions/transcripts.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const SNOOZE_HOURS = 24;
 const LOCK_STALE_MIN = 45;
@@ -42,7 +43,7 @@ function context(vault, now, runner, ghRunner) {
   return { vault, now, runClaude: runner, gh: ghRunner, policy, policyFile, promotions: [], log: [] };
 }
 
-function save(card, text) { fs.writeFileSync(card.file, text); return text; }
+function save(card, text) { writeFileAtomic(card.file, text); return text; }
 
 function decide(ctx, card, kind) {
   const r = applyDecision(ctx.policy, { action: card.action, kind, always: card.always === true, never: card.never === true, key: card.key });
@@ -118,7 +119,7 @@ export function runOnce(vault, { now = new Date(), runner = runClaude, ghRunner 
     if (card.status === 'approved' && !card.finished_at) execute(ctx, { ...card, text }, text);
   }
   fs.mkdirSync(path.dirname(ctx.policyFile), { recursive: true });
-  fs.writeFileSync(ctx.policyFile, renderPolicy(ctx.policy));
+  writeFileAtomic(ctx.policyFile, renderPolicy(ctx.policy));
   for (const p of ctx.promotions) createCard(vault, promotionSpec(p), now.toISOString());
   if (ctx.log.length) {
     const lines = ctx.log.map(l => `- ${stamp(now)} executor ${l}`).join('\n');

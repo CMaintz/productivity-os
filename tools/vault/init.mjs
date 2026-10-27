@@ -16,6 +16,7 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { syncProjects } from './projects.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'vault-template');
 
@@ -72,7 +73,7 @@ export function writeToolsConfig(vault, repoRoot = path.resolve(TEMPLATE, '..'))
   const prev = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   // mainHost: the PC that runs the executor. Set once, on the first setup; edit to move it.
   const config = { ...prev, productivityOs: repoRoot.replace(/\\/g, '/'), mainHost: prev.mainHost || os.hostname() };
-  fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+  writeFileAtomic(file, JSON.stringify(config, null, 2) + '\n');
 }
 
 function gitInit(vault) {

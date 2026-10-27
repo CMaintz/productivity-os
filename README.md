@@ -15,19 +15,19 @@ Layout:
 You need [Node 22+](https://nodejs.org) and [Git for Windows](https://git-scm.com). The `gh` CLI is optional; it's used for the GitHub cross-check.
 
 ```powershell
-cd C:\Users\akash\Projects
+cd $env:USERPROFILE\Projects
 git clone https://github.com/CMaintz/productivity-os
 cd productivity-os        # run every command below from here
 ```
 
-The scripts always scan `C:\Users\akash\Projects` and its sibling folders, wherever the repo itself lives. Their output goes to `productivity-os\out\`, which git ignores.
+The scripts always scan `%USERPROFILE%\Projects` and its sibling folders, wherever the repo itself lives. Their output goes to `productivity-os\out\`, which git ignores.
 
 ## Phase 0: projects inventory (read-only)
 
 ```powershell
 npm run inventory          # scans %USERPROFILE%\Projects + *Projects siblings + source\repos
 # or pick roots yourself:
-node tools/inventory/inventory.mjs --root C:\Users\akash\Projects --root C:\Users\akash\IdeaProjects --out out
+node tools/inventory/inventory.mjs --root <your-projects-dir> --root <another-projects-dir> --out out
 ```
 
 Outputs `out/inventory.md` (a report) and `out/inventory.json`.

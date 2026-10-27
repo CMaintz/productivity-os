@@ -22,7 +22,14 @@ const DECISION = /^(UNBLOCK|REPLAN|ESCALATE):[ \t]*/gm;
 export function parseDecision(text) {
   const all = [...String(text).matchAll(DECISION)];
   const last = all.at(-1);
-  return last ? { kind: last[1], body: String(text).slice(last.index + last[0].length).trim() } : null;
+  return last
+    ? {
+        kind: last[1],
+        body: String(text)
+          .slice(last.index + last[0].length)
+          .trim(),
+      }
+    : null;
 }
 
 const comment = (ctx, b, issue, body) => ctx.gh(['issue', 'comment', String(issue), '--repo', b.repo, '--body-file', '-'], body);
@@ -61,13 +68,22 @@ function replan(ctx, b, n, body) {
 function escalate(vault, ctx, b, n, question) {
   const t = b.tickets[n];
   const key = `forge-q:${b.slug}:T${n}:${ctx.now.toISOString().slice(0, 16)}`;
-  createCard(vault, {
-    action: 'forge_question', key, risk: 'low', title: `Forge ${b.name}: T${n} needs your call`,
-    reason: question.slice(0, 300), context: `https://github.com/${b.repo}/issues/${t.issue}`,
-    explain: 'write your answer under "## Answer" at the end of this note, then press Do it. The answer goes to the ticket as a comment and the agents pick it up again.',
-    undo: 'nothing to undo; the ticket stays blocked until you answer.',
-    params: { slug: b.slug, n: Number(n) }, expiresDays: 14,
-  }, ctx.now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_question',
+      key,
+      risk: 'low',
+      title: `Forge ${b.name}: T${n} needs your call`,
+      reason: question.slice(0, 300),
+      context: `https://github.com/${b.repo}/issues/${t.issue}`,
+      explain: 'write your answer under "## Answer" at the end of this note, then press Do it. The answer goes to the ticket as a comment and the agents pick it up again.',
+      undo: 'nothing to undo; the ticket stays blocked until you answer.',
+      params: { slug: b.slug, n: Number(n) },
+      expiresDays: 14,
+    },
+    ctx.now.toISOString(),
+  );
   Object.assign(t, { state: 'asked', question: key });
 }
 
@@ -75,7 +91,16 @@ function escalate(vault, ctx, b, n, question) {
 export function startLead(vault, ctx, b, n) {
   const t = b.tickets[n];
   const keys = Object.keys(b.tickets).map(Number);
-  const vars = { REPO: b.repo, OWNER: b.owner, ISSUE: String(t.issue), ISSUE_URL: `https://github.com/${b.repo}/issues/${t.issue}`, N: String(n), FAILURE: t.blocked ?? 'The ticket is labelled agent:blocked.', NEXT: String(Math.max(...keys) + 1), LAST: String(Math.max(...keys)) };
+  const vars = {
+    REPO: b.repo,
+    OWNER: b.owner,
+    ISSUE: String(t.issue),
+    ISSUE_URL: `https://github.com/${b.repo}/issues/${t.issue}`,
+    N: String(n),
+    FAILURE: t.blocked ?? 'The ticket is labelled agent:blocked.',
+    NEXT: String(Math.max(...keys) + 1),
+    LAST: String(Math.max(...keys)),
+  };
   const prompt = Object.entries(vars).reduce((s, [k, v]) => s.replaceAll(`{{${k}}}`, v), fs.readFileSync(PROMPT, 'utf8'));
   t.leadRun = startRun({ prompt, cwd: b.clone, tools: LEAD_TOOLS, logDir: ctx.logDir, name: `lead-T${n}`, now: ctx.now, sys: ctx.sys });
   t.lead = t.blocks;
@@ -87,7 +112,10 @@ export function startLead(vault, ctx, b, n) {
 export function finishLead(vault, ctx, b, n, r) {
   b.tickets[n].leadRun = null;
   const d = r.ok ? parseDecision(r.text) : null;
-  if (d?.kind === 'UNBLOCK' && d.body) { release(ctx, b, n, `Lead agent: ${d.body}`); return `T${n}: lead unblocked it`; }
+  if (d?.kind === 'UNBLOCK' && d.body) {
+    release(ctx, b, n, `Lead agent: ${d.body}`);
+    return `T${n}: lead unblocked it`;
+  }
   if (d?.kind === 'REPLAN') {
     const problem = replan(ctx, b, n, d.body);
     if (!problem) return `T${n}: lead re-planned it into ${b.tickets[n].replacedBy.map(x => `T${x}`).join(', ')}`;
@@ -100,8 +128,13 @@ export function finishLead(vault, ctx, b, n, r) {
 }
 
 // Your text under "## Answer", minus the executor's own result lines appended after it.
-const answerOf = text => (String(text).split(/^## Answer\s*$/m)[1] ?? '').split(/^## /m)[0]
-  .split('\n').filter(l => !/^\*\*(Done|Failed|Held|Undo) \(/.test(l)).join('\n').trim();
+const answerOf = text =>
+  (String(text).split(/^## Answer\s*$/m)[1] ?? '')
+    .split(/^## /m)[0]
+    .split('\n')
+    .filter(l => !/^\*\*(Done|Failed|Held|Undo) \(/.test(l))
+    .join('\n')
+    .trim();
 
 /** An asked ticket whose card you answered: the answer goes to the ticket, which is released. */
 export function collectAnswer(vault, ctx, b, n) {
@@ -114,7 +147,10 @@ export function collectAnswer(vault, ctx, b, n) {
   }
   if (card.status !== 'done') return null;
   const answer = answerOf(card.text) || card.decline_reason;
-  if (!answer) { Object.assign(t, { state: 'blocked', question: null }); return `T${n}: your answer was empty; it stays blocked`; }
+  if (!answer) {
+    Object.assign(t, { state: 'blocked', question: null });
+    return `T${n}: your answer was empty; it stays blocked`;
+  }
   release(ctx, b, n, `The owner answered: ${answer}`);
   return `T${n}: released with your answer`;
 }

@@ -34,7 +34,12 @@ export const DEFAULTS = {
 };
 const FALLBACK = { level: 'suggest', max: 'suggest', promoteAfter: 0 };
 
-const cells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+const cells = line =>
+  line
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map(c => c.trim());
 const num = v => (/^\d+$/.test(v) ? Number(v) : 0);
 
 /** One table row. Accepts the current 5-column form and the older 4-column one (no `max`). */
@@ -80,8 +85,11 @@ const CEILINGS = `## Hard ceilings (max stays at suggest)
 `;
 
 export function renderPolicy({ rows, never }) {
-  const table = ['| action | level | max | promote after | approvals in a row |', '|---|---|---|---|---|',
-    ...[...rows].map(([a, r]) => `| ${a} | ${r.level} | ${r.max} | ${r.promoteAfter || '—'} | ${r.streak} |`)];
+  const table = [
+    '| action | level | max | promote after | approvals in a row |',
+    '|---|---|---|---|---|',
+    ...[...rows].map(([a, r]) => `| ${a} | ${r.level} | ${r.max} | ${r.promoteAfter || '—'} | ${r.streak} |`),
+  ];
   const neverList = never.length ? never.map(k => `- \`${k}\``).join('\n') : '- (none yet)';
   return `${HEADER}\n${table.join('\n')}\n\n## Never suggest\nCards whose action type or key is listed here are never created.\n${neverList}\n\n${CEILINGS}`;
 }
@@ -108,8 +116,7 @@ export function applyDecision(policy, { action, kind, always = false, never = fa
   }
   rows.set(action, row);
   const target = nextLevel(row.level);
-  const earned = kind === 'approved' && row.promoteAfter > 0 && row.streak >= row.promoteAfter
-    && rank(target) > rank(row.level) && rank(target) <= rank(row.max);
+  const earned = kind === 'approved' && row.promoteAfter > 0 && row.streak >= row.promoteAfter && rank(target) > rank(row.level) && rank(target) <= rank(row.max);
   return { policy: { rows, never: neverList }, promote: earned ? { action, to: target } : null };
 }
 

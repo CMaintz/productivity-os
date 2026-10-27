@@ -128,10 +128,24 @@ test('a note the old hook made for the session is reused, and new prompts go who
   write(w, [prompt(w, 0, long)]);
   sync(w, 10);
   assert.deepEqual(notes(w), ['2026-10-20-site-abcdef12.md']);
-  const lines = fs.readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l));
-  assert.deepEqual(lines.map(l => [l.event, l.project, l.prompt]), [['UserPromptSubmit', 'site', long]]);
+  const lines = fs
+    .readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map(l => JSON.parse(l));
+  assert.deepEqual(
+    lines.map(l => [l.event, l.project, l.prompt]),
+    [['UserPromptSubmit', 'site', long]],
+  );
   sync(w, 20);
-  assert.equal(fs.readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8').trim().split('\n').length, 1, 'not logged twice');
+  assert.equal(
+    fs
+      .readFileSync(path.join(w.vault, '_system', 'activity.jsonl'), 'utf8')
+      .trim()
+      .split('\n').length,
+    1,
+    'not logged twice',
+  );
 });
 
 test('no transcripts folder, or a broken line: nothing breaks', () => {
@@ -250,18 +264,29 @@ test('compaction summaries are not prompts, and an interrupt or a local command 
   const w = setup();
   write(w, [
     prompt(w, 0, 'go'),
-    entry(w, 'user', 5, { role: 'user', content: 'This session is being continued from a previous conversation that ran out of context. Summary: ...' }, { isCompactSummary: true, isVisibleInTranscriptOnly: true }),
-    toolCall(w, 10), toolResult(w, 12),
+    entry(
+      w,
+      'user',
+      5,
+      { role: 'user', content: 'This session is being continued from a previous conversation that ran out of context. Summary: ...' },
+      { isCompactSummary: true, isVisibleInTranscriptOnly: true },
+    ),
+    toolCall(w, 10),
+    toolResult(w, 12),
     entry(w, 'user', 13, { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] }),
   ]);
   sync(w, 20);
   assert.equal(note(w).fields.prompts, '1');
   assert.equal(note(w).fields.last_prompt, '"go"');
   assert.equal(note(w).fields.status, 'idle', 'interrupted: the ball is with you');
-  write(w, [
-    entry(w, 'user', 30, { role: 'user', content: '<command-name>/model</command-name>' }),
-    entry(w, 'user', 31, { role: 'user', content: '<local-command-stdout>Set model to opus</local-command-stdout>' }),
-  ], { append: true });
+  write(
+    w,
+    [
+      entry(w, 'user', 30, { role: 'user', content: '<command-name>/model</command-name>' }),
+      entry(w, 'user', 31, { role: 'user', content: '<local-command-stdout>Set model to opus</local-command-stdout>' }),
+    ],
+    { append: true },
+  );
   sync(w, 40);
   assert.equal(note(w).fields.status, 'idle', 'a local command has no reply to wait for');
 });
@@ -302,7 +327,10 @@ test('the first sync does not re-log prompts the old hook already logged', () =>
 
 test('a big transcript is read a slice per pass, and one unreadable file does not stop the rest', () => {
   const w = setup();
-  write(w, Array.from({ length: 40 }, (_, i) => prompt(w, i, `prompt number ${i}`)));
+  write(
+    w,
+    Array.from({ length: 40 }, (_, i) => prompt(w, i, `prompt number ${i}`)),
+  );
   const opts = { home: w.home, maxRead: 2000 };
   syncSessions(w.vault, { ...opts, now: at(100) });
   assert.ok(Number(note(w).fields.prompts) < 40, 'not all at once');

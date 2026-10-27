@@ -20,7 +20,12 @@ const at = minutesAgo => new Date(NOW.valueOf() - minutesAgo * 60_000).toISOStri
 
 const note = (v, rel, fm, body = '') => {
   fs.mkdirSync(path.dirname(path.join(v, rel)), { recursive: true });
-  fs.writeFileSync(path.join(v, rel), `---\n${Object.entries(fm).map(([k, x]) => `${k}: ${JSON.stringify(x)}`).join('\n')}\n---\n${body}`);
+  fs.writeFileSync(
+    path.join(v, rel),
+    `---\n${Object.entries(fm)
+      .map(([k, x]) => `${k}: ${JSON.stringify(x)}`)
+      .join('\n')}\n---\n${body}`,
+  );
 };
 
 function projects(v) {
@@ -32,16 +37,36 @@ function projects(v) {
 }
 
 function sessions(v) {
-  const s = (id, project, status, mins, extra = {}) => note(v, `Sessions/2026-10-14-${project}-${id}.md`,
-    { type: 'session', status, project: `[[Projects/${project}]]`, prompts: 5, started: at(mins + 60), updated: at(mins), ...extra }, `# ${project}\n`);
+  const s = (id, project, status, mins, extra = {}) =>
+    note(
+      v,
+      `Sessions/2026-10-14-${project}-${id}.md`,
+      { type: 'session', status, project: `[[Projects/${project}]]`, prompts: 5, started: at(mins + 60), updated: at(mins), ...extra },
+      `# ${project}\n`,
+    );
   s('aaaa1111', 'productivity-os', 'waiting', 3, { waiting_for: 'Claude needs your permission to use Bash' });
   s('bbbb2222', 'foundry', 'running', 1);
   s('cccc3333', 'cmaintz-site', 'idle', 240);
 }
 
 function cards(v) {
-  createCard(v, { action: 'fix_ci', key: 'fix_ci:cmaintz/cmaintz-site', risk: 'medium', title: 'Fix failing CI on cmaintz-site', reason: 'The default branch of cmaintz/cmaintz-site is failing.', context: '[[Projects/cmaintz-site]]' }, at(40));
-  createCard(v, { action: 'pause_stale_project', key: 'pause:yatzyweb', title: 'Mark yatzyweb as paused', reason: 'Active, but nothing has happened for 74 days.', context: '[[Projects/yatzyweb]]' }, at(90));
+  createCard(
+    v,
+    {
+      action: 'fix_ci',
+      key: 'fix_ci:cmaintz/cmaintz-site',
+      risk: 'medium',
+      title: 'Fix failing CI on cmaintz-site',
+      reason: 'The default branch of cmaintz/cmaintz-site is failing.',
+      context: '[[Projects/cmaintz-site]]',
+    },
+    at(40),
+  );
+  createCard(
+    v,
+    { action: 'pause_stale_project', key: 'pause:yatzyweb', title: 'Mark yatzyweb as paused', reason: 'Active, but nothing has happened for 74 days.', context: '[[Projects/yatzyweb]]' },
+    at(90),
+  );
   createCard(v, { action: 'triage_inbox', key: 'triage:2026-10-14', title: 'Triage 6 inbox notes', reason: '6 notes are waiting in Inbox/.', context: '[[Inbox]]' }, at(200));
   const triage = listCards(v).find(c => c.action === 'triage_inbox');
   fs.writeFileSync(triage.file, appendResult(updateCard(triage.text, { status: 'done', finished_at: at(190) }), '**Done (2026-10-14 08:50):** filed the notes.'));
@@ -58,9 +83,17 @@ function writing(v) {
 export function demoSnapshot() {
   const v = fs.mkdtempSync(path.join(os.tmpdir(), 'demo-vault-'));
   copyTemplate(path.join(ROOT, 'vault-template'), v);
-  projects(v); sessions(v); cards(v); writing(v);
+  projects(v);
+  sessions(v);
+  cards(v);
+  writing(v);
   newForge(v, 'Shared shopping lists for flatmates', { now: new Date(at(30)) });
-  note(v, 'Daily/2026-10-14.md', { type: 'daily' }, '# Today\n\n## Top 3\n1. Fix CI on cmaintz-site\n2. Draft the Foundry post\n3. Review agent ticket #12\n\n## Tasks\n- [ ] a\n- [ ] b\n- [ ] c\n- [x] d\n');
+  note(
+    v,
+    'Daily/2026-10-14.md',
+    { type: 'daily' },
+    '# Today\n\n## Top 3\n1. Fix CI on cmaintz-site\n2. Draft the Foundry post\n3. Review agent ticket #12\n\n## Tasks\n- [ ] a\n- [ ] b\n- [ ] c\n- [x] d\n',
+  );
   for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(v, 'Inbox', `n${i}.md`), 'x');
   const snap = buildSnapshot(v, { now: NOW, host: 'demo-pc' });
   fs.rmSync(v, { recursive: true, force: true });

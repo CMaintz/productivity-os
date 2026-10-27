@@ -6,7 +6,12 @@ import type { Host, Manifest, Row } from './types';
 type Source = Query & { kind: 'snapshot' | 'notes'; collection?: string; folder?: string };
 type FullManifest = Manifest & { source: Source };
 
-interface DcPage { $path: string; $name: string; $frontmatter?: Record<string, unknown>; value(key: string): unknown }
+interface DcPage {
+  $path: string;
+  $name: string;
+  $frontmatter?: Record<string, unknown>;
+  value(key: string): unknown;
+}
 export interface Dc {
   preact: { h: Host['h'] };
   useState: Host['useState'];
@@ -45,13 +50,21 @@ export function createDatacoreWidgets(dc: Dc) {
     const extra = [m.groupBy, m.valueField].filter(Boolean) as string[];
     const shown = m.fields && [...m.fields, ...extra];
     const read = m.source.kind === 'notes' ? shown : undefined;
-    return runQuery(pages.map(p => pageRow(p, read)), m.source, shown);
+    return runQuery(
+      pages.map(p => pageRow(p, read)),
+      m.source,
+      shown,
+    );
   }
 
   function Widget({ manifest }: { manifest: FullManifest }) {
     let rows: Row[] = [];
     let error = manifest.source.collection === 'today' ? TODAY_NOTE : undefined;
-    try { rows = useRows(manifest); } catch (e) { error = `couldn't compute rows: ${(e as Error).message}`; }
+    try {
+      rows = useRows(manifest);
+    } catch (e) {
+      error = `couldn't compute rows: ${(e as Error).message}`;
+    }
     return host.h(WidgetView, { widget: { manifest, rows, error }, ctx: { now: Date.now() } });
   }
 
@@ -62,6 +75,11 @@ export async function widgetView(dc: Dc, id: string) {
   const manifest = JSON.parse(await dc.app.vault.adapter.read(`_system/widgets/${id.replace(/[^a-z0-9-]/g, '')}.json`)) as FullManifest;
   const errors = validateManifest(manifest) as string[];
   const { Widget } = createDatacoreWidgets(dc);
-  if (errors.length) return function Invalid() { return dc.preact.h('p', { class: 'error' }, `Widget "${id}" is invalid: ${errors.join('; ')}`); };
-  return function View() { return dc.preact.h(Widget, { manifest }); };
+  if (errors.length)
+    return function Invalid() {
+      return dc.preact.h('p', { class: 'error' }, `Widget "${id}" is invalid: ${errors.join('; ')}`);
+    };
+  return function View() {
+    return dc.preact.h(Widget, { manifest });
+  };
 }

@@ -10,7 +10,9 @@ const linkTo = p => `[[Projects/${p.slug}]]`;
 
 function fixCi(p) {
   return {
-    action: 'fix_ci', key: `fix_ci:${p.repo}`, risk: 'medium',
+    action: 'fix_ci',
+    key: `fix_ci:${p.repo}`,
+    risk: 'medium',
     title: `Fix failing CI on ${p.slug}`,
     reason: `The default branch of ${p.repo} is failing.`,
     context: linkTo(p),
@@ -25,7 +27,9 @@ function fixCi(p) {
 
 function pauseStale(p, now) {
   return {
-    action: 'pause_stale_project', key: `pause:${p.slug}:${p.updated}`, risk: 'low',
+    action: 'pause_stale_project',
+    key: `pause:${p.slug}:${p.updated}`,
+    risk: 'low',
     title: `Mark ${p.slug} as paused`,
     reason: `Active, but nothing has happened for ${Math.floor(daysSince(p.updated, now))} days.`,
     context: linkTo(p),
@@ -37,7 +41,9 @@ function pauseStale(p, now) {
 
 function blockedTicket(p) {
   return {
-    action: 'reminder', key: `blocked:${p.repo}:${p.agent_blocked}`, risk: 'low',
+    action: 'reminder',
+    key: `blocked:${p.repo}:${p.agent_blocked}`,
+    risk: 'low',
     title: `Agent ticket blocked on ${p.slug}`,
     reason: `${p.agent_blocked} Foundry ticket(s) labelled agent:blocked are waiting on you.`,
     context: linkTo(p),
@@ -49,13 +55,18 @@ function blockedTicket(p) {
 
 function triageInbox(count, now) {
   return {
-    action: 'triage_inbox', key: `triage:${now.toISOString().slice(0, 10)}`, risk: 'low',
+    action: 'triage_inbox',
+    key: `triage:${now.toISOString().slice(0, 10)}`,
+    risk: 'low',
     title: `Triage ${count} inbox notes`,
     reason: `${count} notes are waiting in Inbox/.`,
     context: '[[Inbox]]',
     explain: 'Claude files each one per CLAUDE.md (project task, writing idea, spec, or left in Inbox if unsure) and logs every move.',
     undo: 'revert the vault commit for this run.',
-    params: { prompt: 'Triage every note in Inbox/ following CLAUDE.md and the /capture rules. Log each move to _system/changelog.md. If unsure about a note, leave it. End with one line per note: where it went.' },
+    params: {
+      prompt:
+        'Triage every note in Inbox/ following CLAUDE.md and the /capture rules. Log each move to _system/changelog.md. If unsure about a note, leave it. End with one line per note: where it went.',
+    },
   };
 }
 

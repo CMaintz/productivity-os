@@ -33,7 +33,11 @@ export interface Host {
   CodeFrame?: unknown;
 }
 
-export interface LayoutEntry { id: string; size?: string; disabled?: boolean }
+export interface LayoutEntry {
+  id: string;
+  size?: string;
+  disabled?: boolean;
+}
 
 export type CodeView = (p: { m: Manifest; rows: Row[]; ctx: Ctx }) => unknown;
 export type CodeWidget = (host: Host) => CodeView;

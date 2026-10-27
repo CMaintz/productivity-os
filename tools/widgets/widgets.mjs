@@ -35,10 +35,13 @@ const titleOf = (text, file) => readFrontmatter(text).body.match(/^# (.+)$/m)?.[
 export function noteRows(vault, folder) {
   const dir = path.join(vault, folder);
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => {
-    const text = fs.readFileSync(path.join(dir, f), 'utf8');
-    return { ...fieldsOf(text), title: titleOf(text, f), path: `${folder}/${f}`.replace(/\\/g, '/') };
-  });
+  return fs
+    .readdirSync(dir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => {
+      const text = fs.readFileSync(path.join(dir, f), 'utf8');
+      return { ...fieldsOf(text), title: titleOf(text, f), path: `${folder}/${f}`.replace(/\\/g, '/') };
+    });
 }
 
 /** One widget's rows. `notes` rows are reduced to the manifest's whitelisted fields. */
@@ -56,7 +59,11 @@ function loadManifests(vault) {
   if (!fs.existsSync(dir)) return out;
   for (const f of fs.readdirSync(dir).filter(x => x.endsWith('.json'))) {
     let m;
-    try { m = readJson(path.join(dir, f)); } catch (e) { m = { error: `invalid JSON in ${f}: ${e.message}` }; }
+    try {
+      m = readJson(path.join(dir, f));
+    } catch (e) {
+      m = { error: `invalid JSON in ${f}: ${e.message}` };
+    }
     const id = typeof m.id === 'string' ? m.id : path.basename(f, '.json');
     out.set(id, out.has(id) ? { error: `two widget files use the id "${id}"` } : m);
   }
@@ -70,14 +77,26 @@ function buildWidget(vault, id, m, collections) {
   if (m.error) return errorTile(id, m.error);
   const errors = validateManifest(m);
   if (errors.length) return errorTile(id, errors.join('; '));
-  try { return { manifest: m, rows: widgetRows(vault, m, collections) }; } catch (e) { return errorTile(id, `couldn't compute rows: ${e.message}`); }
+  try {
+    return { manifest: m, rows: widgetRows(vault, m, collections) };
+  } catch (e) {
+    return errorTile(id, `couldn't compute rows: ${e.message}`);
+  }
 }
 
 function loadLayout(vault) {
   const file = path.join(vault, LAYOUT_FILE);
   const SIZES = ['s', 'm', 'l', 'full'];
   const entry = w => ({ id: w.id, ...(SIZES.includes(w.size) ? { size: w.size } : {}), ...(w.disabled === true ? { disabled: true } : {}) });
-  try { return fs.existsSync(file) ? readJson(file).widgets.filter(w => typeof w?.id === 'string').map(entry) : DEFAULT_LAYOUT; } catch { return DEFAULT_LAYOUT; }
+  try {
+    return fs.existsSync(file)
+      ? readJson(file)
+          .widgets.filter(w => typeof w?.id === 'string')
+          .map(entry)
+      : DEFAULT_LAYOUT;
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
 }
 
 /** Layout plus each laid-out widget's manifest and rows (or the reason it can't render). */
@@ -93,23 +112,35 @@ export function loadWidgets(vault, collections) {
 export function proposeWidget(vault, manifest, now = new Date().toISOString()) {
   const errors = validateManifest(manifest);
   if (errors.length) return { errors };
-  const file = createCard(vault, {
-    action: 'create_widget', key: `widget:${manifest.id}`, risk: 'low',
-    title: `Add widget "${manifest.title}"`,
-    reason: manifest.reason ?? `A ${manifest.view} widget over ${manifest.source.kind === 'notes' ? manifest.source.folder : manifest.source.collection}.`,
-    explain: `writes ${WIDGETS_DIR}/${manifest.id}.json and adds it to the dashboard layout.`,
-    undo: 'press Undo here; the file and its layout entry are removed.',
-    params: { manifest: { ...manifest, reason: undefined } },
-  }, now);
+  const file = createCard(
+    vault,
+    {
+      action: 'create_widget',
+      key: `widget:${manifest.id}`,
+      risk: 'low',
+      title: `Add widget "${manifest.title}"`,
+      reason: manifest.reason ?? `A ${manifest.view} widget over ${manifest.source.kind === 'notes' ? manifest.source.folder : manifest.source.collection}.`,
+      explain: `writes ${WIDGETS_DIR}/${manifest.id}.json and adds it to the dashboard layout.`,
+      undo: 'press Undo here; the file and its layout entry are removed.',
+      params: { manifest: { ...manifest, reason: undefined } },
+    },
+    now,
+  );
   return { file };
 }
 
 function main() {
   const [cmd, json] = process.argv.slice(2);
   const vault = vaultFromArgs();
-  if (cmd !== 'create' || !json) { console.error("Usage: widgets.mjs create '<manifest json>' [--vault <dir>]"); process.exit(2); }
+  if (cmd !== 'create' || !json) {
+    console.error("Usage: widgets.mjs create '<manifest json>' [--vault <dir>]");
+    process.exit(2);
+  }
   const r = proposeWidget(vault, JSON.parse(json));
-  if (r.errors) { console.error(`Invalid manifest:\n- ${r.errors.join('\n- ')}`); process.exit(1); }
+  if (r.errors) {
+    console.error(`Invalid manifest:\n- ${r.errors.join('\n- ')}`);
+    process.exit(1);
+  }
   console.log(r.file ? `Proposed as ${path.relative(vault, r.file)}` : 'Skipped: an open card for this widget exists, or it is on the never list.');
 }
 

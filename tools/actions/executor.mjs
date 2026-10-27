@@ -43,7 +43,10 @@ function context(vault, now, runner, ghRunner) {
   return { vault, now, runClaude: runner, gh: ghRunner, policy, policyFile, promotions: [], log: [] };
 }
 
-function save(card, text) { writeFileAtomic(card.file, text); return text; }
+function save(card, text) {
+  writeFileAtomic(card.file, text);
+  return text;
+}
 
 function decide(ctx, card, kind) {
   const r = applyDecision(ctx.policy, { action: card.action, kind, always: card.always === true, never: card.never === true, key: card.key });
@@ -68,7 +71,13 @@ function handleDecision(ctx, card) {
   if (card.status === 'undone' && !card.undone_at) return handleUndo(ctx, card);
   if (card.status === 'running' && hoursSince(card.decided_at || card.created, ctx.now) >= STUCK_HOURS) {
     ctx.log.push(`interrupted ${card.action} ${card.key}`);
-    return save(card, appendResult(updateCard(card.text, { status: 'failed', finished_at: now }), `**Failed (${stamp(ctx.now)}):** interrupted (the PC slept or the executor stopped mid-run). Approve a new card to retry.`));
+    return save(
+      card,
+      appendResult(
+        updateCard(card.text, { status: 'failed', finished_at: now }),
+        `**Failed (${stamp(ctx.now)}):** interrupted (the PC slept or the executor stopped mid-run). Approve a new card to retry.`,
+      ),
+    );
   }
   return card.text;
 }
@@ -86,12 +95,22 @@ const allowedToRun = (ctx, card) => card.decided_by !== 'policy' || levelFor(ctx
 function execute(ctx, card, text) {
   if (!allowedToRun(ctx, card)) {
     ctx.log.push(`refused ${card.action} ${card.key}`);
-    return save(card, appendResult(updateCard(text, { status: 'pending', decided_by: '', decided_at: '' }), `**Held (${stamp(ctx.now)}):** \`${card.action}\` needs your approval at its current level, so this went back to pending.`));
+    return save(
+      card,
+      appendResult(
+        updateCard(text, { status: 'pending', decided_by: '', decided_at: '' }),
+        `**Held (${stamp(ctx.now)}):** \`${card.action}\` needs your approval at its current level, so this went back to pending.`,
+      ),
+    );
   }
   const handler = HANDLERS[card.action];
   let out = save(card, updateCard(text, { status: 'running' }));
   let r;
-  try { r = handler ? handler(card, ctx) : { ok: false, summary: `No handler for action type \`${card.action}\`.` }; } catch (e) { r = { ok: false, summary: `Error: ${e.message}` }; }
+  try {
+    r = handler ? handler(card, ctx) : { ok: false, summary: `No handler for action type \`${card.action}\`.` };
+  } catch (e) {
+    r = { ok: false, summary: `Error: ${e.message}` };
+  }
   const fields = { status: r.ok ? 'done' : 'failed', finished_at: ctx.now.toISOString() };
   if (r.sessionId) fields.session_id = r.sessionId;
   if (r.undo) fields.undo = r.undo;
@@ -102,7 +121,9 @@ function execute(ctx, card, text) {
 
 function promotionSpec({ action, to }) {
   return {
-    action: 'promote_policy', key: `promote:${action}:${to}`, risk: 'low',
+    action: 'promote_policy',
+    key: `promote:${action}:${to}`,
+    risk: 'low',
     title: `Let ${action} run as ${to}`,
     reason: `You've approved ${action} enough times in a row to earn the next level.`,
     explain: `future ${action} cards ${to === 'silent' ? 'run without a card, only logged' : 'run on their own and show up as done, with Undo'}. Any reject or undo drops it back a level.`,
@@ -142,7 +163,11 @@ export async function withLock(vault, fn, now = new Date()) {
     if ((now - new Date(held.at)) / 6e4 < LOCK_STALE_MIN) return { skipped: `locked by pid ${held.pid} on ${held.host}` };
   }
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, host: os.hostname(), at: now.toISOString() }));
-  try { return { result: await fn() }; } finally { fs.rmSync(lock, { force: true }); }
+  try {
+    return { result: await fn() };
+  } finally {
+    fs.rmSync(lock, { force: true });
+  }
 }
 
 /**
@@ -153,12 +178,22 @@ async function lockedPass(vault, dash) {
   const call = dash ? rest(dash) : null;
   const report = msg => console.error(`dashboard: ${msg}`);
   return withLock(vault, async () => {
-    if (call) await pull(vault, dash, call).then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`)).catch(e => report(e.message));
-    if (call) await pullWidgetErrors(vault, dash, call).then(off => off.length && console.log(`dashboard: switched off ${off.join(', ')}`)).catch(e => report(e.message));
+    if (call)
+      await pull(vault, dash, call)
+        .then(a => a.length && console.log(`dashboard: ${a.length} press(es) applied`))
+        .catch(e => report(e.message));
+    if (call)
+      await pullWidgetErrors(vault, dash, call)
+        .then(off => off.length && console.log(`dashboard: switched off ${off.join(', ')}`))
+        .catch(e => report(e.message));
     // Session notes from Claude Code's transcripts; a problem here never stops the cards.
-    try { syncSessions(vault); } catch (e) { console.error(`sessions: ${e.message}`); }
+    try {
+      syncSessions(vault);
+    } catch (e) {
+      console.error(`sessions: ${e.message}`);
+    }
     const log = runOnce(vault);
-    log.push(...await advanceForges(vault, { runClaude }).catch(e => [`forge: ${e.message}`]));
+    log.push(...(await advanceForges(vault, { runClaude }).catch(e => [`forge: ${e.message}`])));
     if (call) await push(vault, dash, call).catch(e => report(e.message));
     return log;
   });
@@ -168,8 +203,14 @@ async function main() {
   const args = process.argv.slice(2);
   const i = args.indexOf('--vault');
   const vault = i >= 0 ? args[i + 1] : process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault');
-  if (!fs.existsSync(cardsDir(vault))) { console.error(`No ${cardsDir(vault)}; run npm run vault first.`); process.exit(1); }
-  if (!onMainHost(vault) && !args.includes('--force')) { console.error('Not the main PC (mainHost in _system/tools.json); exiting. Use --force to override.'); process.exit(0); }
+  if (!fs.existsSync(cardsDir(vault))) {
+    console.error(`No ${cardsDir(vault)}; run npm run vault first.`);
+    process.exit(1);
+  }
+  if (!onMainHost(vault) && !args.includes('--force')) {
+    console.error('Not the main PC (mainHost in _system/tools.json); exiting. Use --force to override.');
+    process.exit(0);
+  }
   const dash = loadConfig();
   let busy = false;
   // setInterval doesn't wait for async work: never start a pass while the last one runs.
@@ -179,20 +220,30 @@ async function main() {
     try {
       const r = await lockedPass(vault, dash);
       console.log(r.skipped ? `executor: skipped, ${r.skipped}` : `executor: ${r.result.length ? r.result.join('; ') : 'nothing to do'}`);
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+    }
   };
   await pass();
   if (!args.includes('--watch')) return;
-  const suggest = () => { const n = suggestAll(vault).length; if (n) console.log(`suggest: ${n} new card(s)`); };
+  const suggest = () => {
+    const n = suggestAll(vault).length;
+    if (n) console.log(`suggest: ${n} new card(s)`);
+  };
   suggest();
   setInterval(pass, WATCH_SECONDS * 1000);
   setInterval(suggest, SUGGEST_MINUTES * 60 * 1000);
   // Code widgets CI merged since the last look (needs gh logged in; offline is fine).
-  const install = () => withLock(vault, () => installMerged(vault))
-    .then(r => r.result?.length && console.log(`code widgets: ${r.result.join('; ')}`))
-    .catch(e => console.error(`code widgets: ${e.message.split('\n')[0]}`));
+  const install = () =>
+    withLock(vault, () => installMerged(vault))
+      .then(r => r.result?.length && console.log(`code widgets: ${r.result.join('; ')}`))
+      .catch(e => console.error(`code widgets: ${e.message.split('\n')[0]}`));
   await install();
   setInterval(install, INSTALL_MINUTES * 60 * 1000);
 }
 
-if (process.argv[1] && path.basename(process.argv[1]) === 'executor.mjs') main().catch(e => { console.error(`executor: ${e.stack || e.message}`); process.exit(1); });
+if (process.argv[1] && path.basename(process.argv[1]) === 'executor.mjs')
+  main().catch(e => {
+    console.error(`executor: ${e.stack || e.message}`);
+    process.exit(1);
+  });

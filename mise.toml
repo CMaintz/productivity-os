@@ -106,8 +106,8 @@ done
 
 [tasks.fix]
 description = "Auto-fix what is mechanically fixable; never opinionated"
-# No formatter or linter is wired in this repo yet, so there is nothing to auto-fix.
-run = "echo 'fix: no auto-fixer configured (no eslint/prettier in this repo)'"
+# Prettier only; eslint isn't wired into the gate here (see lint).
+run = "prettier --write ."
 
 # Provision the pinned habit-hooks (core + language plugin, same version) into a
 # per-plugin venv. Auxiliary (tier c), like setup:pmd - not a contract verb, not in
@@ -160,10 +160,23 @@ echo "smells: $("$hh" --version) --branch base=$mb"
 '''
 
 [tasks.lint]
-description = "Syntax check of the .mjs sources plus structural smells; non-mutating"
+description = "Syntax check, formatting and structural smells; non-mutating"
 # No eslint in this repo. `node --check` is a real syntax check; smells run via habit-hooks.
+# prettier --check fails on any unformatted file, so drift can't reach main and later leak
+# into an unrelated branch through `mise run fix` or the auto-format hook. Honours
+# FOUNDRY_SINCE (see [env]) like the Foundry TS template: changed files at the fast
+# placements, whole-tree in CI. --ignore-unknown skips types Prettier can't format.
 run = [
     "git ls-files -z -- '*.mjs' '*.js' '*.cjs' | xargs -0 -r -n1 node --check",
+    '''
+set -eu
+if [ -z "${FOUNDRY_SINCE+x}" ]; then prettier --check .; exit 0; fi
+mb=$(git merge-base "${FOUNDRY_SINCE:-origin/main}" HEAD 2>/dev/null || true)
+if [ -z "$mb" ]; then echo "changed-scope prettier: cannot resolve base; whole-tree"; prettier --check .; exit 0; fi
+files=$( { git diff --name-only --diff-filter=ACMR "$mb"; git ls-files --others --exclude-standard; } | sort -u | sed '/^$/d')
+if [ -z "$files" ]; then echo "changed-scope prettier: nothing changed since $mb"; exit 0; fi
+printf '%s\n' "$files" | xargs -d '\n' prettier --check --ignore-unknown
+''',
     "mise run smells",
 ]
 

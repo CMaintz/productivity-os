@@ -67,12 +67,20 @@ export function fakeGh(calls, { failOn } = {}) {
   let failed = false;
   return (args, input) => {
     calls.push({ args, input });
-    const notFound = () => { throw Object.assign(new Error('HTTP 404'), { stderr: 'Not Found (HTTP 404)' }); };
+    const notFound = () => {
+      throw Object.assign(new Error('HTTP 404'), { stderr: 'Not Found (HTTP 404)' });
+    };
     if (args[0] === 'repo' && args[1] === 'view') return created ? 'tidewell' : notFound();
-    if (args[0] === 'repo' && args[1] === 'create') { created = true; return ''; }
+    if (args[0] === 'repo' && args[1] === 'create') {
+      created = true;
+      return '';
+    }
     if (args[0] === 'api' && !args.includes('PUT')) return notFound();
     if (args[0] === 'issue') {
-      if (failOn && !failed && args.includes(failOn)) { failed = true; throw new Error('HTTP 502'); }
+      if (failOn && !failed && args.includes(failOn)) {
+        failed = true;
+        throw new Error('HTTP 502');
+      }
       return `https://github.com/me/tidewell/issues/${++n}\n`;
     }
     return '';

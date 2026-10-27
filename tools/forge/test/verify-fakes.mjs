@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { listForges } from '../forge.mjs';
 
-export const SPEC = '# Spec\n## Problem\nx\n## User stories\n1. As a user, I want a list.\nAcceptance criteria:\n- [ ] saves\n2. As a user, I want to share it.\nAcceptance criteria:\n- [ ] link\n## Non-goals\nx\n';
+export const SPEC =
+  '# Spec\n## Problem\nx\n## User stories\n1. As a user, I want a list.\nAcceptance criteria:\n- [ ] saves\n2. As a user, I want to share it.\nAcceptance criteria:\n- [ ] link\n## Non-goals\nx\n';
 export const report = (checks, findings = []) => 'Done.\n```json\n' + JSON.stringify({ checks, findings }) + '\n```\n';
 export const ok = name => ({ name, ok: true, details: 'fine' });
 const QA_CLEAN = report([ok('story 1'), ok('story 2'), ok('axe'), ok('lighthouse'), ok('npm audit'), ok('licenses')]);

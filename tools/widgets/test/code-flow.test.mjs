@@ -47,7 +47,13 @@ test('build_code_widget: proposed as a card; approving opens a widget:code agent
   const v = codeVault();
   assert.match(proposeCodeWidget(v, { id: 'ci', title: 'CI', source: { kind: 'snapshot', collection: 'projects' } }).errors.join(), /purpose/);
   assert.match(proposeCodeWidget(v, { id: 'x', title: 'X', purpose: 'p', source: { kind: 'snapshot', collection: 'today' } }).errors.join(), /may only read/);
-  const spec = { id: 'pr-queue', title: 'PR queue', purpose: 'See which PRs wait on me.', source: { kind: 'snapshot', collection: 'projects', where: { open_prs: { gt: 0 } } }, fields: ['slug', 'open_prs'] };
+  const spec = {
+    id: 'pr-queue',
+    title: 'PR queue',
+    purpose: 'See which PRs wait on me.',
+    source: { kind: 'snapshot', collection: 'projects', where: { open_prs: { gt: 0 } } },
+    fields: ['slug', 'open_prs'],
+  };
   proposeCodeWidget(v, spec, NOW.toISOString());
   const card = cardBy(v, 'build_code_widget');
   assert.equal(card.status, 'pending', 'builds are always asked');
@@ -60,7 +66,10 @@ test('build_code_widget: proposed as a card; approving opens a widget:code agent
   assert.ok(issue.args.includes('widget:code') && issue.args.includes('agent:ready'));
   assert.match(issue.input, /### Intent[\s\S]*### Acceptance criteria[\s\S]*### Scope boundaries[\s\S]*### Pointers/);
   assert.match(issue.input, /"fields": \[\s*"open_prs",\s*"slug"\s*\]/, 'the ticket carries the exact permissions');
-  assert.ok(gh.calls.some(c => c.args.join(' ').startsWith('label create widget:code')), 'labels are ensured');
+  assert.ok(
+    gh.calls.some(c => c.args.join(' ').startsWith('label create widget:code')),
+    'labels are ensured',
+  );
 });
 
 test('a merged widget PR installs itself with a notice card; Undo removes it and offers code removal', () => {
@@ -76,7 +85,10 @@ test('a merged widget PR installs itself with a notice card; Undo removes it and
   assert.equal(loadWidgets(v, { projects: [{ slug: 'a', status: 'active', ci: 'failing', secret: 'x' }] }).widgets['ci-status'].rows[0].secret, undefined, 'rows are cut to the permissions');
   press(cardBy(v, 'install_code_widget'), 'undone');
   runOnce(v, { now: NOW });
-  assert.equal(readLayout(v).widgets.some(w => w.id === 'ci-status'), false);
+  assert.equal(
+    readLayout(v).widgets.some(w => w.id === 'ci-status'),
+    false,
+  );
   const removal = listCards(v).find(c => c.key === 'remove-code-widget:ci-status');
   assert.equal(removal.status, 'pending');
   assert.match(removal.params.prompt, /--label widget:code/);
@@ -87,7 +99,10 @@ test('a GitHub hiccup is retried later, never read as "removed"', () => {
   const v = codeVault();
   fs.writeFileSync(path.join(v, '_system', 'widgets', 'ci-status.json'), JSON.stringify(MANIFEST));
   const prs = [{ number: 9, title: 'x', files: [{ path: 'dashboard/src/widgets/code/ci-status/widget.json' }] }];
-  const flaky = (args) => { if (args[0] === 'pr') return JSON.stringify(prs); throw Object.assign(new Error('HTTP 502: Bad Gateway'), { stderr: 'gh: HTTP 502' }); };
+  const flaky = args => {
+    if (args[0] === 'pr') return JSON.stringify(prs);
+    throw Object.assign(new Error('HTTP 502: Bad Gateway'), { stderr: 'gh: HTTP 502' });
+  };
   assert.match(installMerged(v, { run: flaky }).join(), /retry #9 later/);
   assert.ok(fs.existsSync(path.join(v, '_system', 'widgets', 'ci-status.json')), 'still installed');
   assert.deepEqual(installMerged(v, { run: fakeGh({ prs, onMain: { 'ci-status': MANIFEST } }).run }), ['install ci-status'], 'and picked up on the next pass');

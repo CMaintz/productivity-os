@@ -7,7 +7,10 @@ const FM = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 export function readFrontmatter(note) {
   const m = note?.match(FM);
   if (!m) return { fields: {}, body: note ?? '' };
-  const pairs = m[1].split(/\r?\n/).map(l => l.match(/^(\w+):\s?(.*)$/)).filter(Boolean);
+  const pairs = m[1]
+    .split(/\r?\n/)
+    .map(l => l.match(/^(\w+):\s?(.*)$/))
+    .filter(Boolean);
   return { fields: Object.fromEntries(pairs.map(x => [x[1], x[2]])), body: note.slice(m[0].length) };
 }
 
@@ -26,7 +29,13 @@ export function scalar(raw) {
   if (v === '') return '';
   if (v === 'true' || v === 'false') return v === 'true';
   if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
-  if (/^["{[]/.test(v)) { try { return JSON.parse(v); } catch { /* not JSON: fall through */ } }
+  if (/^["{[]/.test(v)) {
+    try {
+      return JSON.parse(v);
+    } catch {
+      /* not JSON: fall through */
+    }
+  }
   return v;
 }
 

@@ -16,7 +16,12 @@ const css = fs.readFileSync(path.join(DASH, 'src', 'styles', 'dashboard.css'), '
 await build({
   entryPoints: [path.join(DASH, 'src', 'widgets', 'frame.ts')],
   outfile: path.join(DASH, 'public', 'widget-frame.js'),
-  bundle: true, format: 'iife', platform: 'browser', target: 'es2022', minify: true, legalComments: 'none',
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'es2022',
+  minify: true,
+  legalComments: 'none',
   banner: { js: `document.head.append(Object.assign(document.createElement('style'), { textContent: ${JSON.stringify(css)} }));` },
 });
 console.log('wrote dashboard/public/widget-frame.js');

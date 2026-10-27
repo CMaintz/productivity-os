@@ -17,7 +17,12 @@ import { slugOf } from './naming.mjs';
 import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const DEFAULT_OWNER = 'CMaintz';
-const DOCS = [['spec.md', 'docs/spec.md'], ['decisions/0001-stack.md', 'docs/decisions/0001-stack.md'], ['plan.md', 'docs/plan.md'], ['naming.md', 'docs/naming.md']];
+const DOCS = [
+  ['spec.md', 'docs/spec.md'],
+  ['decisions/0001-stack.md', 'docs/decisions/0001-stack.md'],
+  ['plan.md', 'docs/plan.md'],
+  ['naming.md', 'docs/naming.md'],
+];
 const PRODUCT_LABELS = ['agent-feature', 'agent:ready', 'agent:working', 'agent:blocked', 'epic'];
 
 export const ownerOf = vault => readToolsConfig(vault).githubOwner || DEFAULT_OWNER;
@@ -28,13 +33,22 @@ export function proposeRepo(vault, f, now) {
   const name = f.name || f.slug;
   const repo = repoName(vault, name);
   const key = `forge-repo:${f.slug}:${now.toISOString().slice(0, 16)}`;
-  createCard(vault, {
-    action: 'forge_create_repo', key, risk: 'medium', title: `Forge ${name}: create the repo and tickets`,
-    reason: `The plan is ready in ${FORGE_DIR}/${f.slug}/plan.md.`, context: `[[${FORGE_DIR}/${f.slug}/plan]]`,
-    explain: `creates the private repo ${repo} with the spec, ADR and plan in docs/, Foundry's labels, an epic and one agent-feature issue per ticket (tickets without dependencies get agent:ready). To change the plan instead, press No with what to change.`,
-    undo: `not automatic (deleting is yours to do): gh repo delete ${repo}`,
-    params: { slug: f.slug, name, repo }, expiresDays: 14,
-  }, now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_create_repo',
+      key,
+      risk: 'medium',
+      title: `Forge ${name}: create the repo and tickets`,
+      reason: `The plan is ready in ${FORGE_DIR}/${f.slug}/plan.md.`,
+      context: `[[${FORGE_DIR}/${f.slug}/plan]]`,
+      explain: `creates the private repo ${repo} with the spec, ADR and plan in docs/, Foundry's labels, an epic and one agent-feature issue per ticket (tickets without dependencies get agent:ready). To change the plan instead, press No with what to change.`,
+      undo: `not automatic (deleting is yours to do): gh repo delete ${repo}`,
+      params: { slug: f.slug, name, repo },
+      expiresDays: 14,
+    },
+    now.toISOString(),
+  );
   return key;
 }
 
@@ -44,7 +58,13 @@ export function ticketBody(t, issueOf) {
 }
 
 const issueNumber = url => Number(String(url).match(/\/issues\/(\d+)/)?.[1]);
-const exists = (run, args) => { try { return run(args).trim() || 'yes'; } catch { return null; } };
+const exists = (run, args) => {
+  try {
+    return run(args).trim() || 'yes';
+  } catch {
+    return null;
+  }
+};
 
 /** Creates or updates each doc through the contents API, the JSON body on stdin (no argv size limit). */
 function pushDocs(run, repo, dir) {
@@ -63,7 +83,11 @@ function pushDocs(run, repo, dir) {
  */
 function protectMain(run, repo) {
   const body = { required_status_checks: null, enforce_admins: false, required_pull_request_reviews: { required_approving_review_count: 0 }, restrictions: null };
-  try { run(['api', '-X', 'PUT', `repos/${repo}/branches/main/protection`, '--input', '-'], JSON.stringify(body)); } catch { /* not available on this plan */ }
+  try {
+    run(['api', '-X', 'PUT', `repos/${repo}/branches/main/protection`, '--input', '-'], JSON.stringify(body));
+  } catch {
+    /* not available on this plan */
+  }
 }
 
 const record = (note, key, value) => writeFileAtomic(note, setFrontmatter(fs.readFileSync(note, 'utf8'), key, JSON.stringify(value)));

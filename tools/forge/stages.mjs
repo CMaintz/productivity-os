@@ -29,15 +29,32 @@ export function checkOutput(stage, text) {
   return problems;
 }
 
-const cellsOf = line => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+const cellsOf = line =>
+  line
+    .trim()
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map(c => c.trim());
 
 /** Names from naming.md's candidates table, in rank order: the column headed "Name" (else the first). */
 export function candidates(text) {
-  const section = String(text).split(/^## +Candidates.*$/m)[1]?.split(/^## /m)[0] ?? '';
-  const rows = section.split('\n').filter(l => /^\|/.test(l.trim())).map(cellsOf);
+  const section =
+    String(text)
+      .split(/^## +Candidates.*$/m)[1]
+      ?.split(/^## /m)[0] ?? '';
+  const rows = section
+    .split('\n')
+    .filter(l => /^\|/.test(l.trim()))
+    .map(cellsOf);
   if (rows.length < 3) return [];
-  const col = Math.max(0, rows[0].findIndex(h => /^\**name\**$/i.test(h)));
-  return rows.slice(2).map(r => (r[col] ?? '').replace(/[*`]/g, '').trim()).filter(c => c && !/^\d+\.?$/.test(c));
+  const col = Math.max(
+    0,
+    rows[0].findIndex(h => /^\**name\**$/i.test(h)),
+  );
+  return rows
+    .slice(2)
+    .map(r => (r[col] ?? '').replace(/[*`]/g, '').trim())
+    .filter(c => c && !/^\d+\.?$/.test(c));
 }
 
 const TICKET = /^### +T(\d+): *(.+)$/gm;
@@ -84,7 +101,10 @@ export function topoOrder(tickets) {
   while (out.length < tickets.length) {
     const ready = tickets.filter(t => !done.has(t.n) && t.dependsOn.every(d => done.has(d)));
     if (!ready.length) return null;
-    for (const t of ready) { done.add(t.n); out.push(t); }
+    for (const t of ready) {
+      done.add(t.n);
+      out.push(t);
+    }
   }
   return out;
 }

@@ -18,12 +18,14 @@ const titleOf = text => readFrontmatter(text).body.match(/^# (.+)$/m)?.[1] ?? ''
 
 function projects(vault) {
   const dir = path.join(vault, 'Projects');
-  return mdIn(dir).map(f => {
-    const x = fieldsOf(fs.readFileSync(path.join(dir, f), 'utf8'));
-    const pick = ['status', 'priority', 'next', 'repo', 'ci', 'open_prs', 'failing_prs', 'agent_blocked', 'updated'];
-    const slug = path.basename(f, '.md');
-    return { title: slug, slug, ...Object.fromEntries(pick.map(k => [k, x[k] ?? null])) };
-  }).filter(p => p.status !== 'archived');
+  return mdIn(dir)
+    .map(f => {
+      const x = fieldsOf(fs.readFileSync(path.join(dir, f), 'utf8'));
+      const pick = ['status', 'priority', 'next', 'repo', 'ci', 'open_prs', 'failing_prs', 'agent_blocked', 'updated'];
+      const slug = path.basename(f, '.md');
+      return { title: slug, slug, ...Object.fromEntries(pick.map(k => [k, x[k] ?? null])) };
+    })
+    .filter(p => p.status !== 'archived');
 }
 
 /** Just the outcome of the last result line ("Done (2026-10-14 11:14)"), never its text. */
@@ -35,15 +37,25 @@ function cards(vault) {
     .slice(0, MAX_CARDS)
     .map(c => ({
       file: path.relative(vault, c.file).replace(/\\/g, '/'),
-      key: c.key, title: titleOf(c.text), action: c.action, risk: c.risk, status: c.status,
-      reason: c.reason, context: c.context, created: c.created, expires: c.expires,
-      decided_by: c.decided_by || null, finished_at: c.finished_at || null, result: lastOutcome(c.text),
+      key: c.key,
+      title: titleOf(c.text),
+      action: c.action,
+      risk: c.risk,
+      status: c.status,
+      reason: c.reason,
+      context: c.context,
+      created: c.created,
+      expires: c.expires,
+      decided_by: c.decided_by || null,
+      finished_at: c.finished_at || null,
+      result: lastOutcome(c.text),
     }));
 }
 
 function sessions(vault, now) {
   const dir = path.join(vault, 'Sessions');
-  return mdIn(dir).map(f => fieldsOf(fs.readFileSync(path.join(dir, f), 'utf8')))
+  return mdIn(dir)
+    .map(f => fieldsOf(fs.readFileSync(path.join(dir, f), 'utf8')))
     .filter(s => s.type === 'session' && (now - new Date(s.updated)) / 864e5 <= SESSION_DAYS)
     .sort((a, b) => String(b.updated).localeCompare(String(a.updated)))
     .map(s => ({ project: String(s.project).replace(/^\[\[Projects\/|\]\]$/g, ''), status: s.status, waiting_for: s.waiting_for || null, prompts: s.prompts, started: s.started, updated: s.updated }));
@@ -69,7 +81,9 @@ export function buildSnapshot(vault, { now = new Date(), host = '' } = {}) {
   const c = collections(vault, now);
   const { layout, widgets } = loadWidgets(vault, c);
   return {
-    version: 2, generatedAt: now.toISOString(), host,
+    version: 2,
+    generatedAt: now.toISOString(),
+    host,
     counts: {
       pendingCards: c.cards.filter(x => x.status === 'pending').length,
       waitingSessions: c.sessions.filter(x => x.status === 'waiting').length,
@@ -77,6 +91,7 @@ export function buildSnapshot(vault, { now = new Date(), host = '' } = {}) {
       activeProjects: c.projects.filter(p => p.status === 'active').length,
       inbox: mdIn(path.join(vault, 'Inbox')).length,
     },
-    layout, widgets,
+    layout,
+    widgets,
   };
 }

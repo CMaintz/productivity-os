@@ -19,7 +19,9 @@ export function vaultState(vault) {
 }
 
 export function suggestAll(vault, now = new Date()) {
-  return suggestions(vaultState(vault), now).map(spec => createCard(vault, spec, now.toISOString())).filter(Boolean);
+  return suggestions(vaultState(vault), now)
+    .map(spec => createCard(vault, spec, now.toISOString()))
+    .filter(Boolean);
 }
 
 function main() {

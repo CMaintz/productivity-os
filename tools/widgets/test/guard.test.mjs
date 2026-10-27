@@ -3,17 +3,31 @@ import assert from 'node:assert/strict';
 import { checkChange } from '../guard.mjs';
 
 const DIR = 'dashboard/src/widgets/code/ci';
-const manifest = (fields = ['ci', 'status'], extra = {}) => JSON.stringify({
-  id: 'ci', title: 'CI', view: 'code:ci', fields: ['ci'],
-  source: { kind: 'snapshot', collection: 'projects', where: { status: 'active' } },
-  permissions: { collections: ['projects'], fields, connectors: [] }, ...extra,
-});
+const manifest = (fields = ['ci', 'status'], extra = {}) =>
+  JSON.stringify({
+    id: 'ci',
+    title: 'CI',
+    view: 'code:ci',
+    fields: ['ci'],
+    source: { kind: 'snapshot', collection: 'projects', where: { status: 'active' } },
+    permissions: { collections: ['projects'], fields, connectors: [] },
+    ...extra,
+  });
 
 /** A PR: `base` and `head` map paths to file text; `changed` defaults to every path that differs. */
 const CATALOG = 'dashboard/src/widgets/code/catalog.ts';
 const RENDERERS = 'dashboard/src/widgets/code/renderers.ts';
 
-function pr({ base = {}, head = {}, changed, codeIds = ['ci'], expected = [[CATALOG, head[CATALOG] ?? null], [RENDERERS, head[RENDERERS] ?? null]] }) {
+function pr({
+  base = {},
+  head = {},
+  changed,
+  codeIds = ['ci'],
+  expected = [
+    [CATALOG, head[CATALOG] ?? null],
+    [RENDERERS, head[RENDERERS] ?? null],
+  ],
+}) {
   const paths = changed ?? [...new Set([...Object.keys(base), ...Object.keys(head)])].filter(p => base[p] !== head[p]);
   return checkChange({ changed: paths, readBase: p => base[p] ?? null, readHead: p => head[p] ?? null, codeIds, expected });
 }
@@ -27,7 +41,9 @@ test('a new widget inside its folder, with generated files, may merge itself', (
 });
 
 test('touching anything outside the code widget folders needs review', () => {
-  const r = pr({ head: { ...newWidget, 'dashboard/src/lib/data.ts': 'fetch(evil)', '.github/workflows/x.yml': 'x', [`${DIR}/helper.js`]: 'fetch(evil)', 'vault-template/_system/widgets/views.md': 'v' } });
+  const r = pr({
+    head: { ...newWidget, 'dashboard/src/lib/data.ts': 'fetch(evil)', '.github/workflows/x.yml': 'x', [`${DIR}/helper.js`]: 'fetch(evil)', 'vault-template/_system/widgets/views.md': 'v' },
+  });
   assert.equal(r.ok, false);
   assert.match(r.problems.join('\n'), /dashboard\/src\/lib\/data.ts, outside/);
   assert.match(r.problems.join('\n'), /workflows\/x.yml, outside/);
@@ -48,7 +64,13 @@ test('a widget that reads more than its base version needs review', () => {
 
 test('a widget may not borrow another renderer, and generated files must be exactly generated', () => {
   assert.match(pr({ head: { [`${DIR}/widget.json`]: manifest(undefined, { view: 'code:ci-status' }) } }).problems.join(), /view must be "code:ci"/);
-  const tampered = pr({ head: newWidget, expected: [[CATALOG, 'c'], [RENDERERS, 'what the generator writes']] });
+  const tampered = pr({
+    head: newWidget,
+    expected: [
+      [CATALOG, 'c'],
+      [RENDERERS, 'what the generator writes'],
+    ],
+  });
   assert.match(tampered.problems.join(), /renderers.ts isn't what tools\/widgets\/code-registry.mjs generates/);
   assert.match(pr({ head: newWidget, expected: [] }).problems.join(), /catalog.ts isn't what/, 'unchecked generated files never pass');
 });

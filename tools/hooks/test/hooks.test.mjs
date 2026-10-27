@@ -14,7 +14,10 @@ test('sessions link to the note whose path is their checkout, and worktrees to t
   const main = path.join(root, 'school', 'site');
   const clone = path.join(root, '_archive', 'site');
   const wt = path.join(root, 'school', '_wt', 'feature');
-  for (const d of [main, clone]) { fs.mkdirSync(d, { recursive: true }); execFileSync('git', ['init', '-q'], { cwd: d }); }
+  for (const d of [main, clone]) {
+    fs.mkdirSync(d, { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: d });
+  }
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: main });
   execFileSync('git', ['worktree', 'add', '-q', '-b', 'feature', wt], { cwd: main });
   fs.mkdirSync(path.join(vault, 'Projects'), { recursive: true });

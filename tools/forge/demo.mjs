@@ -35,7 +35,12 @@ const TOUR_TOOLS = 'Read,Glob,Grep,Write(forge-demo/**),Edit(forge-demo/**),Bash
 const MAX_ATTEMPTS = 2;
 const HOUR = 36e5;
 
-const firstLine = e => String(e?.stderr || e?.message || e).split('\n').map(l => l.trim()).find(Boolean)?.slice(0, 200) ?? 'unknown error';
+const firstLine = e =>
+  String(e?.stderr || e?.message || e)
+    .split('\n')
+    .map(l => l.trim())
+    .find(Boolean)
+    ?.slice(0, 200) ?? 'unknown error';
 const older = (v, min) => v[0] < min[0] || (v[0] === min[0] && v[1] < min[1]);
 
 /** Builds the checkout and makes the Cloudflare preview: { url } or { reason } there is none. Runs detached (see main). */
@@ -43,7 +48,9 @@ export function preview(sys, wt) {
   try {
     sys.run('npm', ['ci'], wt);
     sys.run('npm', ['run', 'build'], wt);
-  } catch (e) { return { reason: `the build failed: ${firstLine(e)}` }; }
+  } catch (e) {
+    return { reason: `the build failed: ${firstLine(e)}` };
+  }
   if (!CONFIGS.some(c => fs.existsSync(path.join(wt, c)))) return { reason: 'the repo has no wrangler config' };
   try {
     const v = String(sys.run('npx', [...WRANGLER, '--version'], wt)).match(/(\d+)\.(\d+)\.(\d+)/);
@@ -51,14 +58,18 @@ export function preview(sys, wt) {
     if (older([Number(v[1]), Number(v[2])], MIN_WRANGLER)) return { reason: `wrangler ${v[0]} is older than ${MIN_WRANGLER.join('.')}, which previews need` };
     const url = String(sys.run('npx', PREVIEW, wt)).match(/https:\/\/[\w.-]+\.workers\.dev\S*/)?.[0];
     return url ? { url } : { reason: 'wrangler preview printed no URL' };
-  } catch (e) { return { reason: `wrangler preview failed: ${firstLine(e)}` }; }
+  } catch (e) {
+    return { reason: `wrangler preview failed: ${firstLine(e)}` };
+  }
 }
 
 const specOf = f => (fs.existsSync(path.join(f.dir, 'spec.md')) ? fs.readFileSync(path.join(f.dir, 'spec.md'), 'utf8') : '');
 
 function startTour(f, b, ctx, d) {
   const target = d.preview.url ? `the preview at ${d.preview.url}` : 'a local server: build is done, so start `npm run preview` in the background and use the URL it prints';
-  const list = stories(specOf(f)).map(s => `${s.n}. ${s.text}`).join('\n');
+  const list = stories(specOf(f))
+    .map(s => `${s.n}. ${s.text}`)
+    .join('\n');
   const text = Object.entries({ TARGET: target, STORIES: list, NAME: b.name }).reduce((t, [k, v]) => t.replaceAll(`{{${k}}}`, v), fs.readFileSync(path.join(PROMPTS, 'demo-tour.md'), 'utf8'));
   const env = sandboxEnv(path.join(ctx.logDir, 'demo-sandbox'));
   return startRun({ prompt: text, cwd: d.wt, tools: TOUR_TOOLS, logDir: ctx.logDir, name: 'demo-tour', now: ctx.now, env, sys: ctx.sys });
@@ -78,7 +89,9 @@ function previewResult(ctx, run) {
     ctx.sys.kill(run.pid);
     return { reason: `the preview build took over ${PREVIEW_TIMEOUT_H} hour` };
   }
-  try { return JSON.parse(fs.readFileSync(run.out, 'utf8')); } catch {
+  try {
+    return JSON.parse(fs.readFileSync(run.out, 'utf8'));
+  } catch {
     const log = fs.existsSync(`${run.out}.log`) ? fs.readFileSync(`${run.out}.log`, 'utf8') : '';
     return { reason: `the preview run ended without a result: ${firstLine(log.split('\n').filter(Boolean).at(-1) ?? 'no output')}` };
   }
@@ -91,9 +104,15 @@ function isShot(src, root) {
     if (!real) return false;
     const head = Buffer.alloc(PNG.length);
     const fd = fs.openSync(real, 'r');
-    try { fs.readSync(fd, head, 0, PNG.length, 0); } finally { fs.closeSync(fd); }
+    try {
+      fs.readSync(fd, head, 0, PNG.length, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
     return head.equals(PNG);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 /** The tour's screenshots that really are files inside its checkout, copied to Forge/<slug>/demo/. */
@@ -101,7 +120,11 @@ function copyShots(f, d, report) {
   const out = path.join(f.dir, 'demo');
   fs.mkdirSync(out, { recursive: true });
   let root;
-  try { root = fs.realpathSync(d.wt); } catch { return {}; }
+  try {
+    root = fs.realpathSync(d.wt);
+  } catch {
+    return {};
+  }
   const shots = {};
   for (const s of Array.isArray(report?.shots) ? report.shots : []) {
     const n = Number(s?.story);
@@ -118,7 +141,10 @@ const count = n => Math.round(n).toLocaleString('en-US');
 function costLines(b, ctx) {
   const s = b.spent ?? { usd: 0, input: 0, output: 0, ms: 0, runs: 0 };
   const cached = s.cached ? ` (plus ${count(s.cached)} re-read from the prompt cache)` : '';
-  const lines = [`- $${s.usd.toFixed(2)} API-equivalent over ${s.runs} agent runs (${count(s.ms / 6e4)} min). It ran on your subscription, so nothing was billed.`, `- ${count(s.input)} tokens in${cached}, ${count(s.output)} out.`];
+  const lines = [
+    `- $${s.usd.toFixed(2)} API-equivalent over ${s.runs} agent runs (${count(s.ms / 6e4)} min). It ran on your subscription, so nothing was billed.`,
+    `- ${count(s.input)} tokens in${cached}, ${count(s.output)} out.`,
+  ];
   for (const [n, t] of Object.entries(b.tickets ?? {}).filter(([, x]) => x.spent)) lines.push(`  - T${n}: ${count(t.spent.input)} tokens in, ${count(t.spent.output)} out (${t.spent.runs} runs)`);
   if (b.weekly_start != null && ctx.weekly != null) {
     const d = ctx.weekly - b.weekly_start;
@@ -163,13 +189,23 @@ function done(vault, f, b, ctx, d, report, failure) {
   const gaps = writeSummary(f, b, ctx, d, report, failure);
   const where = d.preview.url ?? 'local only';
   const key = `forge-sell:${b.slug}`;
-  createCard(vault, {
-    action: 'forge_sell', key, risk: 'low', title: `Forge ${b.name}: demo ready; draft a sell/handover pack?`,
-    reason: `Preview: ${where}. Summary, screenshots and cost in [[Forge/${b.slug}/demo.md]] (${gaps} known gap${gaps === 1 ? '' : 's'}).`,
-    context: d.preview.url ?? `https://github.com/${b.repo}`,
-    explain: 'an agent drafts a landing page, one-pager, pitch outline, demo video script, marketplace listing, architecture notes and a runbook, and the forge adds a secrets inventory (names only), a license audit, known issues and a transfer checklist. Drafts only: nothing is published, listed or sent. No leaves the product as it is.',
-    undo: 'delete Forge/<slug>/pack/.', params: { slug: b.slug, stage: 'demoed' }, expiresDays: 30,
-  }, ctx.now.toISOString());
+  createCard(
+    vault,
+    {
+      action: 'forge_sell',
+      key,
+      risk: 'low',
+      title: `Forge ${b.name}: demo ready; draft a sell/handover pack?`,
+      reason: `Preview: ${where}. Summary, screenshots and cost in [[Forge/${b.slug}/demo.md]] (${gaps} known gap${gaps === 1 ? '' : 's'}).`,
+      context: d.preview.url ?? `https://github.com/${b.repo}`,
+      explain:
+        'an agent drafts a landing page, one-pager, pitch outline, demo video script, marketplace listing, architecture notes and a runbook, and the forge adds a secrets inventory (names only), a license audit, known issues and a transfer checklist. Drafts only: nothing is published, listed or sent. No leaves the product as it is.',
+      undo: 'delete Forge/<slug>/pack/.',
+      params: { slug: b.slug, stage: 'demoed' },
+      expiresDays: 30,
+    },
+    ctx.now.toISOString(),
+  );
   save(f, { stage: 'demoed', status: 'waiting', review_key: key }, ctx.now, `demo: ready (${where})`);
   return `demo ready (${where})`;
 }
@@ -203,7 +239,10 @@ export function demoStep(vault, f, b, ctx) {
       let s = workerStatus(d.run, { now: ctx.now, sys: ctx.sys });
       if (s === 'running') return log;
       addSpend(b, s);
-      if (s === 'timeout') { ctx.sys.kill(d.run.pid); s = { ok: false, text: 'no result after the time limit' }; }
+      if (s === 'timeout') {
+        ctx.sys.kill(d.run.pid);
+        s = { ok: false, text: 'no result after the time limit' };
+      }
       d.run = null;
       if (s.usageLimit) {
         d.retryAfter = new Date(ctx.now.valueOf() + HOUR).toISOString();
@@ -211,7 +250,10 @@ export function demoStep(vault, f, b, ctx) {
         return log;
       }
       const parsed = s.ok ? jsonBlock(s.text) : { error: firstLine(s.text) };
-      if (parsed.error && ++d.attempts < MAX_ATTEMPTS) { log.push(`demo: the tour gave no usable report (${parsed.error}); retrying`); return log; }
+      if (parsed.error && ++d.attempts < MAX_ATTEMPTS) {
+        log.push(`demo: the tour gave no usable report (${parsed.error}); retrying`);
+        return log;
+      }
       // Kept before the summary is written: a crash there must not cost a second tour.
       d.result = { report: parsed.value ?? null, failure: parsed.error ?? null };
       ctx.persist();

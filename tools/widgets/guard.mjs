@@ -21,7 +21,12 @@ const grants = m => Object.entries(m?.permissions ?? {}).flatMap(([kind, list]) 
 
 function parse(text, id, problems) {
   if (text === null) return null;
-  try { return JSON.parse(text); } catch (e) { problems.push(`${id}: widget.json isn't valid JSON (${e.message})`); return null; }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    problems.push(`${id}: widget.json isn't valid JSON (${e.message})`);
+    return null;
+  }
 }
 
 function checkWidget(id, { changed, readBase, readHead, codeIds }, problems) {
@@ -69,7 +74,13 @@ function main() {
   const git = args => execFileSync('git', args, { encoding: 'utf8' });
   const mb = git(['merge-base', base, 'HEAD']).trim();
   const changed = git(['diff', '--name-only', '--no-renames', mb, 'HEAD']).split('\n').filter(Boolean);
-  const readBase = p => { try { return git(['show', `${mb}:${p}`]); } catch { return null; } };
+  const readBase = p => {
+    try {
+      return git(['show', `${mb}:${p}`]);
+    } catch {
+      return null;
+    }
+  };
   const readHead = p => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
   const expected = generatedFiles().map(([file, text]) => [path.relative(process.cwd(), file).replace(/\\/g, '/'), text]);
   const r = checkChange({ changed, readBase, readHead, codeIds: codeWidgetIds(), expected });

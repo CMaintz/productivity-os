@@ -48,17 +48,53 @@ export function newForge(vault, outline, { mode = 'interview', stopAfter = ['spe
   if (fs.existsSync(file)) return { error: `${FORGE_DIR}/${slug} already exists` };
   if (!['interview', 'autonomous'].includes(mode)) return { error: 'mode must be interview or autonomous' };
   fs.mkdirSync(path.join(vault, FORGE_DIR, slug), { recursive: true });
-  const fm = { type: 'forge', slug, name: q(''), auto_name: q(''), stage: 'spec', mode, stop_after: q(stops(stopAfter)), status: 'running', attempts: 0, answered: false, review_key: q(''), feedback: q(''), repo: q(''), created: q(now.toISOString()), updated: q(now.toISOString()) };
-  fs.writeFileSync(file, `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n# ${title}\n\n## Outline\n${outline.trim()}\n\n## Log\n`);
+  const fm = {
+    type: 'forge',
+    slug,
+    name: q(''),
+    auto_name: q(''),
+    stage: 'spec',
+    mode,
+    stop_after: q(stops(stopAfter)),
+    status: 'running',
+    attempts: 0,
+    answered: false,
+    review_key: q(''),
+    feedback: q(''),
+    repo: q(''),
+    created: q(now.toISOString()),
+    updated: q(now.toISOString()),
+  };
+  fs.writeFileSync(
+    file,
+    `---\n${Object.entries(fm)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\n')}\n---\n# ${title}\n\n## Outline\n${outline.trim()}\n\n## Log\n`,
+  );
   return { file, slug };
 }
 
 function reviewCard(vault, f, stage, now) {
   const key = `forge:${f.slug}:${stage}:${now.toISOString().slice(0, 16)}`;
-  const spec = stage === 'questions'
-    ? { action: 'forge_questions', title: `Forge ${f.slug}: answer a few questions`, reason: 'The spec needs your answers first.', explain: `answer them in [[${FORGE_DIR}/${f.slug}/questions]], then press Do it to write the spec.` }
-    : { action: 'forge_review', title: `Forge ${f.name || f.slug}: ${stage} is ready`, reason: `Stop-point after ${stage}. Read it in ${FORGE_DIR}/${f.slug}/.`, explain: 'the forge continues with the next stage. To change it instead, press No and type what to change: the stage reruns with that feedback.' };
-  createCard(vault, { ...spec, key, risk: 'low', context: `[[${FORGE_DIR}/${f.slug}]]`, undo: `set status: stopped in ${FORGE_DIR}/${f.slug}.md.`, params: { slug: f.slug, stage }, expiresDays: 14 }, now.toISOString());
+  const spec =
+    stage === 'questions'
+      ? {
+          action: 'forge_questions',
+          title: `Forge ${f.slug}: answer a few questions`,
+          reason: 'The spec needs your answers first.',
+          explain: `answer them in [[${FORGE_DIR}/${f.slug}/questions]], then press Do it to write the spec.`,
+        }
+      : {
+          action: 'forge_review',
+          title: `Forge ${f.name || f.slug}: ${stage} is ready`,
+          reason: `Stop-point after ${stage}. Read it in ${FORGE_DIR}/${f.slug}/.`,
+          explain: 'the forge continues with the next stage. To change it instead, press No and type what to change: the stage reruns with that feedback.',
+        };
+  createCard(
+    vault,
+    { ...spec, key, risk: 'low', context: `[[${FORGE_DIR}/${f.slug}]]`, undo: `set status: stopped in ${FORGE_DIR}/${f.slug}.md.`, params: { slug: f.slug, stage }, expiresDays: 14 },
+    now.toISOString(),
+  );
   return key;
 }
 
@@ -70,21 +106,45 @@ function resume(vault, f, ctx) {
   if (['pending', 'snoozed', 'approved', 'running'].includes(status)) return null;
   if (f.stage === 'verify' && card?.action === 'forge_review' && ['done', 'rejected'].includes(status)) return verifyDecision(vault, f, ctx, status === 'rejected');
   if (f.stage === 'verified' && card?.action === 'forge_demo') {
-    if (status === 'done') { save(f, { stage: 'demo', status: 'running' }, now, 'demo: making the preview'); return 'demoing'; }
+    if (status === 'done') {
+      save(f, { stage: 'demo', status: 'running' }, now, 'demo: making the preview');
+      return 'demoing';
+    }
     save(f, { status: 'done' }, now, `demo: none (the card is ${status})`);
     return 'no demo';
   }
   if (f.stage === 'demoed' && card?.action === 'forge_sell') {
-    if (status === 'done') { save(f, { stage: 'sell', status: 'running' }, now, 'sell: drafting the pack'); return 'selling'; }
+    if (status === 'done') {
+      save(f, { stage: 'sell', status: 'running' }, now, 'sell: drafting the pack');
+      return 'selling';
+    }
     save(f, { status: 'done' }, now, `sell: no pack (the card is ${status})`);
     return 'no pack';
   }
-  if (status === 'rejected') { save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with your feedback`); return 'feedback'; }
-  if (status === 'failed' && card.action === 'forge_create_repo') { save(f, { review_key: proposeRepo(vault, f, now) }, now, 'creating the repo failed (see the card); offering it again'); return 'repo-retry'; }
-  if (status !== 'done') { save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`); return 'stopped'; }
-  if (card.action === 'forge_questions') { save(f, { status: 'running', answered: true, feedback: '' }, now, 'questions answered'); return 'answered'; }
-  if (card.action === 'forge_create_repo') { save(f, { stage: 'build', status: 'running' }, now, 'repo and tickets created; building'); return 'building'; }
-  if (f.stage === 'built') { save(f, { stage: 'verify', status: 'running' }, now, 'build reviewed; verifying end-to-end'); return 'verifying'; }
+  if (status === 'rejected') {
+    save(f, { status: 'running', feedback: card.decline_reason || 'The owner rejected this; try a clearly different approach.' }, now, `${f.stage}: rerun with your feedback`);
+    return 'feedback';
+  }
+  if (status === 'failed' && card.action === 'forge_create_repo') {
+    save(f, { review_key: proposeRepo(vault, f, now) }, now, 'creating the repo failed (see the card); offering it again');
+    return 'repo-retry';
+  }
+  if (status !== 'done') {
+    save(f, { status: 'stopped' }, now, `stopped: the review card is ${status}`);
+    return 'stopped';
+  }
+  if (card.action === 'forge_questions') {
+    save(f, { status: 'running', answered: true, feedback: '' }, now, 'questions answered');
+    return 'answered';
+  }
+  if (card.action === 'forge_create_repo') {
+    save(f, { stage: 'build', status: 'running' }, now, 'repo and tickets created; building');
+    return 'building';
+  }
+  if (f.stage === 'built') {
+    save(f, { stage: 'verify', status: 'running' }, now, 'build reviewed; verifying end-to-end');
+    return 'verifying';
+  }
   save(f, { status: 'running', stage: nextStage(f.stage), feedback: '' }, now, `${f.stage}: approved`);
   return 'approved';
 }
@@ -95,7 +155,11 @@ function runStage(f, ctx) {
   const asking = f.stage === 'spec' && f.mode === 'interview' && !f.answered;
   const base = asking ? 'spec-questions' : f.stage;
   const output = path.join(f.dir, asking ? 'questions.md' : stageById(f.stage).output);
-  const vars = { OUTLINE: outlineOf(f.text), MODE: f.mode === 'autonomous' ? '- ## Assumptions: every decision you made without asking, one line each, so the owner can review them.\n' : '', NAME: f.name || f.slug };
+  const vars = {
+    OUTLINE: outlineOf(f.text),
+    MODE: f.mode === 'autonomous' ? '- ## Assumptions: every decision you made without asking, one line each, so the owner can review them.\n' : '',
+    NAME: f.name || f.slug,
+  };
   const feedback = f.feedback ? `\n\nThe owner reviewed the previous version and asked for this change; apply it:\n${f.feedback}\n` : '';
   fs.mkdirSync(path.dirname(output), { recursive: true });
   const before = mtime(output);
@@ -129,8 +193,14 @@ async function finishStage(vault, f, ctx, rewritten) {
     return failed ? 'failed' : 'retry';
   }
   const fields = { attempts: 0, feedback: '', ...(stage.id === 'naming' ? namingFields(f, fs.readFileSync(file, 'utf8')) : {}) };
-  if (stage.id === 'plan') { save(f, { ...fields, status: 'waiting', review_key: proposeRepo(vault, f, ctx.now) }, ctx.now, 'plan: done, waiting for you to create the repo'); return 'repo'; }
-  if (f.stop_after.includes(stage.id)) { save(f, { ...fields, status: 'waiting', review_key: reviewCard(vault, f, stage.id, ctx.now) }, ctx.now, `${stage.id}: done, waiting for your review`); return 'review'; }
+  if (stage.id === 'plan') {
+    save(f, { ...fields, status: 'waiting', review_key: proposeRepo(vault, f, ctx.now) }, ctx.now, 'plan: done, waiting for you to create the repo');
+    return 'repo';
+  }
+  if (f.stop_after.includes(stage.id)) {
+    save(f, { ...fields, status: 'waiting', review_key: reviewCard(vault, f, stage.id, ctx.now) }, ctx.now, `${stage.id}: done, waiting for your review`);
+    return 'review';
+  }
   save(f, { ...fields, stage: nextStage(stage.id) }, ctx.now, `${stage.id}: done`);
   return 'next';
 }
@@ -150,9 +220,15 @@ export async function advance(vault, f, ctx) {
     return lines.length ? lines.join('; ') : null;
   }
   const { asking, output, result, rewritten } = runStage(f, ctx);
-  if (!result.ok) { save(f, { status: 'failed' }, ctx.now, `${f.stage}: claude failed: ${String(result.text).slice(0, 200)}`); return 'failed'; }
+  if (!result.ok) {
+    save(f, { status: 'failed' }, ctx.now, `${f.stage}: claude failed: ${String(result.text).slice(0, 200)}`);
+    return 'failed';
+  }
   if (!asking) return finishStage(vault, f, ctx, rewritten);
-  if (!rewritten || !fs.existsSync(output)) { save(f, { status: 'failed' }, ctx.now, 'spec: no questions.md written'); return 'failed'; }
+  if (!rewritten || !fs.existsSync(output)) {
+    save(f, { status: 'failed' }, ctx.now, 'spec: no questions.md written');
+    return 'failed';
+  }
   save(f, { status: 'waiting', feedback: '', review_key: reviewCard(vault, f, 'questions', ctx.now) }, ctx.now, 'spec: questions written, waiting for your answers');
   return 'questions';
 }
@@ -160,23 +236,40 @@ export async function advance(vault, f, ctx) {
 /** The executor's hook: moves at most one active forge one step (claude runs are long). */
 export async function advanceForges(vault, { now = new Date(), runClaude, run = gh, fetchImpl = fetch, sys } = {}) {
   const ctx = { now, runClaude, gh: run, fetchImpl, ...(sys ? { sys } : {}) };
-  for (const f of listForges(vault).filter(x => ACTIVE.includes(x.status)).sort((a, b) => String(a.updated).localeCompare(String(b.updated)))) {
+  for (const f of listForges(vault)
+    .filter(x => ACTIVE.includes(x.status))
+    .sort((a, b) => String(a.updated).localeCompare(String(b.updated)))) {
     let r;
-    try { r = await advance(vault, f, ctx); } catch (e) { save(f, { status: 'failed' }, now, `${f.stage}: error: ${e.message}`); r = 'failed'; }
+    try {
+      r = await advance(vault, f, ctx);
+    } catch (e) {
+      save(f, { status: 'failed' }, now, `${f.stage}: error: ${e.message}`);
+      r = 'failed';
+    }
     if (r) return [`forge ${f.slug}: ${r}`];
   }
   return [];
 }
 
 /** Headline fields for the dashboard snapshot: the chosen name or slug, never the outline. */
-export const forgeRows = vault => listForges(vault).map(f => ({ title: f.name || f.slug, slug: f.slug, stage: f.stage, status: f.status, mode: f.mode, progress: progressOf(vault, f.slug), updated: f.updated }));
+export const forgeRows = vault =>
+  listForges(vault).map(f => ({ title: f.name || f.slug, slug: f.slug, stage: f.stage, status: f.status, mode: f.mode, progress: progressOf(vault, f.slug), updated: f.updated }));
 
 function main() {
   const args = process.argv.slice(2);
-  const opt = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
-  if (args[0] !== 'new' || !args[1]) { console.error('Usage: forge.mjs new "<outline>" [--mode interview|autonomous] [--stop-after spec,naming] [--vault <dir>]'); process.exit(2); }
+  const opt = k => {
+    const i = args.indexOf(k);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  if (args[0] !== 'new' || !args[1]) {
+    console.error('Usage: forge.mjs new "<outline>" [--mode interview|autonomous] [--stop-after spec,naming] [--vault <dir>]');
+    process.exit(2);
+  }
   const r = newForge(vaultFromArgs(), args[1], { mode: opt('--mode') ?? 'interview', stopAfter: (opt('--stop-after') ?? 'spec,naming').split(',') });
-  if (r.error) { console.error(r.error); process.exit(1); }
+  if (r.error) {
+    console.error(r.error);
+    process.exit(1);
+  }
   console.log(`Started ${FORGE_DIR}/${r.slug}. The executor runs one stage per pass; stop-points show up as cards.`);
 }
 

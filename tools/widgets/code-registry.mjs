@@ -20,9 +20,11 @@ const PARTS = ['widget.ts', 'widget.json', 'fixture.json'];
 /** Widget ids: folders under code/ that have all three files. */
 export function codeWidgetIds(dir = CODE_DIR) {
   if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir, { withFileTypes: true })
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
     .filter(d => d.isDirectory() && ID_PATTERN.test(d.name) && PARTS.every(f => fs.existsSync(path.join(dir, d.name, f))))
-    .map(d => d.name).sort();
+    .map(d => d.name)
+    .sort();
 }
 
 const ident = (id, i) => `w${i}_${id.replace(/-/g, '_')}`;
@@ -50,7 +52,10 @@ ${ids.map((id, i) => `  '${id}': ${ident(id, i)},`).join('\n')}
 }
 
 /** Each generated file and what it must contain for the current widget folders. */
-export const generatedFiles = (ids = codeWidgetIds()) => [[CATALOG_FILE, renderCatalog(ids)], [RENDERERS_FILE, renderRenderers(ids)]];
+export const generatedFiles = (ids = codeWidgetIds()) => [
+  [CATALOG_FILE, renderCatalog(ids)],
+  [RENDERERS_FILE, renderRenderers(ids)],
+];
 
 function main() {
   const files = generatedFiles();

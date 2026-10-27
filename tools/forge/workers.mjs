@@ -33,19 +33,35 @@ export const system = {
   alive: (pid, started) => {
     const bootedAt = Date.now() - os.uptime() * 1000;
     if (started && new Date(started).valueOf() < bootedAt) return false;
-    try { process.kill(pid, 0); return true; } catch { return false; }
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
   },
   // The whole tree: on Windows the pid is cmd.exe's (shell: true), so taskkill /T; elsewhere the group.
   kill: pid => {
-    try { if (win) execFileSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore' }); else process.kill(-pid); } catch { /* already gone */ }
+    try {
+      if (win) execFileSync('taskkill', ['/T', '/F', '/PID', String(pid)], { stdio: 'ignore' });
+      else process.kill(-pid);
+    } catch {
+      /* already gone */
+    }
   },
   /** Starts `claude -p` detached with the prompt on stdin (and `env` instead of ours, if given). Returns the pid. */
   spawnClaude: (prompt, cwd, logFile, tools, env) => {
     const out = fs.openSync(logFile, 'w');
     const err = fs.openSync(`${logFile}.err`, 'w');
     const args = ['-p', '--output-format', 'json', '--permission-mode', 'acceptEdits', '--allowedTools', tools];
-    const child = spawn(process.env.CLAUDE_BIN || 'claude', win ? args.map(a => (/[\s,()*]/.test(a) ? `"${a}"` : a)) : args,
-      { cwd, detached: true, stdio: ['pipe', out, err], shell: win, windowsHide: true, ...(env ? { env } : {}) });
+    const child = spawn(process.env.CLAUDE_BIN || 'claude', win ? args.map(a => (/[\s,()*]/.test(a) ? `"${a}"` : a)) : args, {
+      cwd,
+      detached: true,
+      stdio: ['pipe', out, err],
+      shell: win,
+      windowsHide: true,
+      ...(env ? { env } : {}),
+    });
     child.stdin.end(prompt);
     child.unref();
     fs.closeSync(out);
@@ -62,7 +78,11 @@ export function prepareWorktree(sys, clone, name, attempt = 0, { fromMain = fals
   sys.git(['worktree', 'prune'], clone);
   let wt = worktreeOf(clone, name);
   if (fs.existsSync(wt)) {
-    try { sys.git(['worktree', 'remove', '--force', wt], clone); } catch { wt = `${wt}-${attempt}`; }
+    try {
+      sys.git(['worktree', 'remove', '--force', wt], clone);
+    } catch {
+      wt = `${wt}-${attempt}`;
+    }
   }
   const remote = !fromMain && sys.git(['ls-remote', '--heads', 'origin', `forge/${name}`], clone).trim();
   sys.git(['worktree', 'add', '-B', `forge/${name}`, wt, remote ? `origin/forge/${name}` : 'origin/main'], clone);
@@ -94,7 +114,9 @@ export function insideFile(src, root) {
   try {
     const real = fs.realpathSync(src);
     return real.startsWith(root + path.sep) && fs.lstatSync(src).isFile() ? real : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 const SECRETS = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN'];
@@ -109,14 +131,27 @@ export function sandboxEnv(dir) {
   for (const d of ['config', 'gh']) fs.mkdirSync(path.join(dir, d), { recursive: true });
   fs.writeFileSync(path.join(dir, 'gitconfig'), '');
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !SECRETS.includes(k)));
-  return { ...env, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), XDG_CONFIG_HOME: path.join(dir, 'config'), GH_CONFIG_DIR: path.join(dir, 'gh'), GIT_CONFIG_GLOBAL: path.join(dir, 'gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' };
+  return {
+    ...env,
+    CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'),
+    XDG_CONFIG_HOME: path.join(dir, 'config'),
+    GH_CONFIG_DIR: path.join(dir, 'gh'),
+    GIT_CONFIG_GLOBAL: path.join(dir, 'gitconfig'),
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    GCM_INTERACTIVE: 'never',
+  };
 }
 
 /** The last fenced ```json block of a run's answer: { value } or { error }. */
 export function jsonBlock(text) {
   const blocks = [...String(text).matchAll(/```json\s*\n([\s\S]*?)```/g)];
   if (!blocks.length) return { error: 'no JSON report' };
-  try { return { value: JSON.parse(blocks.at(-1)[1]) }; } catch (e) { return { error: `the JSON report doesn't parse (${e.message})` }; }
+  try {
+    return { value: JSON.parse(blocks.at(-1)[1]) };
+  } catch (e) {
+    return { error: `the JSON report doesn't parse (${e.message})` };
+  }
 }
 
 /** 'running', 'timeout', or the finished result { ok, text, usageLimit, spent, session }. */
@@ -124,7 +159,11 @@ export function workerStatus(run, { now, sys = system }) {
   if (sys.alive(run.pid, run.started)) return (now - new Date(run.started)) / 36e5 >= WORKER_TIMEOUT_H ? 'timeout' : 'running';
   const raw = fs.existsSync(run.log) ? fs.readFileSync(run.log, 'utf8').trim() : '';
   let out;
-  try { out = JSON.parse(raw); } catch { out = { is_error: true, result: raw.slice(-300) || 'no output' }; }
+  try {
+    out = JSON.parse(raw);
+  } catch {
+    out = { is_error: true, result: raw.slice(-300) || 'no output' };
+  }
   const text = String(out.result ?? '');
   return { ok: !out.is_error, text, usageLimit: !!out.is_error && USAGE_LIMIT.test(text), spent: spentOf(out), session: out.session_id };
 }

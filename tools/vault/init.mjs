@@ -34,10 +34,18 @@ function parseArgs(argv) {
 export function copyTemplate(src, dest, created = [], skipped = []) {
   fs.mkdirSync(dest, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
-    const from = path.join(src, e.name); const to = path.join(dest, e.name);
-    if (e.isDirectory()) { copyTemplate(from, to, created, skipped); continue; }
-    if (fs.existsSync(to)) { skipped.push(to); continue; }
-    fs.copyFileSync(from, to); created.push(to);
+    const from = path.join(src, e.name);
+    const to = path.join(dest, e.name);
+    if (e.isDirectory()) {
+      copyTemplate(from, to, created, skipped);
+      continue;
+    }
+    if (fs.existsSync(to)) {
+      skipped.push(to);
+      continue;
+    }
+    fs.copyFileSync(from, to);
+    created.push(to);
   }
   return { created, skipped };
 }
@@ -55,13 +63,17 @@ function listFiles(dir) {
 export function updateSystem(src, vault, stamp = Date.now()) {
   const updated = [];
   for (const from of SYSTEM.flatMap(rel => listFiles(path.join(src, rel)))) {
-    const rel = path.relative(src, from); const to = path.join(vault, rel);
+    const rel = path.relative(src, from);
+    const to = path.join(vault, rel);
     if (fs.existsSync(to) && fs.readFileSync(to).equals(fs.readFileSync(from))) continue;
     if (fs.existsSync(to)) {
       const backup = path.join(vault, '_system', 'backup', String(stamp), rel);
-      fs.mkdirSync(path.dirname(backup), { recursive: true }); fs.copyFileSync(to, backup);
+      fs.mkdirSync(path.dirname(backup), { recursive: true });
+      fs.copyFileSync(to, backup);
     }
-    fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(from, to); updated.push(rel);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+    updated.push(rel);
   }
   return updated;
 }
@@ -80,7 +92,11 @@ function gitInit(vault) {
   const run = args => execFileSync('git', args, { cwd: vault, stdio: 'ignore' });
   if (!fs.existsSync(path.join(vault, '.git'))) run(['init', '-q']);
   run(['add', '-A']);
-  try { run(['commit', '-qm', 'vault: initial setup from productivity-os template']); } catch { /* nothing new to commit */ }
+  try {
+    run(['commit', '-qm', 'vault: initial setup from productivity-os template']);
+  } catch {
+    /* nothing new to commit */
+  }
 }
 
 function main() {
@@ -93,7 +109,10 @@ function main() {
     const s = syncProjects(a.path, JSON.parse(fs.readFileSync(a.inventory, 'utf8')));
     console.log(`  project notes created: ${s.created.length}, refreshed: ${s.refreshed.length}, unchanged: ${s.unchanged.length}`);
   }
-  if (a.git) { gitInit(a.path); console.log('  git: initialised and committed'); }
+  if (a.git) {
+    gitInit(a.path);
+    console.log('  git: initialised and committed');
+  }
   console.log('\nNext: open the folder as a vault in Obsidian, install the plugins listed in docs/VAULT.md, then run `claude` in the vault and try /today.');
 }
 

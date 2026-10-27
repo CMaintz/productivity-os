@@ -27,11 +27,17 @@ function reportOncePerWidget(source: Source): Ctx['reportError'] {
 function Header({ source, login }: { source: Source; login: string | null }) {
   return (
     <header class="top">
-      <a class="logo" href="/">CM<span>dash</span></a>
+      <a class="logo" href="/">
+        CM<span>dash</span>
+      </a>
       <div class="user">
         {source.demo && <span class="tag">demo</span>}
         {login && <span>{login}</span>}
-        {login && !source.demo && <button class="quiet" onClick={() => source.signOut().then(() => location.reload())}>Sign out</button>}
+        {login && !source.demo && (
+          <button class="quiet" onClick={() => source.signOut().then(() => location.reload())}>
+            Sign out
+          </button>
+        )}
       </div>
     </header>
   );
@@ -42,7 +48,9 @@ function SignIn({ source }: { source: Source }) {
     <section class="panel signin">
       <h2>Sign in</h2>
       <p>This dashboard is private. Sign in with the GitHub account that owns it.</p>
-      <button class="primary" onClick={() => source.signIn()}>Sign in with GitHub</button>
+      <button class="primary" onClick={() => source.signIn()}>
+        Sign in with GitHub
+      </button>
     </section>
   );
 }
@@ -54,7 +62,11 @@ function Body({ source, snap }: { source: Source; snap: Snapshot }) {
   const ctx: Ctx = { now, demo: source.demo, press: pressFor(source), reportError };
   return (
     <>
-      {stale && <p class="banner" role="status">No update from {snap.host} for a while. Is the PC on and the executor running?</p>}
+      {stale && (
+        <p class="banner" role="status">
+          No update from {snap.host} for a while. Is the PC on and the executor running?
+        </p>
+      )}
       {Board({ layout: snap.layout, widgets: snap.widgets, ctx }) as VNode}
       <p class="footer muted">Snapshot from {snap.host}</p>
     </>
@@ -70,8 +82,16 @@ function useSnapshot(source: Source, signedIn: boolean) {
     const load = () => {
       const n = ++latest.current;
       return source.snapshot().then(
-        s => { if (n === latest.current) { setError(''); setSnap(s); } },
-        (e: Error) => { if (n === latest.current) setError(e.message); });
+        s => {
+          if (n === latest.current) {
+            setError('');
+            setSnap(s);
+          }
+        },
+        (e: Error) => {
+          if (n === latest.current) setError(e.message);
+        },
+      );
     };
     void load();
     return source.watch(load);
@@ -82,18 +102,36 @@ function useSnapshot(source: Source, signedIn: boolean) {
 export default function Dashboard() {
   const [source] = useState(() => connect());
   const [login, setLogin] = useState<string | null | undefined>(undefined);
-  useEffect(() => { void source.user().then(u => setLogin(u?.login ?? null)); }, []);
+  useEffect(() => {
+    void source.user().then(u => setLogin(u?.login ?? null));
+  }, []);
   const { snap, error } = useSnapshot(source, !!login);
   let main;
   if (login === null) main = <SignIn source={source} />;
-  else if (error) main = <section class="panel"><h2>Couldn't load</h2><p>{error}</p></section>;
-  else if (snap === null) main = <section class="panel"><h2>No snapshot yet</h2><p>The main PC hasn't published anything. Check that the executor is running and <code>~/.productivity-os/dashboard.json</code> exists (setup guide step 8).</p></section>;
+  else if (error)
+    main = (
+      <section class="panel">
+        <h2>Couldn't load</h2>
+        <p>{error}</p>
+      </section>
+    );
+  else if (snap === null)
+    main = (
+      <section class="panel">
+        <h2>No snapshot yet</h2>
+        <p>
+          The main PC hasn't published anything. Check that the executor is running and <code>~/.productivity-os/dashboard.json</code> exists (setup guide step 8).
+        </p>
+      </section>
+    );
   else if (snap) main = <Body source={source} snap={snap} />;
   else main = <p class="empty">Loading…</p>;
   return (
     <>
       <Header source={source} login={login ?? null} />
-      <main id="main" aria-live="polite">{main}</main>
+      <main id="main" aria-live="polite">
+        {main}
+      </main>
     </>
   );
 }

@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { projectFor } from '../vault/projects.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const FIRST_SYNC_DAYS = 14;
 const IDLE_MIN = 30;
@@ -200,14 +201,13 @@ export function syncSessions(vault, { home = os.homedir(), now = new Date(), max
     const project = projectFor(s.cwd, vault);
     const target = noteFile(vault, s, project);
     const text = render(s, project, status);
-    if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== text) { fs.writeFileSync(target, text); written.push(path.basename(target)); }
+    if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== text) { writeFileAtomic(target, text); written.push(path.basename(target)); }
     s.status = status;
   }
   // State first (atomically): if appending the log then fails, a prompt is missed, never logged twice.
   if (JSON.stringify(state) !== saved) {
     fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-    fs.writeFileSync(`${stateFile}.tmp`, JSON.stringify(state) + '\n');
-    fs.renameSync(`${stateFile}.tmp`, stateFile);
+    writeFileAtomic(stateFile, JSON.stringify(state) + '\n');
   }
   // Prompts from before the first sync were logged by the old hook already.
   const logged = added.filter(a => a.ts >= state.since && state.sessions[a.id] && !state.sessions[a.id].headless);

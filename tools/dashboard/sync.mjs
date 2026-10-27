@@ -16,6 +16,7 @@ import os from 'node:os';
 import { buildSnapshot } from './snapshot.mjs';
 import { listCards, updateCard } from '../actions/cards.mjs';
 import { applyWidgetErrors } from '../widgets/code-widgets.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 export const CONFIG_FILE = path.join(os.homedir(), '.productivity-os', 'dashboard.json');
 
@@ -63,7 +64,7 @@ function applyEvent(vault, cards, e) {
   if (e.always) fields.always = true;
   if (e.never) fields.never = true;
   if (e.reason) fields.decline_reason = e.reason;
-  fs.writeFileSync(card.file, updateCard(card.text, fields));
+  writeFileAtomic(card.file, updateCard(card.text, fields));
   card.status = e.status;
   return 'applied';
 }

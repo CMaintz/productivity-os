@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fieldsOf, setFrontmatter } from '../lib/frontmatter.mjs';
 import { samePath } from '../lib/paths.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const ACTIVE_DAYS = 60;
 const MAX_DOCS = 30;
@@ -152,7 +153,7 @@ export function syncProjects(vault, inventory, today = new Date()) {
     }
     const before = fs.readFileSync(existing, 'utf8'); const after = refreshNote(before, p);
     if (after === before) { result.unchanged.push(existing); continue; }
-    fs.writeFileSync(existing, after); result.refreshed.push(existing);
+    writeFileAtomic(existing, after); result.refreshed.push(existing);
   }
   return result;
 }

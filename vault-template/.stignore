@@ -3,3 +3,5 @@
 .obsidian/workspace*.json
 // full prompt log stays on the main PC
 _system/activity.jsonl
+// in-flight atomic-write temp files (tools/lib/atomic-write.mjs)
+.*.tmp

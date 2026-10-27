@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { REPO_QUERY, GH_BLOCK, summarise, githubBlock, githubFields } from './github.mjs';
 import { replaceBlock } from '../vault/projects.mjs';
 import { setFrontmatter } from '../lib/frontmatter.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 function parseArgs(argv) {
   const a = { vault: process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault'), only: null };
@@ -56,7 +57,7 @@ export function syncVault(vault, { only = null, fetch = ghFetch, now = new Date(
     try {
       const data = fetch(repo);
       if (!data) throw new Error('not found');
-      fs.writeFileSync(file, applyToNote(fs.readFileSync(file, 'utf8'), summarise(data), syncedAt));
+      writeFileAtomic(file, applyToNote(fs.readFileSync(file, 'utf8'), summarise(data), syncedAt));
       result.updated.push(repo);
     } catch (e) {
       result.failed.push({ repo, error: String(e.stderr || e.message).trim().split('\n')[0] });

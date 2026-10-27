@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The session hook this used to install; npm run hooks removes it from your settings.
@@ -62,7 +63,7 @@ function main() {
   const next = args.includes('--uninstall') ? withoutStatusLine(withoutHook(current)) : withStatusLine(withoutHook(current));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-${Date.now()}`);
-  fs.writeFileSync(file, JSON.stringify(next, null, 2) + '\n');
+  writeFileAtomic(file, JSON.stringify(next, null, 2) + '\n');
   console.log(`${args.includes('--uninstall') ? 'Removed' : 'Installed'} the usage status line in ${file} (and removed the old session hook, if it was there).`);
   if (!args.includes('--uninstall')) console.log('Restart running Claude Code sessions to pick it up. Session notes come from the executor now.');
 }

@@ -2,3 +2,5 @@
 .obsidian/cache
 .trash/
 _system/activity.jsonl
+# in-flight atomic-write temp files (tools/lib/atomic-write.mjs)
+.*.tmp

@@ -19,6 +19,7 @@ import { save } from './state.mjs';
 import { stories } from './verify.mjs';
 import { insideFile, jsonBlock, prepareWorktree, sandboxEnv, startRun, system, workerStatus } from './workers.mjs';
 import { addSpend } from '../lib/spend.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const PROMPTS = path.join(path.dirname(SELF), 'prompts');
@@ -153,7 +154,7 @@ ${gaps.length ? gaps.map(g => `- ${g}`).join('\n') : '- None found.'}
 ## Cost
 ${costLines(b, ctx).join('\n')}
 `;
-  fs.writeFileSync(path.join(f.dir, 'demo.md'), md);
+  writeFileAtomic(path.join(f.dir, 'demo.md'), md);
   d.gaps = gaps;
   return gaps.length;
 }

@@ -33,7 +33,7 @@ Rules the local Claude follows:
 
 ## 1. Get the latest code
 1. 🧑 Merge any open PRs you want in first. Each PR body says what it needs from you.
-2. 🤖 Pull the merged code: `git pull` in `C:\Users\akash\Projects\productivity-os`.
+2. 🤖 Pull the merged code: `git pull` in `%USERPROFILE%\Projects\productivity-os`.
 
 ## 2. Reorganise Projects (Phase 0)
 1. 🤖 `npm run inventory`. This only reads; it writes `out\inventory.md`.
@@ -43,7 +43,7 @@ Rules the local Claude follows:
 5. 🧑 Say "go". 🤖 Claude runs `--apply` and gives you the undo command and the post-move checklist: reopen projects in the IDE from their new paths, and rebuild any flagged venvs.
 
 ## 3. Vault
-1. 🤖 `npm run inventory` then `npm run vault`. This creates or refreshes `C:\Users\akash\Vault`: new project notes, updated paths, docs lists, and `_system\tools.json`.
+1. 🤖 `npm run inventory` then `npm run vault`. This creates or refreshes `%USERPROFILE%\Vault`: new project notes, updated paths, docs lists, and `_system\tools.json`.
 2. 🤖 `node tools/vault/init.mjs --update-system`. Pulls in the newest `CLAUDE.md`, skills (`/today`, `/capture`, `/shutdown`, `/resume`, `/next`) and Bases. Old copies go to `_system\backup\`.
 3. 🤖 With your OK, add these blocks to `Vault\Home.md`. They're missing from vaults created before them; `Home.md` is yours, so it's never overwritten.
    ```markdown
@@ -54,7 +54,7 @@ Rules the local Claude follows:
    ![[Sessions.base#Active]]
    ```
 4. 🧑 **Obsidian:**
-   - Open `C:\Users\akash\Vault` as a vault.
+   - Open `%USERPROFILE%\Vault` as a vault.
    - Settings → Core plugins: turn on **Bases**, **Daily notes** and **Templates**.
    - Settings → Community plugins: install **Tasks** and **Homepage**, then set Homepage to open `Home.md`.
 5. 🤖 `npm run github`. Fills in the `## GitHub` section and CI/PR fields of every project note that has a `repo`. Needs step 0.3.
@@ -78,7 +78,7 @@ Rules the local Claude follows:
 
 ## 5. Phone (Android) sync
 1. 🧑 Install **Syncthing** on the PC and **Syncthing-Fork** on Android.
-2. 🧑 Share `C:\Users\akash\Vault` to the phone. The vault's `.stignore` already keeps out `.git` and the private prompt log.
+2. 🧑 Share `%USERPROFILE%\Vault` to the phone. The vault's `.stignore` already keeps out `.git` and the private prompt log.
 3. 🧑 On the phone, open the synced folder as a vault in Obsidian.
 
 ## 6. maintz.dev blog editor (after #91 is merged)
@@ -95,7 +95,7 @@ Rules the local Claude follows:
    - **Where can this app be installed:** Only on this account. Then click **Create**.
    - On the app page: **Generate a new client secret** and keep that tab open. Note the **Client ID**.
    - **Install App** → only `CMaintz/cmaintz-site`.
-2. 🧑 `npx wrangler login` in `C:\Users\akash\Projects\…\cmaintz-site` (browser login to Cloudflare).
+2. 🧑 `npx wrangler login` in your `cmaintz-site` checkout (browser login to Cloudflare).
 3. 🧑 In your own terminal, so the values never touch the chat:
    ```powershell
    npx wrangler secret put KEYSTATIC_GITHUB_CLIENT_ID --name cmaintz-site      # paste the Client ID

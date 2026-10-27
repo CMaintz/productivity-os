@@ -1,10 +1,34 @@
-# Copy to <repo>/.habit-hooks/config.toml
+# From Foundry's presets/habit-hooks/javascript.toml (copied in until a Foundry release
+# ships it), with the dashboard's TypeScript kept in scope beside the .mjs tools.
 plugins = ["typescript", "generic"]
 
 # Tests are not structural-smell-gated: long, mock-heavy specs are normal and fine.
-# CI should police production maintainability, not test structure. (Language-
-# agnostic principle - see README.)
-files = ["**/*.ts", "**/*.tsx", "!**/*.spec.ts", "!**/*.spec.tsx", "!**/*.test.ts", "!**/*.test.tsx"]
+# (Language-agnostic principle - see Foundry's preset README.) node --test keeps its fakes
+# and fixtures in test/ dirs with no suffix, so the dirs go too. A project `files`
+# replaces the plugin's default, so its node_modules exclude is carried; build output is
+# not the project's code either.
+files = [
+    "**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs", "**/*.cjs",
+    "!**/*.spec.ts", "!**/*.spec.tsx", "!**/*.test.ts", "!**/*.test.tsx",
+    "!**/*.test.js", "!**/*.test.mjs", "!**/*.test.cjs",
+    "!**/*.spec.js", "!**/*.spec.mjs", "!**/*.spec.cjs",
+    "!**/test/**", "!**/tests/**", "!**/__tests__/**",
+    "!**/node_modules/**", "!**/dist/**", "!**/coverage/**",
+]
+
+# The eslint sensor lints with the project's own eslint config whenever one exists, and
+# that config only covers the dashboard, so the .mjs tools got no structural rules at all.
+# .habit-hooks/eslint.config.mjs spreads the project config in (its sandbox bans keep
+# reporting) and adds the structural rules for JS files. Only habit-hooks runs it, so the
+# rules ratchet through the snooze baseline.
+[sensors.eslint]
+args = ["--config", ".habit-hooks/eslint.config.mjs"]
+
+# non-essential-comment flags every comment, why-comments included. A pattern check can't
+# tell a why-comment from a what-comment; that judgment is Leash's. Off at the sensor (it
+# reports nothing else).
+[sensors.comment]
+disabled = true
 
 # File-length: flag files over 300 lines (oversized-file). 300 rather than the
 # sensor default of 200 - verbose-but-cohesive files (esp. Java) legitimately pass

@@ -5,6 +5,11 @@
     "**/build/**",
     "**/target/**",
     "**/*.golden.txt",
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
     "**/package-lock.json",
     "dashboard/src/lib/demo-snapshot.json",
     "vault-template/_system/widgets/views.md"

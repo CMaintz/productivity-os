@@ -15,11 +15,13 @@ node = "22.14.0" # pin to whatever the repo actually uses
 # workflow's `habit_hooks_version` default (1.5.0).
 HABIT_HOOKS_VERSION = "1.5.0"
 HABIT_HOOKS_PLUGIN = "habit-hooks-typescript"
-# The Foundry gate scripts (foundry-verb-wrap, npm-audit-ratchet.mjs) are provisioned by
-# setup:foundry-scripts into a cache dir at this ref, not vendored into the repo (see that
-# task for why). Renovate tracks the pin via the comment above it.
+# The Foundry scripts (foundry-verb-wrap, npm-audit-ratchet.mjs, foundry-explain and its
+# rule catalog) are provisioned by setup:foundry-scripts into a cache dir at this ref, not
+# vendored into the repo (see that task for why). Renovate tracks the pin via the comment
+# above it.
+# A bump must also update the sha256 lines in setup:foundry-scripts.
 # renovate: datasource=github-tags depName=CMaintz/foundry
-FOUNDRY_SCRIPTS_REF = "v2.13.0"
+FOUNDRY_SCRIPTS_REF = "v2.14.0"
 
 # Put local binaries on PATH so tasks call `eslint`, not `npx eslint`; the habit-hooks venv
 # bin (Linux `bin/`, Windows `Scripts/` - a missing one on PATH is harmless); the Foundry
@@ -76,32 +78,60 @@ FOUNDRY_TELEMETRY = "{{config_root}}/.foundry/telemetry.jsonl"
 # in order; each no-ops on a warm install.
 postinstall = ["mise run setup:habit-hooks", "mise run setup:foundry-scripts"]
 
-# Fetch the pinned Foundry gate scripts into a cache dir, rather than vendoring copies into
-# the repo. Why: these are agent/CI plumbing, not the repo's own code; a vendored copy
-# drifts from Foundry and has to be re-synced on every bump. Pinned to FOUNDRY_SCRIPTS_REF
-# and provisioned once (postinstall / `mise install`), exactly like setup:habit-hooks and
-# setup:pmd. Offline-safe: when every script is already cached at this ref it makes no
-# network call, so the gate hot path never depends on the network. A ref bump needs the
-# network once (same contract as any pinned-tool bump).
+# Fetch the pinned Foundry scripts into a cache dir instead of copying them into the repo
+# (agent/CI plumbing, not the repo's code; a copy drifts and needs a re-sync on every bump).
+# Every run checks each script against its sha256 below, cached or not: the tag is only a
+# locator, so a moved tag, a proxy page or a truncated download is re-fetched once and then
+# refused, never cached. A verified cache needs no network, so the gate hot path stays
+# offline; a ref bump needs the network once. cut-release.sh writes the digests for the tag
+# it cuts, so bumping FOUNDRY_SCRIPTS_REF means taking that tag's digest lines with it.
 [tasks."setup:foundry-scripts"]
-description = "Fetch the pinned Foundry gate scripts into a cache dir (de-vendored)"
+description = "Fetch the pinned Foundry scripts into a cache dir, sha256-verified"
 run = '''
 set -eu
+# <file> <sha256 of that file at FOUNDRY_SCRIPTS_REF>, one per line. A bare name is
+# scripts/<name>; a path (the rule catalog) is fetched from there, cached by basename.
+# foundry-smells joins this list at the next FOUNDRY_SCRIPTS_REF bump (once a tag ships
+# it); until then the `smells` task falls back to habit-hooks directly. Do NOT add a
+# comment inside the quoted block below - `read -r s want` would try to fetch it.
+scripts='
+foundry-verb-wrap bec5e917c13c22ed534ea0a3a49e33b099be35f05d8fc39473b0bd960fc4bf0e
+npm-audit-ratchet.mjs 169376a3227c5806f7438ef8641d2b5d5460d78a704c87e639fb176350f09cdb
+foundry-explain 6b483daf5867badb4db5d222fccbe717b310deda6ebd064e8f478ec3f2dcef60
+presets/rules/catalog.toml c311172c29dd735821e2a0efe566aecc35320f45d375bfac1a2622a43ba4fb9b
+presets/rules/matchers.toml 8f0a748fc181e1a37c754d79e7a196e4d9006592e633826c8031b89acba7f455
+'
 dst="$HOME/.local/opt/foundry-scripts-$FOUNDRY_SCRIPTS_REF"
-scripts="foundry-verb-wrap npm-audit-ratchet.mjs"
-need=""
-for s in $scripts; do [ -f "$dst/$s" ] || need="$need $s"; done
-[ -z "$need" ] && exit 0
+base="https://raw.githubusercontent.com/CMaintz/foundry/$FOUNDRY_SCRIPTS_REF"
+# sha256sum ships with Linux and Git Bash; macOS has only shasum.
+digest() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 mkdir -p "$dst"
-base="https://raw.githubusercontent.com/CMaintz/foundry/$FOUNDRY_SCRIPTS_REF/scripts"
-for s in $need; do
-  if ! curl -fsSL "$base/$s" -o "$dst/$s.part"; then
+while read -r s want; do
+  [ -n "$s" ] || continue
+  case "$s" in */*) src="$s" ;; *) src="scripts/$s" ;; esac
+  f="${s##*/}"
+  [ -f "$dst/$f" ] && [ "$(digest "$dst/$f")" = "$want" ] && continue
+  # A per-run temp file, moved into place only once verified: concurrent runs (parallel
+  # worktrees share $HOME) never write into each other's download or expose a partial one.
+  tmp=$(mktemp "$dst/.$f.XXXXXX")
+  if ! curl -fsSL "$base/$src" -o "$tmp"; then
+    rm -f "$tmp"
     echo "setup:foundry-scripts: cannot fetch $s at $FOUNDRY_SCRIPTS_REF (network needed once per ref)" >&2
-    rm -f "$dst/$s.part"; exit 1
+    exit 1
   fi
-  mv "$dst/$s.part" "$dst/$s"
-  case "$s" in *.mjs) : ;; *) chmod +x "$dst/$s" 2>/dev/null || true ;; esac
-done
+  got=$(digest "$tmp")
+  if [ "$got" != "$want" ]; then
+    rm -f "$tmp"
+    echo "setup:foundry-scripts: $s at $FOUNDRY_SCRIPTS_REF has sha256 $got, expected $want; refusing it." >&2
+    echo "  If FOUNDRY_SCRIPTS_REF was just bumped, copy the digest lines from that ref's mise template;" >&2
+    echo "  otherwise the download was not the script (proxy or captive page, truncation, moved tag)." >&2
+    exit 1
+  fi
+  chmod +x "$tmp" 2>/dev/null || true
+  mv -f "$tmp" "$dst/$f"
+done <<EOF
+$scripts
+EOF
 '''
 
 [tasks.fix]

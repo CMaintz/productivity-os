@@ -12,7 +12,7 @@
 - **Project structure:** decided after the inventory, which proposes 2–3 options using your actual repos.
 - **Claude subscription only, no API key.** All AI work runs through Claude Code on your login (see "Execution model").
 - **Paths:**
-  - `C:\Users\akash\Projects`
+  - `%USERPROFILE%\Projects`
   - Siblings to fold in: `PhpStormProjects`, `IdeaProjects`, etc.
 - **Main PC:** the PC the user is on now. The executor registers machines by hostname on first run, and setup marks this one as main.
 - **Later idea:** an always-on server running Claude Code plus the collector and executor.
@@ -424,7 +424,7 @@ Status (Oct 2026):
 - **In progress:** the Product Forge (epic #16). Slice 1, outline → plan with repo and tickets, is #17. Slice 2, build with workers, lead agent, merge cards and usage pacing, is #19. Slice 3, verify end-to-end with a bounded fix loop, is #22. Slice 4, the demo (a Cloudflare preview, a screenshot tour, known gaps and the usage cost), is #27. Slice 5, sell or hand over (drafts and a handover pack, nothing published), is #32.
 
 0. **Projects inventory & renovation (first real use):**
-   - A script scans `C:\Users\akash\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).
+   - A script scans `%USERPROFILE%\Projects` plus its siblings (`PhpStormProjects`, `IdeaProjects`, `WebstormProjects`, `source\repos`…).
    - For each folder it lists git remote, last commit, uncommitted changes and unpushed branches, size, language and docs found.
    - It also cross-checks against your GitHub repos: what's local-only and what's GitHub-only.
    - **Loose docs:** markdown and PDF files that sit outside any project, plus projects cluttered with root-level notes. The proposal gives each one a destination: a project's `docs/`, the vault (`Inbox/`, `Writing/`, `Raw/`), merge into an existing doc, or archive.

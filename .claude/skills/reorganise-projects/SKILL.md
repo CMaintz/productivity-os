@@ -1,6 +1,6 @@
 ---
 name: reorganise-projects
-description: Phase 0 of productivity-os. Inventory the user's project folders and propose a new structure for C:\Users\akash\Projects. Use when asked to inventory, sort, reorganise or restructure projects.
+description: Phase 0 of productivity-os. Inventory the user's project folders and propose a new structure for %USERPROFILE%\Projects. Use when asked to inventory, sort, reorganise or restructure projects.
 ---
 
 # Reorganise projects
@@ -29,7 +29,7 @@ The agent never moves files itself with shell commands, and **never runs `--appl
 5. Stop and let the user review the proposal. Apply any edits they ask for.
 6. Once they approve, write `out/reorg-plan.json` like this:
    ```json
-   { "moves": [ { "from": "C:\\Users\\akash\\IdeaProjects\\foo", "to": "C:\\Users\\akash\\Projects\\java\\foo", "reason": "..." } ] }
+   { "moves": [ { "from": "C:\\Users\\<you>\\IdeaProjects\\foo", "to": "C:\\Users\\<you>\\Projects\\java\\foo", "reason": "..." } ] }
    ```
    - Paths must be absolute.
    - Move a whole project, or a single loose file, per entry.

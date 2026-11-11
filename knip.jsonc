@@ -5,7 +5,14 @@
   "workspaces": {
     ".": {
       "entry": ["tools/**/*.mjs!", "tools/**/*.d.mts"],
-      "project": ["tools/**/*.{mjs,mts}"]
+      "project": ["tools/**/*.{mjs,mts}"],
+      // Every tools/ file is an entry, and knip never reports an entry's exports without
+      // this, so unused exports went unseen. Not set for the dashboard, whose entries are
+      // bundles that export to Obsidian and the widget frame.
+      "includeEntryExports": true,
+      // Tests and the .d.mts declarations stay in the graph (what they import still
+      // counts as used), but their own exports are not production code to report.
+      "ignore": ["tools/**/test/**", "tools/**/*.d.mts"]
     },
     // The Obsidian bundle and the code widget frame are built by esbuild (tools/widgets/build-*.mjs), which knip can't follow.
     "dashboard": {

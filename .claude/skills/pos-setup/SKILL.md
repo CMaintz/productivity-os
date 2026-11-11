@@ -10,7 +10,7 @@ Work through `docs/SETUP-GUIDE.md` from top to bottom. Progress is tracked in `o
 For each step:
 1. **🤖 steps:** run them, show a short summary of the result, then verify. For example: a file exists, a command exits 0, `gh auth status` passes.
 2. **🧑 steps:** stop. Give the exact clicks, field values or commands, then wait for "done" or a question. Verify afterwards where you can, e.g. `gh variable list`, `wrangler secret list --name cmaintz-site`, or that a new note appeared in `Sessions/`.
-3. **Steps that need a yes:** merging PRs, `--apply` on folder moves, editing `Home.md` or `~/.claude/settings.json`, deploying. Ask before running them, even though they're tagged 🤖.
+3. **Steps that need a yes:** merging PRs, `--apply` on folder moves, editing `Home.md`, `~/.claude/settings.json` or the Claude Desktop config, deploying. Ask before running them, even though they're tagged 🤖.
 4. **Ticking off:** tick the step off in `out/pos-setup-progress.md` only after it's verified.
 
 Hard rules:

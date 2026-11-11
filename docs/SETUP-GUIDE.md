@@ -174,12 +174,22 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
 
 4. 🤖 **Product Forge demos** use the wrangler login on this PC (step 6.2) to make a Cloudflare preview of each finished product, never a production deploy. Check it with `npx wrangler whoami`. Each demo asks first on a card.
 
+## 9. Claude Desktop (MCP server)
+Claude Desktop on this PC can read what's on your plate and propose cards through a local MCP server. It sees only what the dashboard publishes, and it can't approve or run anything.
+
+1. 🧑 Install [Claude Desktop](https://claude.ai/download) and sign in.
+2. 🤖 With your OK, from this repo's main clone: `npm run mcp:install`. It adds a `productivity-os` entry to `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other servers, and writes a `.bak-<time>` copy first. Check that the file now lists `productivity-os` with this vault's path. If Claude Desktop came from the Microsoft Store and ignores the file, find its real config through Settings → Developer → Edit Config and pass it with `npm run mcp:install -- --config <path>`.
+3. 🧑 Quit Claude Desktop from the tray icon (closing the window isn't enough) and open it again. Ask "what's on my plate today?". 🤖 Confirm the answer matches today's Top 3, and that a card you ask it to propose shows up as pending in `_system\actions\`.
+
+The config points at the Node that mise installed. After a Node version bump in `mise.toml`, run `npm run mcp:install` again.
+
 ## Daily use, once set up
 | When | What |
 |---|---|
 | Morning | In the vault: `/today` |
 | Something pops up | `/capture <text>` |
 | Starting work | `/next`, or `/resume <project>` |
+| From Claude Desktop | Ask what's on your plate, or ask it to propose a card. Proposals wait for your click like any other card. |
 | Anytime | Answer cards under **Waiting on me** (works on the phone). `/suggest` asks for fresh ideas. |
 | End of day | `/shutdown` |
 | After moving folders | `npm run inventory` then `npm run vault` |

@@ -114,6 +114,16 @@ const MUTANTS = [
   ["sell: usage stop ends the pack", "tools/forge/sell.mjs", "      if (s.usageLimit) {\n        p.retryAfter", "      if (false) {\n        p.retryAfter"],
   ["sell: missing draft not retried", "tools/forge/sell.mjs", "if (missing.length && ++p.attempts < MAX_ATTEMPTS)", "if (false)"],
   ["sell: demo gaps not known issues", "tools/forge/sell.mjs", "...(b.demo?.gaps ?? []).map(", "...[].map("],
+  ["mcp: finished cards listed as open", "tools/mcp/views.mjs", "c.cards.filter(isOpen).map(openCard)", "c.cards.map(openCard)"],
+  ["mcp: never list skipped", "tools/mcp/propose.mjs", "if (isNever(policy, spec)) return { error:", "if (false) return { error:"],
+  ["mcp: proposal follows the policy level", "tools/mcp/propose.mjs", "{ ask: true, policy })", "{ policy })"],
+  ["mcp: claude_task guard dropped", "tools/mcp/propose.mjs", "params: { cwd, prompt: full }", "params: { cwd, prompt }"],
+  ["mcp: install drops your other servers", "tools/mcp/install.mjs", "mcpServers: { ...config.mcpServers, [NAME]", "mcpServers: { [NAME]"],
+  ["mcp: client text renders as markdown", "tools/mcp/propose.mjs", "reason: plain(input.reason)", "reason: input.reason"],
+  ["mcp: prompt fence can be closed early", "tools/mcp/propose.mjs", "const ticks = '`'.repeat(longest + 1);", "const ticks = '```';"],
+  ["mcp: missing task folder accepted", "tools/mcp/propose.mjs", "\n  && fs.existsSync(cwd) && fs.statSync(cwd).isDirectory();", ";"],
+  ["mcp: non-ASCII titles share a key", "tools/mcp/propose.mjs", ":${crypto.createHash('sha256').update(title).digest('hex').slice(0, 8)}`", "`"],
+  ["mcp: half-written policy trusted", "tools/mcp/propose.mjs", "return /^## Never suggest/m.test(text) ? parsePolicy(text) : null;", "return parsePolicy(text);"],
 ];
 
 const survivors = [];

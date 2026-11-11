@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const iso = epochSeconds => (Number.isFinite(epochSeconds) ? new Date(epochSeconds * 1000).toISOString() : null);
 const pct = v => (Number.isFinite(v) ? v : null);
@@ -32,7 +33,7 @@ function main() {
   const usage = usageFromStatus(status);
   const vault = process.env.PRODUCTIVITY_VAULT || path.join(os.homedir(), 'Vault');
   if (usage && fs.existsSync(path.join(vault, '_system'))) {
-    try { fs.writeFileSync(path.join(vault, '_system', 'usage.json'), JSON.stringify(usage) + '\n'); } catch { /* the status line must never break */ }
+    try { writeFileAtomic(path.join(vault, '_system', 'usage.json'), JSON.stringify(usage) + '\n', { retryMs: 0 }); } catch { /* the status line must never break */ }
   }
   const i = process.argv.indexOf('--chain');
   if (i < 0) { process.stdout.write(`${line(usage)}\n`); return; }

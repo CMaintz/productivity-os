@@ -14,6 +14,7 @@ import { createCard } from '../actions/cards.mjs';
 import { createIssue, ensureLabels } from '../lib/gh.mjs';
 import { FORGE_DIR, forgeNote, parsePlan, topoOrder } from './stages.mjs';
 import { slugOf } from './naming.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const DEFAULT_OWNER = 'CMaintz';
 const DOCS = [['spec.md', 'docs/spec.md'], ['decisions/0001-stack.md', 'docs/decisions/0001-stack.md'], ['plan.md', 'docs/plan.md'], ['naming.md', 'docs/naming.md']];
@@ -65,7 +66,7 @@ function protectMain(run, repo) {
   try { run(['api', '-X', 'PUT', `repos/${repo}/branches/main/protection`, '--input', '-'], JSON.stringify(body)); } catch { /* not available on this plan */ }
 }
 
-const record = (note, key, value) => fs.writeFileSync(note, setFrontmatter(fs.readFileSync(note, 'utf8'), key, JSON.stringify(value)));
+const record = (note, key, value) => writeFileAtomic(note, setFrontmatter(fs.readFileSync(note, 'utf8'), key, JSON.stringify(value)));
 
 /** The handler: repo, docs, labels, tickets in dependency order, then the epic linking them. */
 export function createForgeRepo(card, ctx) {

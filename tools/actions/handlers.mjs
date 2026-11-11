@@ -13,6 +13,7 @@ import { readLayout, writeLayout } from '../widgets/widgets.mjs';
 import { installWidget, openBuildTicket, openFixTicket, proposeCodeRemoval } from '../widgets/code-widgets.mjs';
 import { createForgeRepo } from '../forge/repo.mjs';
 import { mergeTicketPr } from '../forge/build.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const MAX_SUMMARY = 1500;
 const TIMEOUT_MS = 30 * 60 * 1000;
@@ -58,7 +59,7 @@ function setField(card, ctx) {
   if (!fs.existsSync(full)) return { ok: false, summary: `Note not found: ${file}` };
   const note = fs.readFileSync(full, 'utf8');
   const previous = readFrontmatter(note).fields[key] ?? '';
-  fs.writeFileSync(full, setFrontmatter(note, key, value));
+  writeFileAtomic(full, setFrontmatter(note, key, value));
   return { ok: true, summary: `Set \`${key}: ${value}\` in [[${file.replace(/\.md$/, '')}]] (was \`${previous}\`).`, undo: { file, key, value: previous } };
 }
 
@@ -70,7 +71,7 @@ function createWidget(card, ctx) {
   const file = path.join(ctx.vault, '_system', 'widgets', `${m.id}.json`);
   if (fs.existsSync(file)) return { ok: false, summary: `A widget named \`${m.id}\` already exists.` };
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(m, null, 2) + '\n');
+  writeFileAtomic(file, JSON.stringify(m, null, 2) + '\n');
   const layout = readLayout(ctx.vault);
   if (!layout.widgets.some(w => w.id === m.id)) layout.widgets.push({ id: m.id });
   writeLayout(ctx.vault, layout);
@@ -119,6 +120,6 @@ export function undoAction(card, ctx) {
   }
   if (!u?.file) return { ok: false, summary: 'No automatic undo for this action; follow the Undo line above.' };
   const full = path.join(ctx.vault, u.file);
-  fs.writeFileSync(full, setFrontmatter(fs.readFileSync(full, 'utf8'), u.key, u.value));
+  writeFileAtomic(full, setFrontmatter(fs.readFileSync(full, 'utf8'), u.key, u.value));
   return { ok: true, summary: `Restored \`${u.key}: ${u.value}\` in [[${u.file.replace(/\.md$/, '')}]].` };
 }

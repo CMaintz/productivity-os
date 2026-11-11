@@ -12,6 +12,7 @@ import { runQuery } from './query.mjs';
 import { validateManifest } from './manifest.mjs';
 import { createCard } from '../actions/cards.mjs';
 import { vaultFromArgs } from '../lib/cli.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 export const WIDGETS_DIR = path.join('_system', 'widgets');
 const LAYOUT_FILE = path.join('_system', 'layouts', 'dashboard.json');
@@ -26,7 +27,7 @@ export const readLayout = vault => {
 };
 export const writeLayout = (vault, layout) => {
   fs.mkdirSync(path.dirname(path.join(vault, LAYOUT_FILE)), { recursive: true });
-  fs.writeFileSync(path.join(vault, LAYOUT_FILE), JSON.stringify(layout, null, 2) + '\n');
+  writeFileAtomic(path.join(vault, LAYOUT_FILE), JSON.stringify(layout, null, 2) + '\n');
 };
 const titleOf = (text, file) => readFrontmatter(text).body.match(/^# (.+)$/m)?.[1] ?? path.basename(file, '.md');
 

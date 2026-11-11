@@ -25,6 +25,7 @@ import { ownerOf } from './repo.mjs';
 import { resumeVerify, verifyStep } from './verify.mjs';
 import { demoStep } from './demo.mjs';
 import { sellStep } from './sell.mjs';
+import { writeFileAtomic } from '../lib/atomic-write.mjs';
 
 const BUILD_DIR = path.join('_system', 'forge-builds');
 const MAX_ATTEMPTS = 2;
@@ -34,7 +35,7 @@ const HOUR = 36e5;
 
 const buildFile = (vault, slug) => path.join(vault, BUILD_DIR, `${slug}.json`);
 export const loadBuild = (vault, slug) => { try { return JSON.parse(fs.readFileSync(buildFile(vault, slug), 'utf8')); } catch { return null; } };
-const saveBuild = (vault, b) => { fs.mkdirSync(path.join(vault, BUILD_DIR), { recursive: true }); fs.writeFileSync(buildFile(vault, b.slug), JSON.stringify(b, null, 2) + '\n'); };
+const saveBuild = (vault, b) => { fs.mkdirSync(path.join(vault, BUILD_DIR), { recursive: true }); writeFileAtomic(buildFile(vault, b.slug), JSON.stringify(b, null, 2) + '\n'); };
 const json = (run, args) => JSON.parse(run(args) || '[]');
 
 /** gh pr checks exits non-zero when a check failed or is pending; its JSON is still on stdout. */

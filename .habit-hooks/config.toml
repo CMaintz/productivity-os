@@ -12,3 +12,10 @@ files = ["**/*.ts", "**/*.tsx", "!**/*.spec.ts", "!**/*.spec.tsx", "!**/*.test.t
 # are already excluded by the `files` globs; keep big prompts in their own resource file.
 [sensors.line-count]
 args = ["--max", "300"]
+
+# The TS plugin's comment sensor flags every comment over a few characters and coaches the
+# agent to delete it, so why-comments go too. Foundry wants why-comments and only objects
+# to what-comments, but a pattern check cannot tell the two apart; that judgment belongs to
+# Leash, where "comments say why, not what" is a rubric rule.
+[smells.non-essential-comment]
+disabled = true

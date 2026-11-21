@@ -170,7 +170,10 @@ test('transcripts untouched for two weeks before the first sync are left alone',
 test('the executor syncs sessions on every pass', () => {
   const w = setup();
   fs.mkdirSync(path.join(w.vault, '_system', 'actions'), { recursive: true });
-  write(w, [prompt(w, 0, 'hello from a session')]);
+  // The executor syncs against the real clock, so a prompt dated at T0 ages past FORGET_DAYS
+  // and is dropped before it becomes a note; date it now instead.
+  const sinceT0 = Math.floor((Date.now() - T0.valueOf()) / 1000);
+  write(w, [prompt(w, sinceT0, 'hello from a session')]);
   const executor = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'actions', 'executor.mjs');
   execFileSync(process.execPath, [executor, '--once', '--vault', w.vault, '--force'], { encoding: 'utf8', env: { ...process.env, HOME: w.home, USERPROFILE: w.home } });
   assert.equal(notes(w).length, 1);

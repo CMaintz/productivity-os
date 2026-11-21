@@ -56,7 +56,7 @@ Every project note with a `repo` gets:
 - A generated `## GitHub` section: default-branch CI, open PRs with CI and review state, Foundry agent tickets (ready, working, blocked) and open issues.
 - Frontmatter fields: `ci`, `open_prs`, `failing_prs`, `agent_blocked`. These feed the **Needs attention** view on Home.
 
-`/today` runs the sync itself, and `/resume <project>` and `/next` use this data.
+`/today` runs the sync itself, and `/pickup <project>` and `/next` use this data.
 
 ## 7. Action cards and the executor
 Suggestions arrive as **cards** in `_system/actions/`, shown on Home under **Waiting on me**. Each card has buttons:

@@ -44,7 +44,7 @@ Rules the local Claude follows:
 
 ## 3. Vault
 1. 🤖 `npm run inventory` then `npm run vault`. This creates or refreshes `C:\Users\akash\Vault`: new project notes, updated paths, docs lists, and `_system\tools.json`.
-2. 🤖 `node tools/vault/init.mjs --update-system`. Pulls in the newest `CLAUDE.md`, skills (`/today`, `/capture`, `/shutdown`, `/resume`, `/next`) and Bases. Old copies go to `_system\backup\`.
+2. 🤖 `node tools/vault/init.mjs --update-system`. Pulls in the newest `CLAUDE.md`, skills (`/today`, `/capture`, `/shutdown`, `/pickup`, `/next`) and Bases. Old copies go to `_system\backup\`.
 3. 🤖 With your OK, add these blocks to `Vault\Home.md`. They're missing from vaults created before them; `Home.md` is yours, so it's never overwritten.
    ```markdown
    ## Needs attention
@@ -179,7 +179,7 @@ Try the page without any of this: `npm --workspace dashboard run dev`, then open
 |---|---|
 | Morning | In the vault: `/today` |
 | Something pops up | `/capture <text>` |
-| Starting work | `/next`, or `/resume <project>` |
+| Starting work | `/next`, or `/pickup <project>` |
 | Anytime | Answer cards under **Waiting on me** (works on the phone). `/suggest` asks for fresh ideas. |
 | End of day | `/shutdown` |
 | After moving folders | `npm run inventory` then `npm run vault` |

@@ -92,7 +92,7 @@ How it works:
 - In Obsidian, a Datacore widget shows that file as the tabbed panel. The web dashboard uses the same JSON with the same component.
 - There is no note per file, so the vault stays clean.
 - On the phone, the Local tab shows file names and summaries only, because the files themselves stay on the PC.
-- **`/resume <project>` and `/next`** read the project's ADRs and recent decisions, so their suggestions follow the architecture choices you've already made.
+- **`/pickup <project>` and `/next`** read the project's ADRs and recent decisions, so their suggestions follow the architecture choices you've already made.
 
 ### Windows specifics
 - **Scripts** are written in Node/TypeScript, so the hooks, indexer, executor and web dashboard all share one language and data types. No bash dependency.
@@ -114,7 +114,7 @@ How it works:
   - `/weekly`: planned vs actual, stalled projects, and tasks postponed 3 or more times (do / split / drop?).
   - `/next`: "what should I work on now?", based on energy, time available, deadlines and momentum.
   - `/lint`: vault health check for orphans, stale projects, broken links and schema violations.
-  - `/resume <project>`: a context card with the last session summary, the open threads and the next step.
+  - `/pickup <project>`: a context card with the last session summary, the open threads and the next step.
 - **Scheduling:**
   - Desktop scheduled tasks or cron run `claude -p` for the brief and the nightly lint.
   - Routines (cloud) only handle jobs that don't need the local vault.
@@ -415,7 +415,7 @@ A pipeline for building a new product, or a big feature for an existing project.
 
 ## Phased roadmap
 Status (Oct 2026):
-- **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/resume` and `/next`.
+- **Done:** Phase 0 tools (inventory, mover), the vault MVP, and all of Phase 2: session hooks, the Repo/Local-only docs lists, GitHub data in notes, `/pickup` and `/next`.
 - **Done:** action cards with Meta Bind buttons, the executor, the trust ladder, rule-based suggestions and `/suggest` (Phase 4 core).
 - **Done:** the web dashboard MVP at `dash.maintz.dev`: Supabase snapshot, card buttons, sessions, attention (issue #9).
 - **Done:** the widget runtime (#11). Preact views are shared by the dashboard and Obsidian (Datacore), declarative widgets live in the vault, and there's a layout and `create_widget` cards.
@@ -438,7 +438,7 @@ Status (Oct 2026):
    - This also tests the card flow before anything depends on it.
 1. **Widget runtime + MVP:** widget manifest format, the built-in view primitives, and the core widgets built with them.
    **MVP (rest):** vault schema, contract `CLAUDE.md`, Home dashboard, `/today`, `/capture`, `/shutdown`.
-2. **Sessions + GitHub + repo docs indexer:** hooks feed the session board, GitHub data lands in project notes, and ADRs/audits/decisions are indexed per project. Adds `/resume` and `/next`.
+2. **Sessions + GitHub + repo docs indexer:** hooks feed the session board, GitHub data lands in project notes, and ADRs/audits/decisions are indexed per project. Adds `/pickup` and `/next`.
 3. **Calendar/email + writing pipeline + PDF import.**
 4. **Overseer:** activity log, `/weekly`, action cards + executor, trust ladder.
 5. **Web dashboard / PWA.**

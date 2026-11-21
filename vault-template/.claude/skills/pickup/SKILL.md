@@ -1,9 +1,9 @@
 ---
-name: resume
-description: Context card for picking a project back up - where it stands, what was decided, what's open, and the next concrete step. Use for "/resume <project>", "where was I with X", "pick up X again".
+name: pickup
+description: Context card for picking a project back up - where it stands, what was decided, what's open, and the next concrete step. Use for "/pickup <project>", "where was I with X", "pick up X again".
 ---
 
-# /resume <project>
+# /pickup <project>
 
 Follow `CLAUDE.md`. This skill only reads (apart from the log line in step 4).
 
@@ -20,4 +20,4 @@ Follow `CLAUDE.md`. This skill only reads (apart from the log line in step 4).
    - **Open:** blocked or failing items first, then tasks.
    - **Next step:** one concrete action, small enough to start now. If `next` in the note is stale, say so and propose a new one.
    - **To continue in Claude Code:** `cd "<path>"; claude --continue` (or `claude` for a fresh session).
-4. **Offer** to update the note's `next` field. Only change it if the user says yes. Log `/resume <project>` to `_system/changelog.md`.
+4. **Offer** to update the note's `next` field. Only change it if the user says yes. Log `/pickup <project>` to `_system/changelog.md`.
